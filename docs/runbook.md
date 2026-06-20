@@ -38,7 +38,7 @@ The preview prints the exact Nmap commands that would be executed.
 Add Wi-Fi observations when macOS exposes the local wireless scanner:
 
 ```bash
-./scripts/edge scan 192.168.1.0/24 --include-wifi
+./scripts/edge scan 192.168.1.0/24 --wifi
 ```
 
 ## Generate an AI Report
@@ -70,6 +70,32 @@ After deploying the API to Render and the dashboard to Cloudflare Pages:
 
 Use the dashboard Settings page to connect to the hosted API with your admin token. The token is
 exchanged for a browser session and is not baked into the Cloudflare Pages build.
+
+## Remote Scan Jobs
+
+The hosted dashboard can queue a scan job, but the scan still runs locally.
+
+Start the local worker:
+
+```bash
+./scripts/edge worker --cloud
+```
+
+For a single poll/execution cycle:
+
+```bash
+./scripts/edge worker --cloud --once
+```
+
+Flow:
+
+1. Open the hosted dashboard.
+2. Enter an authorized private CIDR in Scan Actions.
+3. Click Queue Remote Scan.
+4. Keep the local worker running.
+5. Refresh the dashboard as the job moves through queued, claimed, running, and completed.
+
+Remote jobs are limited to RFC1918 IPv4 CIDRs with `/24` or narrower ranges.
 
 ## Splunk HEC Export
 

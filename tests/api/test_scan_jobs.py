@@ -1,0 +1,125 @@
+from collections.abc import Generator
+
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine, select
+from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.pool import StaticPool
+
+from secopsai_api.database import get_db
+from secopsai_api.main import app
+from secopsai_api.models import Base, ScanJob, Sensor, Site
+from secopsai_api.security import hash_secret
+
+
+def make_session() -> Session:
+    engine = create_engine(
+        "sqlite+pysqlite://",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    Base.metadata.create_all(engine)
+    SessionLocal = sessionmaker(bind=engine)
+    return SessionLocal()
+
+
+def make_client(db: Session) -> TestClient:
+    def override_get_db() -> Generator[Session, None, None]:
+        yield db
+
+    app.dependency_overrides[get_db] = override_get_db
+    return TestClient(app)
+
+
+def seed_sensor(db: Session) -> tuple[Sensor, str]:
+    sensor_token = "sensor-token"
+    site = Site(name="Test Site")
+    sensor = Sensor(site=site, name="MacBook Sensor", hostname="macbook", token_hash=hash_secret(sensor_token))
+    db.add_all([site, sensor])
+    db.commit()
+    db.refresh(sensor)
+    return sensor, sensor_token
+
+
+def admin_headers() -> dict[str, str]:
+    return {"Authorization": "Bearer dev-admin-token"}
+
+
+def sensor_headers(sensor_token: str) -> dict[str, str]:
+    return {"X-Sensor-Token": sensor_token}
+
+
+def test_scan_job_rejects_public_ranges() -> None:
+    db = make_session()
+    seed_sensor(db)
+    client = make_client(db)
+
+    response = client.post(
+        "/api/v1/scan-jobs",
+        headers=admin_headers(),
+        json={"target_cidr": "8.8.8.0/24"},
+    )
+
+    assert response.status_code == 400
+
+
+def test_scan_job_claim_start_and_complete_from_scan_ingest() -> None:
+    db = make_session()
+    sensor, sensor_token = seed_sensor(db)
+    client = make_client(db)
+
+    create_response = client.post(
+        "/api/v1/scan-jobs",
+        headers=admin_headers(),
+        json={"target_cidr": "192.168.1.0/24", "include_wifi": True},
+    )
+    assert create_response.status_code == 200
+    job = create_response.json()
+    assert job["status"] == "queued"
+    assert job["sensor_id"] == sensor.id
+
+    claim_response = client.post(
+        f"/api/v1/sensors/{sensor.id}/scan-jobs/claim",
+        headers=sensor_headers(sensor_token),
+    )
+    assert claim_response.status_code == 200
+    assert claim_response.json()["status"] == "claimed"
+
+    start_response = client.post(
+        f"/api/v1/sensors/{sensor.id}/scan-jobs/{job['id']}/start",
+        headers=sensor_headers(sensor_token),
+        json={"preview": {"target_cidr": "192.168.1.0/24"}},
+    )
+    assert start_response.status_code == 200
+    assert start_response.json()["status"] == "running"
+
+    ingest_response = client.post(
+        "/api/v1/scans",
+        headers=sensor_headers(sensor_token),
+        json={
+            "sensor_id": sensor.id,
+            "scan_job_id": job["id"],
+            "target_cidr": "192.168.1.0/24",
+            "assets": [{"ip": "192.168.1.42", "vendor": "Apple"}],
+            "wifi_networks": [],
+        },
+    )
+    assert ingest_response.status_code == 200
+
+    completed_job = db.scalar(select(ScanJob).where(ScanJob.id == job["id"]))
+    assert completed_job is not None
+    assert completed_job.status == "completed"
+    assert completed_job.result_summary["assets_seen"] == 1
+
+
+def test_claim_returns_null_when_no_jobs_are_queued() -> None:
+    db = make_session()
+    sensor, sensor_token = seed_sensor(db)
+    client = make_client(db)
+
+    response = client.post(
+        f"/api/v1/sensors/{sensor.id}/scan-jobs/claim",
+        headers=sensor_headers(sensor_token),
+    )
+
+    assert response.status_code == 200
+    assert response.json() is None

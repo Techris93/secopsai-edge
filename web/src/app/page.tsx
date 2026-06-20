@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertTriangle, FileText, RefreshCw, Server, ShieldAlert, Wifi } from "lucide-react";
 import { LiveState } from "@/components/LiveState";
 import { PageHeader } from "@/components/PageHeader";
+import { ScanActions } from "@/components/ScanActions";
 import { SeverityBadge } from "@/components/SeverityBadge";
 import { StatCard } from "@/components/StatCard";
 import { fetchDashboardData } from "@/lib/api";
@@ -15,13 +16,16 @@ export default function OverviewPage() {
   const [live, setLive] = useState(false);
   const [error, setError] = useState<string | undefined>();
 
-  useEffect(() => {
-    fetchDashboardData().then((result) => {
-      setData(result.data);
-      setLive(result.live);
-      setError(result.error);
-    });
+  const loadDashboardData = useCallback(async () => {
+    const result = await fetchDashboardData();
+    setData(result.data);
+    setLive(result.live);
+    setError(result.error);
   }, []);
+
+  useEffect(() => {
+    loadDashboardData();
+  }, [loadDashboardData]);
 
   const summary = useMemo(() => {
     const findings = data?.findings ?? [];
@@ -52,7 +56,7 @@ export default function OverviewPage() {
         <StatCard label="Open Findings" value={summary.openFindings} detail="Waiting for review" icon={ShieldAlert} tone="amber" />
       </div>
 
-      <div className="mt-6 grid gap-6 xl:grid-cols-[1.25fr_0.75fr]">
+      <div className="mt-6 grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
         <section className="rounded-lg border border-line bg-white shadow-panel">
           <div className="flex items-center justify-between border-b border-line px-4 py-3">
             <h2 className="text-lg font-semibold text-ink">Recent Findings</h2>
@@ -72,28 +76,32 @@ export default function OverviewPage() {
           </div>
         </section>
 
-        <section className="rounded-lg border border-line bg-white p-4 shadow-panel">
-          <div className="flex items-center gap-2">
-            <FileText size={20} className="text-sea" aria-hidden="true" />
-            <h2 className="text-lg font-semibold text-ink">AI Insight</h2>
-          </div>
-          {latestReport ? (
-            <div className="mt-4">
-              <SeverityBadge severity={latestReport.risk_level} />
-              <h3 className="mt-4 text-xl font-semibold text-ink">{latestReport.title}</h3>
-              <p className="mt-3 text-sm leading-6 text-zinc-600">{latestReport.summary}</p>
-              <ul className="mt-4 space-y-2">
-                {(latestReport.content.recommended_actions ?? []).slice(0, 3).map((action) => (
-                  <li key={action} className="rounded-md bg-paper px-3 py-2 text-sm text-ink">
-                    {action}
-                  </li>
-                ))}
-              </ul>
+        <div className="grid gap-6">
+          <ScanActions scanJobs={data?.scanJobs ?? []} onChanged={loadDashboardData} />
+
+          <section className="rounded-lg border border-line bg-white p-4 shadow-panel">
+            <div className="flex items-center gap-2">
+              <FileText size={20} className="text-sea" aria-hidden="true" />
+              <h2 className="text-lg font-semibold text-ink">AI Insight</h2>
             </div>
-          ) : (
-            <p className="mt-4 text-sm text-zinc-600">Generate a report after ingesting scan findings.</p>
-          )}
-        </section>
+            {latestReport ? (
+              <div className="mt-4">
+                <SeverityBadge severity={latestReport.risk_level} />
+                <h3 className="mt-4 text-xl font-semibold text-ink">{latestReport.title}</h3>
+                <p className="mt-3 text-sm leading-6 text-zinc-600">{latestReport.summary}</p>
+                <ul className="mt-4 space-y-2">
+                  {(latestReport.content.recommended_actions ?? []).slice(0, 3).map((action) => (
+                    <li key={action} className="rounded-md bg-paper px-3 py-2 text-sm text-ink">
+                      {action}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : (
+              <p className="mt-4 text-sm text-zinc-600">Generate a report after ingesting scan findings.</p>
+            )}
+          </section>
+        </div>
       </div>
     </>
   );

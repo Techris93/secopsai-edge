@@ -69,9 +69,13 @@ Cloud commands:
 ```bash
 ./scripts/edge cloud configure https://<your-render-api>.onrender.com
 ./scripts/edge cloud register
+./scripts/edge worker --cloud
 ./scripts/edge scan 192.168.1.0/24 --cloud
 ./scripts/edge report --cloud
 ```
+
+The hosted dashboard can also queue remote scan jobs. Keep the worker running locally so queued jobs
+execute on your MacBook/Raspberry Pi, where the LAN is actually reachable.
 
 See [docs/architecture.md](docs/architecture.md) and [docs/runbook.md](docs/runbook.md) for implementation details.
 

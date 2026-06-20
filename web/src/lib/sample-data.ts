@@ -96,5 +96,6 @@ export const sampleData: DashboardData = {
       },
       created_at: now
     }
-  ]
+  ],
+  scanJobs: []
 };

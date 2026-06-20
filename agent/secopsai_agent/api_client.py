@@ -25,11 +25,43 @@ class SecOpsApiClient:
         self.sensor_token = sensor_token
         self.timeout = timeout
 
+    def _sensor_headers(self) -> dict[str, str]:
+        return {"X-Sensor-Token": self.sensor_token}
+
+    def claim_scan_job(self, sensor_id: str) -> dict[str, Any] | None:
+        response = httpx.post(
+            f"{self.base_url}/api/v1/sensors/{sensor_id}/scan-jobs/claim",
+            headers=self._sensor_headers(),
+            timeout=self.timeout,
+        )
+        response.raise_for_status()
+        return response.json()
+
+    def start_scan_job(self, sensor_id: str, job_id: str, preview: dict[str, Any]) -> dict[str, Any]:
+        response = httpx.post(
+            f"{self.base_url}/api/v1/sensors/{sensor_id}/scan-jobs/{job_id}/start",
+            headers=self._sensor_headers(),
+            json={"preview": preview},
+            timeout=self.timeout,
+        )
+        response.raise_for_status()
+        return response.json()
+
+    def fail_scan_job(self, sensor_id: str, job_id: str, error_message: str) -> dict[str, Any]:
+        response = httpx.post(
+            f"{self.base_url}/api/v1/sensors/{sensor_id}/scan-jobs/{job_id}/fail",
+            headers=self._sensor_headers(),
+            json={"error_message": error_message},
+            timeout=self.timeout,
+        )
+        response.raise_for_status()
+        return response.json()
+
     def submit_scan(self, scan: ScanResult) -> dict[str, Any]:
         payload = _json_safe(asdict(scan))
         response = httpx.post(
             f"{self.base_url}/api/v1/scans",
-            headers={"X-Sensor-Token": self.sensor_token},
+            headers=self._sensor_headers(),
             json=payload,
             timeout=self.timeout,
         )

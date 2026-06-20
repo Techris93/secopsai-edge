@@ -1,5 +1,5 @@
 import { sampleData } from "./sample-data";
-import type { Asset, DashboardData, Finding, Report, WifiNetwork } from "./types";
+import type { Asset, DashboardData, Finding, Report, ScanJob, WifiNetwork } from "./types";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000";
 const SESSION_TOKEN_KEY = "secopsai_dashboard_session";
@@ -67,13 +67,14 @@ export function apiBaseUrl(): string {
 
 export async function fetchDashboardData(): Promise<ApiResult<DashboardData>> {
   try {
-    const [assets, wifiNetworks, findings, reports] = await Promise.all([
+    const [assets, wifiNetworks, findings, reports, scanJobs] = await Promise.all([
       requestJson<Asset[]>("/api/v1/assets"),
       requestJson<WifiNetwork[]>("/api/v1/wifi-networks"),
       requestJson<Finding[]>("/api/v1/findings"),
-      requestJson<Report[]>("/api/v1/reports")
+      requestJson<Report[]>("/api/v1/reports"),
+      requestJson<ScanJob[]>("/api/v1/scan-jobs")
     ]);
-    return { data: { assets, wifiNetworks, findings, reports }, live: true };
+    return { data: { assets, wifiNetworks, findings, reports, scanJobs }, live: true };
   } catch (error) {
     return {
       data: sampleData,
@@ -85,6 +86,13 @@ export async function fetchDashboardData(): Promise<ApiResult<DashboardData>> {
 
 export async function generateReport(): Promise<Report> {
   return requestJson<Report>("/api/v1/reports/generate", { method: "POST" });
+}
+
+export async function createScanJob(targetCidr: string, includeWifi: boolean): Promise<ScanJob> {
+  return requestJson<ScanJob>("/api/v1/scan-jobs", {
+    method: "POST",
+    body: JSON.stringify({ target_cidr: targetCidr, include_wifi: includeWifi })
+  });
 }
 
 export async function updateFindingStatus(findingId: string, status: string): Promise<Finding> {

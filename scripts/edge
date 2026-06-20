@@ -27,6 +27,7 @@ Usage:
   ./scripts/edge preview <cidr>        Show the safe Nmap commands for a target
   ./scripts/edge scan <cidr> [--wifi]  Submit a scan using saved local sensor credentials
   ./scripts/edge scan <cidr> --cloud   Submit a scan to the configured hosted API
+  ./scripts/edge worker [--cloud]      Poll for remote scan jobs and execute them locally
   ./scripts/edge report [--cloud]      Generate an AI-style report
   ./scripts/edge cloud configure <url> Save hosted Render API URL
   ./scripts/edge cloud register        Register this sensor against the hosted API
@@ -45,6 +46,7 @@ Typical flow:
 Cloud flow:
   ./scripts/edge cloud configure https://secopsai-edge-api.onrender.com
   ./scripts/edge cloud register
+  ./scripts/edge worker --cloud
   ./scripts/edge scan 192.168.1.0/24 --cloud
 EOF
 }
@@ -301,6 +303,8 @@ submit_scan() {
   for arg in "$@"; do
     if [ "$arg" = "--cloud" ]; then
       profile="cloud"
+    elif [ "$arg" = "--wifi" ]; then
+      agent_args+=("--include-wifi")
     else
       agent_args+=("$arg")
     fi
@@ -321,6 +325,38 @@ submit_scan() {
   ensure_python_tools
   cd "$ROOT_DIR"
   PYTHONPATH="$ROOT_DIR/agent" "$PYTHON_BIN" -m secopsai_agent.cli submit "$target" \
+    --sensor-id "$sensor_id" \
+    --sensor-token "$sensor_token" \
+    --api-url "$target_api_url" \
+    "${agent_args[@]}"
+}
+
+run_worker() {
+  profile="local"
+  agent_args=()
+  for arg in "$@"; do
+    if [ "$arg" = "--cloud" ]; then
+      profile="cloud"
+    else
+      agent_args+=("$arg")
+    fi
+  done
+
+  if [ "$profile" = "cloud" ]; then
+    require_cloud_sensor_env
+    sensor_id="$SECOPSAI_CLOUD_SENSOR_ID"
+    sensor_token="$SECOPSAI_CLOUD_SENSOR_TOKEN"
+    target_api_url="$(cloud_api_url)"
+  else
+    require_sensor_env
+    sensor_id="$SECOPSAI_SENSOR_ID"
+    sensor_token="$SECOPSAI_SENSOR_TOKEN"
+    target_api_url="$(api_url)"
+  fi
+
+  ensure_python_tools
+  cd "$ROOT_DIR"
+  PYTHONPATH="$ROOT_DIR/agent" "$PYTHON_BIN" -m secopsai_agent.cli worker \
     --sensor-id "$sensor_id" \
     --sensor-token "$sensor_token" \
     --api-url "$target_api_url" \
@@ -452,6 +488,7 @@ main() {
     cloud) cloud "$@" ;;
     preview) preview_scan "$@" ;;
     scan) submit_scan "$@" ;;
+    worker) run_worker "$@" ;;
     report) generate_report ;;
     test) run_tests ;;
     status) status "$@" ;;

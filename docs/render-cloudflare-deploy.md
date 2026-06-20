@@ -75,6 +75,12 @@ Run a scan and submit it to Render:
 ./scripts/edge scan 192.168.1.0/24 --cloud
 ```
 
+Or run the local worker so dashboard-queued jobs execute locally:
+
+```bash
+./scripts/edge worker --cloud
+```
+
 Generate a hosted report:
 
 ```bash
@@ -88,4 +94,5 @@ Generate a hosted report:
 - Settings > API Connection accepts the admin token.
 - Assets/Findings/Reports switch from demo fallback to live API data after connection.
 - Local agent can register and scan with `--cloud`.
+- Dashboard Scan Actions can queue a remote job, and `./scripts/edge worker --cloud --once` can claim it.
 - Browser source and Cloudflare env vars do not contain `NEXT_PUBLIC_ADMIN_TOKEN`.

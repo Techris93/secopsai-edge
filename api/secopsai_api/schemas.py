@@ -39,6 +39,7 @@ class WifiNetworkIn(BaseModel):
 
 class ScanIn(BaseModel):
     sensor_id: str
+    scan_job_id: str | None = None
     target_cidr: str | None = None
     scan_source: str | None = None
     started_at: datetime | None = None
@@ -136,3 +137,36 @@ class ScanIngestResponse(BaseModel):
     assets_seen: int
     wifi_networks_seen: int
     findings_created: int
+
+
+class ScanJobCreateRequest(BaseModel):
+    target_cidr: str
+    include_wifi: bool = False
+    sensor_id: str | None = None
+
+
+class ScanJobStartRequest(BaseModel):
+    preview: dict[str, Any] = Field(default_factory=dict)
+
+
+class ScanJobFailRequest(BaseModel):
+    error_message: str
+
+
+class ScanJobOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    site_id: str
+    sensor_id: str
+    target_cidr: str
+    include_wifi: bool
+    status: str
+    created_at: datetime
+    claimed_at: datetime | None = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    updated_at: datetime
+    preview: dict[str, Any]
+    result_summary: dict[str, Any]
+    error_message: str | None = None

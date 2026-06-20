@@ -59,6 +59,25 @@ class ScanRun(Base):
     summary: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
 
 
+class ScanJob(Base):
+    __tablename__ = "scan_jobs"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    site_id: Mapped[str] = mapped_column(ForeignKey("sites.id"), nullable=False)
+    sensor_id: Mapped[str] = mapped_column(ForeignKey("sensors.id"), nullable=False)
+    target_cidr: Mapped[str] = mapped_column(String(64), nullable=False)
+    include_wifi: Mapped[bool] = mapped_column(Boolean, default=False)
+    status: Mapped[str] = mapped_column(String(32), default="queued")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    claimed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    preview: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    result_summary: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    error_message: Mapped[str | None] = mapped_column(Text)
+
+
 class Asset(Base):
     __tablename__ = "assets"
     __table_args__ = (UniqueConstraint("site_id", "ip_address", name="uq_asset_site_ip"),)

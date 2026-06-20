@@ -53,9 +53,27 @@ export type Report = {
   created_at: string;
 };
 
+export type ScanJob = {
+  id: string;
+  site_id: string;
+  sensor_id: string;
+  target_cidr: string;
+  include_wifi: boolean;
+  status: "queued" | "claimed" | "running" | "completed" | "failed" | "canceled" | string;
+  created_at: string;
+  claimed_at?: string | null;
+  started_at?: string | null;
+  completed_at?: string | null;
+  updated_at: string;
+  preview: Record<string, unknown>;
+  result_summary: Record<string, unknown>;
+  error_message?: string | null;
+};
+
 export type DashboardData = {
   assets: Asset[];
   wifiNetworks: WifiNetwork[];
   findings: Finding[];
   reports: Report[];
+  scanJobs: ScanJob[];
 };

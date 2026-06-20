@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from ipaddress import ip_network
+
 from fastapi import Depends, FastAPI, Header, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import select
@@ -10,7 +12,7 @@ from secopsai_api.audit import write_audit
 from secopsai_api.config import get_settings
 from secopsai_api.database import engine, get_db
 from secopsai_api.detection import ingest_scan
-from secopsai_api.models import Asset, Base, Finding, Report, Sensor, Site, WifiNetwork, utcnow
+from secopsai_api.models import Asset, Base, Finding, Report, ScanJob, Sensor, Site, WifiNetwork, utcnow
 from secopsai_api.schemas import (
     AssetOut,
     DashboardLoginRequest,
@@ -20,6 +22,10 @@ from secopsai_api.schemas import (
     ReportOut,
     ScanIn,
     ScanIngestResponse,
+    ScanJobCreateRequest,
+    ScanJobFailRequest,
+    ScanJobOut,
+    ScanJobStartRequest,
     SensorRegisterRequest,
     SensorRegisterResponse,
     WifiNetworkOut,
@@ -38,6 +44,10 @@ from secopsai_api.splunk import export_finding, export_report
 
 settings = get_settings()
 app = FastAPI(title="SecOpsAI Edge API", version="0.1.0")
+PRIVATE_SCAN_RANGES = tuple(
+    ip_network(cidr) for cidr in ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16")
+)
+TERMINAL_SCAN_JOB_STATUSES = {"completed", "failed", "canceled"}
 
 app.add_middleware(
     CORSMiddleware,
@@ -57,6 +67,39 @@ def startup() -> None:
 @app.get("/healthz")
 def healthz() -> dict[str, str]:
     return {"status": "ok"}
+
+
+def normalize_scan_job_target(target_cidr: str) -> str:
+    try:
+        network = ip_network(target_cidr, strict=False)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid CIDR target",
+        ) from exc
+
+    if network.version != 4:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only IPv4 CIDRs are supported")
+    if not any(network.subnet_of(allowed) for allowed in PRIVATE_SCAN_RANGES):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only RFC1918 private CIDRs are allowed for remote jobs",
+        )
+    if network.prefixlen < 24 or network.num_addresses > 256:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Remote scan jobs are limited to /24 or narrower CIDRs",
+        )
+    return str(network)
+
+
+def get_sensor_job(db: Session, sensor: Sensor, job_id: str) -> ScanJob:
+    job = db.get(ScanJob, job_id)
+    if job is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Scan job not found")
+    if job.sensor_id != sensor.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Scan job belongs to a different sensor")
+    return job
 
 
 @app.post("/api/v1/auth/session", response_model=DashboardSessionResponse)
@@ -123,6 +166,148 @@ def heartbeat(
     return {"status": "ok"}
 
 
+@app.post("/api/v1/scan-jobs", response_model=ScanJobOut, dependencies=[Depends(require_admin)])
+def create_scan_job(payload: ScanJobCreateRequest, db: Session = Depends(get_db)) -> ScanJob:
+    target_cidr = normalize_scan_job_target(payload.target_cidr)
+    if payload.sensor_id:
+        sensor = db.get(Sensor, payload.sensor_id)
+    else:
+        sensor = db.scalar(select(Sensor).order_by(Sensor.created_at.asc()))
+    if sensor is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Register a sensor before queueing scans")
+
+    job = ScanJob(
+        site_id=sensor.site_id,
+        sensor_id=sensor.id,
+        target_cidr=target_cidr,
+        include_wifi=payload.include_wifi,
+        status="queued",
+        preview={},
+        result_summary={},
+    )
+    db.add(job)
+    db.flush()
+    write_audit(
+        db,
+        "scan_job.created",
+        sensor_id=sensor.id,
+        resource_type="scan_job",
+        resource_id=job.id,
+        details={"target_cidr": target_cidr, "include_wifi": payload.include_wifi},
+    )
+    db.commit()
+    db.refresh(job)
+    return job
+
+
+@app.get("/api/v1/scan-jobs", response_model=list[ScanJobOut], dependencies=[Depends(require_admin)])
+def list_scan_jobs(
+    status_filter: str | None = None,
+    sensor_id: str | None = None,
+    db: Session = Depends(get_db),
+) -> list[ScanJob]:
+    query = select(ScanJob).order_by(ScanJob.created_at.desc())
+    if status_filter:
+        query = query.where(ScanJob.status == status_filter)
+    if sensor_id:
+        query = query.where(ScanJob.sensor_id == sensor_id)
+    return list(db.scalars(query).all())
+
+
+@app.post("/api/v1/scan-jobs/{job_id}/cancel", response_model=ScanJobOut, dependencies=[Depends(require_admin)])
+def cancel_scan_job(job_id: str, db: Session = Depends(get_db)) -> ScanJob:
+    job = db.get(ScanJob, job_id)
+    if job is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Scan job not found")
+    if job.status in TERMINAL_SCAN_JOB_STATUSES:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Scan job is already terminal")
+    job.status = "canceled"
+    job.updated_at = utcnow()
+    job.completed_at = job.completed_at or job.updated_at
+    write_audit(db, "scan_job.canceled", sensor_id=job.sensor_id, resource_type="scan_job", resource_id=job.id)
+    db.commit()
+    db.refresh(job)
+    return job
+
+
+@app.post("/api/v1/sensors/{sensor_id}/scan-jobs/claim", response_model=ScanJobOut | None)
+def claim_scan_job(
+    sensor: Sensor = Depends(require_sensor_for_path),
+    db: Session = Depends(get_db),
+) -> ScanJob | None:
+    job = db.scalar(
+        select(ScanJob)
+        .where(ScanJob.sensor_id == sensor.id, ScanJob.status == "queued")
+        .order_by(ScanJob.created_at.asc())
+    )
+    if job is None:
+        return None
+
+    now = utcnow()
+    job.status = "claimed"
+    job.claimed_at = now
+    job.updated_at = now
+    sensor.status = "online"
+    sensor.last_seen_at = now
+    write_audit(db, "scan_job.claimed", sensor_id=sensor.id, resource_type="scan_job", resource_id=job.id)
+    db.commit()
+    db.refresh(job)
+    return job
+
+
+@app.post("/api/v1/sensors/{sensor_id}/scan-jobs/{job_id}/start", response_model=ScanJobOut)
+def start_scan_job(
+    job_id: str,
+    payload: ScanJobStartRequest,
+    sensor: Sensor = Depends(require_sensor_for_path),
+    db: Session = Depends(get_db),
+) -> ScanJob:
+    job = get_sensor_job(db, sensor, job_id)
+    if job.status in TERMINAL_SCAN_JOB_STATUSES:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Scan job is already terminal")
+    now = utcnow()
+    job.status = "running"
+    job.started_at = job.started_at or now
+    job.updated_at = now
+    job.preview = payload.preview
+    sensor.status = "scanning"
+    sensor.last_seen_at = now
+    write_audit(db, "scan_job.started", sensor_id=sensor.id, resource_type="scan_job", resource_id=job.id)
+    db.commit()
+    db.refresh(job)
+    return job
+
+
+@app.post("/api/v1/sensors/{sensor_id}/scan-jobs/{job_id}/fail", response_model=ScanJobOut)
+def fail_scan_job(
+    job_id: str,
+    payload: ScanJobFailRequest,
+    sensor: Sensor = Depends(require_sensor_for_path),
+    db: Session = Depends(get_db),
+) -> ScanJob:
+    job = get_sensor_job(db, sensor, job_id)
+    if job.status in TERMINAL_SCAN_JOB_STATUSES:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Scan job is already terminal")
+    now = utcnow()
+    job.status = "failed"
+    job.error_message = payload.error_message[:2000]
+    job.completed_at = now
+    job.updated_at = now
+    sensor.status = "online"
+    sensor.last_seen_at = now
+    write_audit(
+        db,
+        "scan_job.failed",
+        sensor_id=sensor.id,
+        resource_type="scan_job",
+        resource_id=job.id,
+        details={"error_message": job.error_message},
+    )
+    db.commit()
+    db.refresh(job)
+    return job
+
+
 @app.post("/api/v1/scans", response_model=ScanIngestResponse)
 def ingest_scan_endpoint(
     payload: ScanIn,
@@ -130,16 +315,40 @@ def ingest_scan_endpoint(
     db: Session = Depends(get_db),
 ) -> ScanIngestResponse:
     sensor = authenticate_sensor(db, payload.sensor_id, x_sensor_token)
+    scan_job = None
+    if payload.scan_job_id:
+        scan_job = get_sensor_job(db, sensor, payload.scan_job_id)
+        if scan_job.status in TERMINAL_SCAN_JOB_STATUSES:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Scan job is already terminal")
+
     scan, findings = ingest_scan(db, sensor, payload)
     for finding in findings:
         export_finding(finding)
+    if scan_job:
+        now = utcnow()
+        scan_job.status = "completed"
+        scan_job.started_at = scan_job.started_at or payload.started_at or scan.started_at or now
+        scan_job.completed_at = now
+        scan_job.updated_at = now
+        scan_job.result_summary = {
+            "scan_id": scan.id,
+            "assets_seen": len(payload.assets),
+            "wifi_networks_seen": len(payload.wifi_networks),
+            "findings_created": len({finding.id for finding in findings}),
+        }
+        sensor.status = "online"
+        sensor.last_seen_at = now
     write_audit(
         db,
         "scan.ingested",
         sensor_id=sensor.id,
         resource_type="scan",
         resource_id=scan.id,
-        details={"assets_seen": len(payload.assets), "wifi_networks_seen": len(payload.wifi_networks)},
+        details={
+            "assets_seen": len(payload.assets),
+            "wifi_networks_seen": len(payload.wifi_networks),
+            "scan_job_id": payload.scan_job_id,
+        },
     )
     db.commit()
     return ScanIngestResponse(

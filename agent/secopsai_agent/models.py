@@ -47,6 +47,7 @@ class WifiNetworkObservation:
 class ScanResult:
     sensor_id: str
     target_cidr: str
+    scan_job_id: str | None = None
     scan_source: str = "nmap"
     started_at: datetime = field(default_factory=utcnow)
     completed_at: datetime | None = None

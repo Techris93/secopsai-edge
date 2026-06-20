@@ -4,6 +4,7 @@ import argparse
 import json
 import os
 import socket
+import time
 from dataclasses import asdict
 
 from secopsai_agent.api_client import SecOpsApiClient
@@ -31,6 +32,13 @@ def main() -> int:
     submit.add_argument("--sensor-token", default=os.getenv("SECOPSAI_SENSOR_TOKEN"))
     submit.add_argument("--include-wifi", action="store_true")
 
+    worker = subcommands.add_parser("worker", help="Poll the API for remote scan jobs and run them locally.")
+    worker.add_argument("--sensor-id", default=os.getenv("SECOPSAI_SENSOR_ID"))
+    worker.add_argument("--api-url", default=os.getenv("SECOPSAI_API_URL", "http://127.0.0.1:8000"))
+    worker.add_argument("--sensor-token", default=os.getenv("SECOPSAI_SENSOR_TOKEN"))
+    worker.add_argument("--poll-interval", type=float, default=30.0)
+    worker.add_argument("--once", action="store_true")
+
     args = parser.parse_args()
     scanner = NmapScanner()
 
@@ -51,6 +59,18 @@ def main() -> int:
         print(json.dumps(response, indent=2))
         return 0
 
+    if args.command == "worker":
+        if not args.sensor_id or not args.sensor_token:
+            parser.error("worker requires --sensor-id and --sensor-token or matching environment vars.")
+        return _run_worker(
+            scanner=scanner,
+            api_url=args.api_url,
+            sensor_id=args.sensor_id,
+            sensor_token=args.sensor_token,
+            poll_interval=args.poll_interval,
+            once=args.once,
+        )
+
     return 1
 
 
@@ -69,6 +89,55 @@ def _run_scan(
     if include_wifi:
         result.wifi_networks = MacOSWifiScanner().scan()
     return result.complete()
+
+
+def _run_worker(
+    scanner: NmapScanner,
+    api_url: str,
+    sensor_id: str,
+    sensor_token: str,
+    poll_interval: float,
+    once: bool,
+) -> int:
+    client = SecOpsApiClient(api_url, sensor_token, timeout=30.0)
+    while True:
+        job = client.claim_scan_job(sensor_id)
+        if not job:
+            if once:
+                print(json.dumps({"status": "idle", "message": "No queued scan jobs."}, indent=2))
+                return 0
+            time.sleep(max(poll_interval, 1.0))
+            continue
+
+        job_id = str(job["id"])
+        try:
+            target_cidr = str(job["target_cidr"])
+            include_wifi = bool(job.get("include_wifi"))
+            preview = scanner.preview(NmapScanConfig(target_cidr))
+            client.start_scan_job(sensor_id, job_id, preview)
+            result = _run_scan(scanner, target_cidr, sensor_id, include_wifi)
+            result.scan_job_id = job_id
+            response = client.submit_scan(result)
+            print(
+                json.dumps(
+                    {"status": "completed", "job_id": job_id, "scan": response},
+                    indent=2,
+                )
+            )
+            if once:
+                return 0
+        except Exception as exc:
+            _fail_job(client, sensor_id, job_id, exc)
+            if once:
+                return 1
+
+
+def _fail_job(client: SecOpsApiClient, sensor_id: str, job_id: str, exc: Exception) -> None:
+    error = f"{type(exc).__name__}: {exc}"
+    try:
+        client.fail_scan_job(sensor_id, job_id, error)
+    finally:
+        print(json.dumps({"status": "failed", "job_id": job_id, "error": error}, indent=2))
 
 
 def _scan_to_json(scan: ScanResult) -> dict[str, object]:
