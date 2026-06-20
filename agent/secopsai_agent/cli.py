@@ -4,8 +4,10 @@ import argparse
 import json
 import os
 import socket
+import sys
 import time
 from dataclasses import asdict
+from typing import Callable
 
 from secopsai_agent.api_client import SecOpsApiClient
 from secopsai_agent.models import ScanResult
@@ -47,14 +49,19 @@ def main() -> int:
         return 0
 
     if args.command == "scan":
-        result = _run_scan(scanner, args.target_cidr, args.sensor_id, args.include_wifi)
+        result = _run_scan(
+            scanner, args.target_cidr, args.sensor_id, args.include_wifi, _stderr_progress
+        )
         print(json.dumps(_scan_to_json(result), indent=2))
         return 0
 
     if args.command == "submit":
         if not args.sensor_id or not args.sensor_token:
             parser.error("submit requires --sensor-id and --sensor-token or matching environment vars.")
-        result = _run_scan(scanner, args.target_cidr, args.sensor_id, args.include_wifi)
+        result = _run_scan(
+            scanner, args.target_cidr, args.sensor_id, args.include_wifi, _stderr_progress
+        )
+        _stderr_progress("Uploading normalized results to SecOpsAI Cloud.")
         response = SecOpsApiClient(args.api_url, args.sensor_token).submit_scan(result)
         print(json.dumps(response, indent=2))
         return 0
@@ -79,16 +86,23 @@ def _run_scan(
     target_cidr: str,
     sensor_id: str,
     include_wifi: bool,
+    progress: Callable[[str], None] | None = None,
 ) -> ScanResult:
     result = ScanResult(
         sensor_id=sensor_id,
         target_cidr=target_cidr,
         scan_source=f"macos:{socket.gethostname()}",
     )
-    result.assets = scanner.discover(NmapScanConfig(target_cidr=target_cidr))
+    result.assets = scanner.discover(NmapScanConfig(target_cidr=target_cidr), progress=progress)
     if include_wifi:
+        if progress:
+            progress("Collecting local Wi-Fi inventory.")
         result.wifi_networks = MacOSWifiScanner().scan()
     return result.complete()
+
+
+def _stderr_progress(message: str) -> None:
+    print(f"[SecOpsAI] {message}", file=sys.stderr, flush=True)
 
 
 def _run_worker(
@@ -100,6 +114,7 @@ def _run_worker(
     once: bool,
 ) -> int:
     client = SecOpsApiClient(api_url, sensor_token, timeout=30.0)
+    active_job_id: str | None = None
     if not once:
         print(
             json.dumps(
@@ -125,13 +140,21 @@ def _run_worker(
                 continue
 
             job_id = str(job["id"])
+            active_job_id = job_id
             try:
                 target_cidr = str(job["target_cidr"])
                 include_wifi = bool(job.get("include_wifi"))
                 preview = scanner.preview(NmapScanConfig(target_cidr))
                 client.start_scan_job(sensor_id, job_id, preview)
-                result = _run_scan(scanner, target_cidr, sensor_id, include_wifi)
+                progress = lambda message: print(
+                    json.dumps({"status": "scanning", "job_id": job_id, "message": message}),
+                    flush=True,
+                )
+                result = _run_scan(
+                    scanner, target_cidr, sensor_id, include_wifi, progress=progress
+                )
                 result.scan_job_id = job_id
+                progress("Uploading normalized results to SecOpsAI Cloud.")
                 response = client.submit_scan(result)
                 print(
                     json.dumps(
@@ -140,13 +163,24 @@ def _run_worker(
                     ),
                     flush=True,
                 )
+                active_job_id = None
                 if once:
                     return 0
             except Exception as exc:
                 _fail_job(client, sensor_id, job_id, exc)
+                active_job_id = None
                 if once:
                     return 1
     except KeyboardInterrupt:
+        if active_job_id:
+            try:
+                client.fail_scan_job(
+                    sensor_id,
+                    active_job_id,
+                    "Worker stopped before the scan completed.",
+                )
+            except Exception:
+                pass
         print('\n{"status": "stopped", "message": "Worker stopped."}')
         return 0
 

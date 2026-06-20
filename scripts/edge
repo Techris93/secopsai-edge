@@ -499,7 +499,7 @@ main() {
     preview) preview_scan "$@" ;;
     scan) submit_scan "$@" ;;
     worker) run_worker "$@" ;;
-    report) generate_report ;;
+    report) generate_report "$@" ;;
     test) run_tests ;;
     status) status "$@" ;;
     *) usage; fail "Unknown command: $command" ;;
