@@ -100,36 +100,55 @@ def _run_worker(
     once: bool,
 ) -> int:
     client = SecOpsApiClient(api_url, sensor_token, timeout=30.0)
-    while True:
-        job = client.claim_scan_job(sensor_id)
-        if not job:
-            if once:
-                print(json.dumps({"status": "idle", "message": "No queued scan jobs."}, indent=2))
-                return 0
-            time.sleep(max(poll_interval, 1.0))
-            continue
+    if not once:
+        print(
+            json.dumps(
+                {
+                    "status": "waiting",
+                    "message": "Worker connected. Waiting for dashboard scan jobs.",
+                    "api_url": api_url,
+                    "poll_interval_seconds": max(poll_interval, 1.0),
+                },
+                indent=2,
+            ),
+            flush=True,
+        )
 
-        job_id = str(job["id"])
-        try:
-            target_cidr = str(job["target_cidr"])
-            include_wifi = bool(job.get("include_wifi"))
-            preview = scanner.preview(NmapScanConfig(target_cidr))
-            client.start_scan_job(sensor_id, job_id, preview)
-            result = _run_scan(scanner, target_cidr, sensor_id, include_wifi)
-            result.scan_job_id = job_id
-            response = client.submit_scan(result)
-            print(
-                json.dumps(
-                    {"status": "completed", "job_id": job_id, "scan": response},
-                    indent=2,
+    try:
+        while True:
+            job = client.claim_scan_job(sensor_id)
+            if not job:
+                if once:
+                    print(json.dumps({"status": "idle", "message": "No queued scan jobs."}, indent=2))
+                    return 0
+                time.sleep(max(poll_interval, 1.0))
+                continue
+
+            job_id = str(job["id"])
+            try:
+                target_cidr = str(job["target_cidr"])
+                include_wifi = bool(job.get("include_wifi"))
+                preview = scanner.preview(NmapScanConfig(target_cidr))
+                client.start_scan_job(sensor_id, job_id, preview)
+                result = _run_scan(scanner, target_cidr, sensor_id, include_wifi)
+                result.scan_job_id = job_id
+                response = client.submit_scan(result)
+                print(
+                    json.dumps(
+                        {"status": "completed", "job_id": job_id, "scan": response},
+                        indent=2,
+                    ),
+                    flush=True,
                 )
-            )
-            if once:
-                return 0
-        except Exception as exc:
-            _fail_job(client, sensor_id, job_id, exc)
-            if once:
-                return 1
+                if once:
+                    return 0
+            except Exception as exc:
+                _fail_job(client, sensor_id, job_id, exc)
+                if once:
+                    return 1
+    except KeyboardInterrupt:
+        print('\n{"status": "stopped", "message": "Worker stopped."}')
+        return 0
 
 
 def _fail_job(client: SecOpsApiClient, sensor_id: str, job_id: str, exc: Exception) -> None:

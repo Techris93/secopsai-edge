@@ -324,11 +324,16 @@ submit_scan() {
 
   ensure_python_tools
   cd "$ROOT_DIR"
-  PYTHONPATH="$ROOT_DIR/agent" "$PYTHON_BIN" -m secopsai_agent.cli submit "$target" \
-    --sensor-id "$sensor_id" \
-    --sensor-token "$sensor_token" \
-    --api-url "$target_api_url" \
-    "${agent_args[@]}"
+  command_args=(
+    -m secopsai_agent.cli submit "$target"
+    --sensor-id "$sensor_id"
+    --sensor-token "$sensor_token"
+    --api-url "$target_api_url"
+  )
+  if [ "${#agent_args[@]}" -gt 0 ]; then
+    command_args+=("${agent_args[@]}")
+  fi
+  PYTHONPATH="$ROOT_DIR/agent" "$PYTHON_BIN" "${command_args[@]}"
 }
 
 run_worker() {
@@ -356,11 +361,16 @@ run_worker() {
 
   ensure_python_tools
   cd "$ROOT_DIR"
-  PYTHONPATH="$ROOT_DIR/agent" "$PYTHON_BIN" -m secopsai_agent.cli worker \
-    --sensor-id "$sensor_id" \
-    --sensor-token "$sensor_token" \
-    --api-url "$target_api_url" \
-    "${agent_args[@]}"
+  command_args=(
+    -m secopsai_agent.cli worker
+    --sensor-id "$sensor_id"
+    --sensor-token "$sensor_token"
+    --api-url "$target_api_url"
+  )
+  if [ "${#agent_args[@]}" -gt 0 ]; then
+    command_args+=("${agent_args[@]}")
+  fi
+  PYTHONPATH="$ROOT_DIR/agent" "$PYTHON_BIN" "${command_args[@]}"
 }
 
 generate_report() {
