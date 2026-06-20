@@ -1,0 +1,20 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: secopsai-edge-postgres
+    environment:
+      POSTGRES_DB: secopsai_edge
+      POSTGRES_USER: secopsai
+      POSTGRES_PASSWORD: secopsai
+    ports:
+      - "5432:5432"
+    volumes:
+      - secopsai-edge-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U secopsai -d secopsai_edge"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  secopsai-edge-postgres:

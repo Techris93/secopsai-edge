@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<nmaprun scanner="nmap">
+  <host>
+    <status state="up"/>
+    <address addr="192.168.1.25" addrtype="ipv4"/>
+    <address addr="AA:BB:CC:DD:EE:FF" addrtype="mac" vendor="Apple"/>
+    <hostnames>
+      <hostname name="Chris-MacBook.local"/>
+    </hostnames>
+    <ports>
+      <port protocol="tcp" portid="22">
+        <state state="open"/>
+        <service name="ssh" product="OpenSSH" version="9.0"/>
+      </port>
+      <port protocol="tcp" portid="445">
+        <state state="closed"/>
+        <service name="microsoft-ds"/>
+      </port>
+    </ports>
+  </host>
+</nmaprun>

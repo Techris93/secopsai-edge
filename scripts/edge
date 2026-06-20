@@ -1,0 +1,462 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ENV_FILE="$ROOT_DIR/.env"
+SENSOR_ENV_FILE="$ROOT_DIR/.sensor.env"
+CLOUD_ENV_FILE="$ROOT_DIR/.cloud.env"
+CLOUD_SENSOR_ENV_FILE="$ROOT_DIR/.cloud-sensor.env"
+PYTHON_BIN="$ROOT_DIR/.venv/bin/python"
+PIP_BIN="$ROOT_DIR/.venv/bin/pip"
+ALEMBIC_BIN="$ROOT_DIR/.venv/bin/alembic"
+UVICORN_BIN="$ROOT_DIR/.venv/bin/uvicorn"
+API_URL_DEFAULT="http://127.0.0.1:8000"
+
+usage() {
+  cat <<'EOF'
+SecOpsAI Edge helper
+
+Usage:
+  ./scripts/edge setup                 Install local Python and web dependencies
+  ./scripts/edge dev                   Start Postgres, migrate DB, API, and dashboard
+  ./scripts/edge db                    Start Postgres only
+  ./scripts/edge api                   Start the FastAPI backend only
+  ./scripts/edge web                   Start the Next.js dashboard only
+  ./scripts/edge migrate               Run database migrations
+  ./scripts/edge register              Register this MacBook sensor and save .sensor.env
+  ./scripts/edge preview <cidr>        Show the safe Nmap commands for a target
+  ./scripts/edge scan <cidr> [--wifi]  Submit a scan using saved local sensor credentials
+  ./scripts/edge scan <cidr> --cloud   Submit a scan to the configured hosted API
+  ./scripts/edge report [--cloud]      Generate an AI-style report
+  ./scripts/edge cloud configure <url> Save hosted Render API URL
+  ./scripts/edge cloud register        Register this sensor against the hosted API
+  ./scripts/edge test                  Run backend, frontend, build, and audit checks
+  ./scripts/edge status [--cloud]      Check local or hosted API status
+  ./scripts/edge stop-db               Stop Postgres
+
+Typical flow:
+  ./scripts/edge setup
+  ./scripts/edge dev
+  ./scripts/edge register
+  ./scripts/edge preview 192.168.1.0/24
+  ./scripts/edge scan 192.168.1.0/24
+  ./scripts/edge report
+
+Cloud flow:
+  ./scripts/edge cloud configure https://secopsai-edge-api.onrender.com
+  ./scripts/edge cloud register
+  ./scripts/edge scan 192.168.1.0/24 --cloud
+EOF
+}
+
+info() {
+  printf "\033[1;36m==>\033[0m %s\n" "$*"
+}
+
+warn() {
+  printf "\033[1;33mwarning:\033[0m %s\n" "$*" >&2
+}
+
+fail() {
+  printf "\033[1;31merror:\033[0m %s\n" "$*" >&2
+  exit 1
+}
+
+load_env() {
+  if [ -f "$ENV_FILE" ]; then
+    set -a
+    # shellcheck disable=SC1090
+    . "$ENV_FILE"
+    set +a
+  fi
+
+  if [ -f "$SENSOR_ENV_FILE" ]; then
+    set -a
+    # shellcheck disable=SC1090
+    . "$SENSOR_ENV_FILE"
+    set +a
+  fi
+}
+
+load_cloud_env() {
+  if [ -f "$CLOUD_ENV_FILE" ]; then
+    set -a
+    # shellcheck disable=SC1090
+    . "$CLOUD_ENV_FILE"
+    set +a
+  fi
+
+  if [ -f "$CLOUD_SENSOR_ENV_FILE" ]; then
+    set -a
+    # shellcheck disable=SC1090
+    . "$CLOUD_SENSOR_ENV_FILE"
+    set +a
+  fi
+}
+
+ensure_env_file() {
+  if [ ! -f "$ENV_FILE" ]; then
+    info "Creating .env from .env.example"
+    cp "$ROOT_DIR/.env.example" "$ENV_FILE"
+  fi
+}
+
+ensure_python_env() {
+  if [ ! -x "$PYTHON_BIN" ]; then
+    info "Creating Python virtual environment"
+    python3 -m venv "$ROOT_DIR/.venv"
+  fi
+}
+
+ensure_python_tools() {
+  ensure_python_env
+  if [ ! -x "$UVICORN_BIN" ] || [ ! -x "$ALEMBIC_BIN" ]; then
+    info "Installing Python dependencies"
+    "$PIP_BIN" install -r "$ROOT_DIR/api/requirements.txt" -r "$ROOT_DIR/agent/requirements.txt"
+  fi
+}
+
+require_sensor_env() {
+  load_env
+  if [ -z "${SECOPSAI_SENSOR_ID:-}" ] || [ -z "${SECOPSAI_SENSOR_TOKEN:-}" ]; then
+    fail "No saved sensor credentials. Run ./scripts/edge register first."
+  fi
+}
+
+require_cloud_sensor_env() {
+  load_cloud_env
+  if [ -z "${SECOPSAI_CLOUD_API_URL:-}" ]; then
+    fail "No hosted API URL. Run ./scripts/edge cloud configure <render-api-url> first."
+  fi
+  if [ -z "${SECOPSAI_CLOUD_SENSOR_ID:-}" ] || [ -z "${SECOPSAI_CLOUD_SENSOR_TOKEN:-}" ]; then
+    fail "No hosted sensor credentials. Run ./scripts/edge cloud register first."
+  fi
+}
+
+api_url() {
+  printf "%s" "${SECOPSAI_API_URL:-$API_URL_DEFAULT}"
+}
+
+cloud_api_url() {
+  load_cloud_env
+  if [ -z "${SECOPSAI_CLOUD_API_URL:-}" ]; then
+    fail "No hosted API URL. Run ./scripts/edge cloud configure <render-api-url> first."
+  fi
+  printf "%s" "${SECOPSAI_CLOUD_API_URL%/}"
+}
+
+admin_token() {
+  printf "%s" "${SECOPSAI_ADMIN_TOKEN:-dev-admin-token}"
+}
+
+cloud_admin_token() {
+  load_cloud_env
+  if [ -n "${SECOPSAI_CLOUD_ADMIN_TOKEN:-}" ]; then
+    printf "%s" "$SECOPSAI_CLOUD_ADMIN_TOKEN"
+    return
+  fi
+
+  printf "Cloud API admin token: " >&2
+  stty -echo
+  read -r token
+  stty echo
+  printf "\n" >&2
+  [ -n "$token" ] || fail "Cloud API admin token is required."
+  printf "%s" "$token"
+}
+
+compose() {
+  require_docker
+  docker compose -f "$ROOT_DIR/infra/docker-compose.yml" "$@"
+}
+
+require_docker() {
+  if ! command -v docker >/dev/null 2>&1; then
+    fail "Docker is not installed. Install Docker Desktop before starting Postgres."
+  fi
+  if ! docker info >/dev/null 2>&1; then
+    fail "Docker is not running. Start Docker Desktop, then rerun this command."
+  fi
+}
+
+setup() {
+  ensure_env_file
+  ensure_python_env
+  info "Installing Python dependencies"
+  "$PIP_BIN" install -r "$ROOT_DIR/api/requirements.txt" -r "$ROOT_DIR/agent/requirements.txt"
+  info "Installing web dependencies"
+  (cd "$ROOT_DIR/web" && npm install)
+  info "Setup complete"
+}
+
+start_db() {
+  info "Starting PostgreSQL"
+  compose up -d
+}
+
+stop_db() {
+  info "Stopping PostgreSQL"
+  compose down
+}
+
+migrate() {
+  ensure_python_tools
+  load_env
+  info "Running database migrations"
+  (cd "$ROOT_DIR/api" && "$ALEMBIC_BIN" upgrade head)
+}
+
+start_api() {
+  ensure_python_tools
+  load_env
+  info "Starting API on http://127.0.0.1:8000"
+  cd "$ROOT_DIR"
+  PYTHONPATH="$ROOT_DIR/api:$ROOT_DIR/agent" "$UVICORN_BIN" secopsai_api.main:app --reload --host 127.0.0.1 --port 8000
+}
+
+start_web() {
+  info "Starting dashboard on http://127.0.0.1:3000"
+  cd "$ROOT_DIR/web"
+  npm run dev
+}
+
+dev() {
+  ensure_env_file
+  ensure_python_tools
+  start_db
+  migrate
+
+  info "Starting API and dashboard. Press Ctrl+C to stop both."
+  "$0" api &
+  api_pid=$!
+  "$0" web &
+  web_pid=$!
+
+  cleanup() {
+    info "Stopping API and dashboard"
+    kill "$api_pid" "$web_pid" 2>/dev/null || true
+  }
+  trap cleanup INT TERM EXIT
+
+  wait "$api_pid" "$web_pid"
+}
+
+register_sensor() {
+  profile="${1:-local}"
+  ensure_python_env
+  if [ "$profile" = "cloud" ]; then
+    target_api_url="$(cloud_api_url)"
+    target_admin_token="$(cloud_admin_token)"
+    output_file="$CLOUD_SENSOR_ENV_FILE"
+  else
+    load_env
+    target_api_url="$(api_url)"
+    target_admin_token="$(admin_token)"
+    output_file="$SENSOR_ENV_FILE"
+  fi
+
+  hostname_value="$(hostname)"
+  info "Registering sensor with API at $target_api_url"
+  response="$(
+    curl -sS -X POST "$target_api_url/api/v1/sensors/register" \
+      -H "Authorization: Bearer $target_admin_token" \
+      -H "Content-Type: application/json" \
+      -d "{\"name\":\"MacBook Sensor\",\"hostname\":\"$hostname_value\",\"site_name\":\"Default Site\"}"
+  )"
+
+  sensor_id="$(printf "%s" "$response" | "$PYTHON_BIN" -c 'import json,sys; print(json.load(sys.stdin)["sensor_id"])')"
+  sensor_token="$(printf "%s" "$response" | "$PYTHON_BIN" -c 'import json,sys; print(json.load(sys.stdin)["sensor_token"])')"
+
+  if [ "$profile" = "cloud" ]; then
+    cat > "$output_file" <<EOF
+SECOPSAI_CLOUD_SENSOR_ID=$sensor_id
+SECOPSAI_CLOUD_SENSOR_TOKEN=$sensor_token
+EOF
+  else
+    cat > "$output_file" <<EOF
+SECOPSAI_SENSOR_ID=$sensor_id
+SECOPSAI_SENSOR_TOKEN=$sensor_token
+SECOPSAI_API_URL=$target_api_url
+EOF
+  fi
+
+  info "Saved sensor credentials to ${output_file#$ROOT_DIR/}"
+  printf "Sensor ID: %s\n" "$sensor_id"
+}
+
+preview_scan() {
+  target="${1:-}"
+  [ -n "$target" ] || fail "Usage: ./scripts/edge preview <cidr>"
+  ensure_python_tools
+  cd "$ROOT_DIR"
+  PYTHONPATH="$ROOT_DIR/agent" "$PYTHON_BIN" -m secopsai_agent.cli preview "$target"
+}
+
+submit_scan() {
+  target="${1:-}"
+  [ -n "$target" ] || fail "Usage: ./scripts/edge scan <cidr> [--wifi]"
+  shift || true
+  profile="local"
+  agent_args=()
+  for arg in "$@"; do
+    if [ "$arg" = "--cloud" ]; then
+      profile="cloud"
+    else
+      agent_args+=("$arg")
+    fi
+  done
+
+  if [ "$profile" = "cloud" ]; then
+    require_cloud_sensor_env
+    sensor_id="$SECOPSAI_CLOUD_SENSOR_ID"
+    sensor_token="$SECOPSAI_CLOUD_SENSOR_TOKEN"
+    target_api_url="$(cloud_api_url)"
+  else
+    require_sensor_env
+    sensor_id="$SECOPSAI_SENSOR_ID"
+    sensor_token="$SECOPSAI_SENSOR_TOKEN"
+    target_api_url="$(api_url)"
+  fi
+
+  ensure_python_tools
+  cd "$ROOT_DIR"
+  PYTHONPATH="$ROOT_DIR/agent" "$PYTHON_BIN" -m secopsai_agent.cli submit "$target" \
+    --sensor-id "$sensor_id" \
+    --sensor-token "$sensor_token" \
+    --api-url "$target_api_url" \
+    "${agent_args[@]}"
+}
+
+generate_report() {
+  profile="local"
+  for arg in "$@"; do
+    if [ "$arg" = "--cloud" ]; then
+      profile="cloud"
+    fi
+  done
+
+  if [ "$profile" = "cloud" ]; then
+    target_api_url="$(cloud_api_url)"
+    target_admin_token="$(cloud_admin_token)"
+  else
+    load_env
+    target_api_url="$(api_url)"
+    target_admin_token="$(admin_token)"
+  fi
+
+  info "Generating report at $target_api_url"
+  curl -sS -X POST "$target_api_url/api/v1/reports/generate" \
+    -H "Authorization: Bearer $target_admin_token"
+  printf "\n"
+}
+
+run_tests() {
+  ensure_python_tools
+  info "Running backend and agent tests"
+  (cd "$ROOT_DIR" && PYTHONPATH="$ROOT_DIR/api:$ROOT_DIR/agent" "$PYTHON_BIN" -m pytest tests)
+
+  info "Running frontend tests"
+  (cd "$ROOT_DIR/web" && npm test -- --run)
+
+  info "Building dashboard"
+  (cd "$ROOT_DIR/web" && npm run build)
+
+  info "Checking frontend audit"
+  (cd "$ROOT_DIR/web" && npm audit --audit-level=moderate)
+}
+
+status() {
+  profile="local"
+  for arg in "$@"; do
+    if [ "$arg" = "--cloud" ]; then
+      profile="cloud"
+    fi
+  done
+
+  info "Checking local services"
+  if [ "$profile" = "cloud" ]; then
+    target_api_url="$(cloud_api_url)"
+  else
+    target_api_url="$(api_url)"
+  fi
+
+  if curl -fsS "$target_api_url/healthz" >/dev/null 2>&1; then
+    printf "API:       running at %s\n" "$target_api_url"
+  else
+    printf "API:       not responding at %s\n" "$target_api_url"
+  fi
+
+  if [ "$profile" = "cloud" ]; then
+    return
+  fi
+
+  if curl -fsS "http://127.0.0.1:3000" >/dev/null 2>&1; then
+    printf "Dashboard: running at http://127.0.0.1:3000\n"
+  else
+    printf "Dashboard: not responding at http://127.0.0.1:3000\n"
+  fi
+
+  if ! command -v docker >/dev/null 2>&1; then
+    printf "Postgres:  Docker is not installed\n"
+  elif ! docker info >/dev/null 2>&1; then
+    printf "Postgres:  Docker is not running\n"
+  elif docker ps --format '{{.Names}}' | grep -q '^secopsai-edge-postgres$'; then
+    printf "Postgres:  running in Docker\n"
+  else
+    printf "Postgres:  not running in Docker\n"
+  fi
+}
+
+cloud() {
+  subcommand="${1:-help}"
+  shift || true
+
+  case "$subcommand" in
+    configure)
+      url="${1:-}"
+      [ -n "$url" ] || fail "Usage: ./scripts/edge cloud configure <render-api-url>"
+      cat > "$CLOUD_ENV_FILE" <<EOF
+SECOPSAI_CLOUD_API_URL=${url%/}
+EOF
+      info "Saved hosted API URL to .cloud.env"
+      ;;
+    register)
+      register_sensor cloud
+      ;;
+    status)
+      status --cloud
+      ;;
+    help|-h|--help)
+      usage
+      ;;
+    *)
+      fail "Unknown cloud command: $subcommand"
+      ;;
+  esac
+}
+
+main() {
+  command="${1:-help}"
+  shift || true
+
+  case "$command" in
+    help|-h|--help) usage ;;
+    setup) setup ;;
+    dev) dev ;;
+    db) start_db ;;
+    stop-db) stop_db ;;
+    migrate) migrate ;;
+    api) start_api ;;
+    web) start_web ;;
+    register) register_sensor ;;
+    cloud) cloud "$@" ;;
+    preview) preview_scan "$@" ;;
+    scan) submit_scan "$@" ;;
+    report) generate_report ;;
+    test) run_tests ;;
+    status) status "$@" ;;
+    *) usage; fail "Unknown command: $command" ;;
+  esac
+}
+
+main "$@"
