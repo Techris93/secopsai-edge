@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import json
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Literal
 
 import httpx
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -12,6 +14,16 @@ from secopsai_api.models import Finding, Report
 
 
 SENSITIVE_EVIDENCE_KEYS = {"mac", "mac_address", "bssid", "raw", "hostname"}
+
+
+class OpenAiReportOutput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    title: str
+    summary: str
+    risk_level: Literal["low", "medium", "high", "critical"]
+    recommended_actions: list[str]
+    technical_notes: list[str]
 
 
 def build_report(db: Session, site_id: str, settings: Settings | None = None) -> Report:
@@ -69,9 +81,61 @@ class AiReportProvider:
         self.settings = settings
 
     def generate(self, payload: dict[str, Any]) -> dict[str, Any]:
+        if self.settings.ai_provider == "openai":
+            return self._generate_openai(payload)
         if self.settings.ai_provider == "http" and self.settings.ai_endpoint:
             return self._generate_http(payload)
         return self._generate_mock(payload)
+
+    def _generate_openai(self, payload: dict[str, Any]) -> dict[str, Any]:
+        if not self.settings.ai_api_key:
+            raise RuntimeError("AI_API_KEY is required when AI_PROVIDER=openai.")
+
+        endpoint = self.settings.ai_endpoint or "https://api.openai.com/v1/responses"
+        response = httpx.post(
+            endpoint,
+            headers={
+                "Authorization": f"Bearer {self.settings.ai_api_key}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": self.settings.ai_model,
+                "store": False,
+                "input": [
+                    {
+                        "role": "system",
+                        "content": (
+                            "You are a defensive cybersecurity analyst for SecOpsAI Edge. "
+                            "Use only the supplied normalized findings. Do not claim compromise "
+                            "without evidence. Treat new-device findings from an initial baseline "
+                            "as inventory changes requiring validation, not confirmed threats. "
+                            "Produce a concise report for both executives and technical operators."
+                        ),
+                    },
+                    {"role": "user", "content": json.dumps(payload)},
+                ],
+                "text": {
+                    "format": {
+                        "type": "json_schema",
+                        "name": "secopsai_security_report",
+                        "strict": True,
+                        "schema": OpenAiReportOutput.model_json_schema(),
+                    }
+                },
+                "max_output_tokens": 2000,
+            },
+            timeout=60,
+        )
+        response.raise_for_status()
+        data = response.json()
+        output_text = _openai_output_text(data)
+        report = OpenAiReportOutput.model_validate_json(output_text).model_dump()
+        return {
+            **report,
+            "findings": payload["findings"],
+            "provider": "openai",
+            "model": self.settings.ai_model,
+        }
 
     def _generate_http(self, payload: dict[str, Any]) -> dict[str, Any]:
         headers = {"Content-Type": "application/json"}
@@ -115,3 +179,15 @@ class AiReportProvider:
             ],
             "provider": "mock",
         }
+
+
+def _openai_output_text(response: dict[str, Any]) -> str:
+    for output in response.get("output", []):
+        if output.get("type") != "message":
+            continue
+        for content in output.get("content", []):
+            if content.get("type") == "refusal":
+                raise RuntimeError(f"OpenAI refused the report request: {content.get('refusal', 'unknown')}")
+            if content.get("type") == "output_text" and content.get("text"):
+                return str(content["text"])
+    raise RuntimeError("OpenAI response did not contain a report.")

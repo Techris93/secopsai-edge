@@ -24,6 +24,7 @@ The repository includes `render.yaml`.
 3. Fill these prompted values:
    - `SECOPSAI_ADMIN_TOKEN`: a long random operator token.
    - `SECOPSAI_CORS_ORIGINS`: your Cloudflare Pages URL, plus local dev if needed.
+   - `AI_API_KEY`: optional; add an OpenAI API key to enable live reports.
 4. Apply the Blueprint.
 5. Confirm the health check:
 
@@ -38,6 +39,18 @@ Expected response:
 ```
 
 The Render start script runs Alembic migrations before starting Uvicorn.
+
+### Live OpenAI Reports
+
+In the Render service environment, set these server-side values:
+
+```text
+AI_PROVIDER=openai
+AI_API_KEY=<your OpenAI API key>
+AI_MODEL=gpt-5.4-mini
+```
+
+Redeploy the API, then generate a new report. Existing reports remain unchanged. Never put the API key in a `NEXT_PUBLIC_*` variable or the Cloudflare Pages environment.
 
 ## Cloudflare Pages Dashboard
 

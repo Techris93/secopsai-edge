@@ -42,7 +42,7 @@ class Settings:
     ai_provider: str = os.getenv("AI_PROVIDER", "mock")
     ai_endpoint: str | None = os.getenv("AI_ENDPOINT") or None
     ai_api_key: str | None = os.getenv("AI_API_KEY") or None
-    ai_model: str = os.getenv("AI_MODEL", "secopsai-report-v1")
+    ai_model: str = os.getenv("AI_MODEL", "gpt-5.4-mini")
     splunk_hec_enabled: bool = _bool_env("SPLUNK_HEC_ENABLED", False)
     splunk_hec_url: str | None = os.getenv("SPLUNK_HEC_URL") or None
     splunk_hec_token: str | None = os.getenv("SPLUNK_HEC_TOKEN") or None

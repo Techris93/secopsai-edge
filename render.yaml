@@ -23,8 +23,10 @@ services:
         value: "28800"
       - key: AI_PROVIDER
         value: mock
+      - key: AI_API_KEY
+        sync: false
       - key: AI_MODEL
-        value: secopsai-report-v1
+        value: gpt-5.4-mini
       - key: SPLUNK_HEC_ENABLED
         value: "false"
 

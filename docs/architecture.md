@@ -57,7 +57,7 @@ Suspicious scan-like behavior is left as a future rule because the MVP does not 
 
 ## AI Boundary
 
-The AI provider receives minimized finding payloads, not raw Nmap output, packet data, or full scan logs. The default provider is `mock`, which gives deterministic report output for local development. A generic HTTP provider can be enabled with `AI_PROVIDER=http` and `AI_ENDPOINT`.
+The AI provider receives minimized finding payloads, not raw Nmap output, packet data, or full scan logs. The default provider is `mock`, which gives deterministic report output for local development. OpenAI Structured Outputs can be enabled with `AI_PROVIDER=openai`, `AI_API_KEY`, and `AI_MODEL`. A generic HTTP provider remains available with `AI_PROVIDER=http` and `AI_ENDPOINT`.
 
 ## Future SecOpsAI Cloud Integration
 
