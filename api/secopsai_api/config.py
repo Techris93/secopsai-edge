@@ -18,6 +18,14 @@ def _list_env(name: str, default: list[str]) -> list[str]:
     return [item.strip() for item in raw.split(",") if item.strip()]
 
 
+def normalize_database_url(database_url: str) -> str:
+    if database_url.startswith("postgresql://"):
+        return database_url.replace("postgresql://", "postgresql+psycopg://", 1)
+    if database_url.startswith("postgres://"):
+        return database_url.replace("postgres://", "postgresql+psycopg://", 1)
+    return database_url
+
+
 @dataclass(frozen=True, slots=True)
 class Settings:
     database_url: str = os.getenv(

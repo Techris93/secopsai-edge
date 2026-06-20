@@ -5,13 +5,11 @@ from collections.abc import Generator
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
-from secopsai_api.config import get_settings
+from secopsai_api.config import get_settings, normalize_database_url
 
 
 settings = get_settings()
-database_url = settings.database_url
-if database_url.startswith("postgres://"):
-    database_url = database_url.replace("postgres://", "postgresql://", 1)
+database_url = normalize_database_url(settings.database_url)
 engine = create_engine(database_url, pool_pre_ping=True)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 
