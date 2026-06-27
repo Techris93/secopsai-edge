@@ -170,3 +170,16 @@ class ScanJobOut(BaseModel):
     preview: dict[str, Any]
     result_summary: dict[str, Any]
     error_message: str | None = None
+
+
+class SensorOut(BaseModel):
+    id: str
+    site_id: str
+    site_name: str
+    name: str
+    hostname: str | None = None
+    status: str
+    connection_state: str
+    created_at: datetime
+    last_seen_at: datetime | None = None
+    current_job: ScanJobOut | None = None

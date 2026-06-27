@@ -77,7 +77,7 @@ export default function OverviewPage() {
         </section>
 
         <div className="grid gap-6">
-          <ScanActions scanJobs={data?.scanJobs ?? []} onChanged={loadDashboardData} />
+          <ScanActions scanJobs={data?.scanJobs ?? []} sensors={data?.sensors ?? []} onChanged={loadDashboardData} />
 
           <section className="rounded-lg border border-line bg-white p-4 shadow-panel">
             <div className="flex items-center gap-2">

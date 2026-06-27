@@ -1,5 +1,5 @@
 import { sampleData } from "./sample-data";
-import type { Asset, DashboardData, Finding, Report, ScanJob, WifiNetwork } from "./types";
+import type { Asset, DashboardData, Finding, Report, ScanJob, Sensor, WifiNetwork } from "./types";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000";
 const SESSION_TOKEN_KEY = "secopsai_dashboard_session";
@@ -67,14 +67,15 @@ export function apiBaseUrl(): string {
 
 export async function fetchDashboardData(): Promise<ApiResult<DashboardData>> {
   try {
-    const [assets, wifiNetworks, findings, reports, scanJobs] = await Promise.all([
+    const [assets, wifiNetworks, findings, reports, scanJobs, sensors] = await Promise.all([
       requestJson<Asset[]>("/api/v1/assets"),
       requestJson<WifiNetwork[]>("/api/v1/wifi-networks"),
       requestJson<Finding[]>("/api/v1/findings"),
       requestJson<Report[]>("/api/v1/reports"),
-      requestJson<ScanJob[]>("/api/v1/scan-jobs")
+      requestJson<ScanJob[]>("/api/v1/scan-jobs"),
+      requestJson<Sensor[]>("/api/v1/sensors")
     ]);
-    return { data: { assets, wifiNetworks, findings, reports, scanJobs }, live: true };
+    return { data: { assets, wifiNetworks, findings, reports, scanJobs, sensors }, live: true };
   } catch (error) {
     return {
       data: sampleData,
@@ -93,6 +94,14 @@ export async function createScanJob(targetCidr: string, includeWifi: boolean): P
     method: "POST",
     body: JSON.stringify({ target_cidr: targetCidr, include_wifi: includeWifi })
   });
+}
+
+export async function cancelScanJob(jobId: string): Promise<ScanJob> {
+  return requestJson<ScanJob>(`/api/v1/scan-jobs/${jobId}/cancel`, { method: "POST" });
+}
+
+export async function retryScanJob(jobId: string): Promise<ScanJob> {
+  return requestJson<ScanJob>(`/api/v1/scan-jobs/${jobId}/retry`, { method: "POST" });
 }
 
 export async function updateFindingStatus(findingId: string, status: string): Promise<Finding> {

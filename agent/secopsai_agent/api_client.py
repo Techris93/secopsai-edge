@@ -57,6 +57,16 @@ class SecOpsApiClient:
         response.raise_for_status()
         return response.json()
 
+    def heartbeat(self, sensor_id: str, status: str = "online", details: dict[str, Any] | None = None) -> dict[str, Any]:
+        response = httpx.post(
+            f"{self.base_url}/api/v1/sensors/{sensor_id}/heartbeat",
+            headers=self._sensor_headers(),
+            json={"status": status, "details": details or {}},
+            timeout=self.timeout,
+        )
+        response.raise_for_status()
+        return response.json()
+
     def submit_scan(self, scan: ScanResult) -> dict[str, Any]:
         payload = _json_safe(asdict(scan))
         response = httpx.post(

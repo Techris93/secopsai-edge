@@ -75,7 +75,8 @@ Cloud commands:
 ```
 
 The hosted dashboard can also queue remote scan jobs. Keep the worker running locally so queued jobs
-execute on your MacBook/Raspberry Pi, where the LAN is actually reachable.
+execute on your MacBook/Raspberry Pi, where the LAN is actually reachable. The dashboard shows
+sensor online/offline status from worker heartbeats and provides cancel/retry controls for remote jobs.
 
 See [docs/architecture.md](docs/architecture.md) and [docs/runbook.md](docs/runbook.md) for implementation details.
 

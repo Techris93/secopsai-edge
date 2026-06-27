@@ -70,10 +70,24 @@ export type ScanJob = {
   error_message?: string | null;
 };
 
+export type Sensor = {
+  id: string;
+  site_id: string;
+  site_name: string;
+  name: string;
+  hostname?: string | null;
+  status: string;
+  connection_state: "online" | "offline" | string;
+  created_at: string;
+  last_seen_at?: string | null;
+  current_job?: ScanJob | null;
+};
+
 export type DashboardData = {
   assets: Asset[];
   wifiNetworks: WifiNetwork[];
   findings: Finding[];
   reports: Report[];
   scanJobs: ScanJob[];
+  sensors: Sensor[];
 };

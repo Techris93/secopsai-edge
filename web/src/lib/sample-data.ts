@@ -97,5 +97,19 @@ export const sampleData: DashboardData = {
       created_at: now
     }
   ],
-  scanJobs: []
+  scanJobs: [],
+  sensors: [
+    {
+      id: "sensor-demo",
+      site_id: "site-demo",
+      site_name: "Demo Site",
+      name: "MacBook Sensor",
+      hostname: "macbook",
+      status: "offline",
+      connection_state: "offline",
+      created_at: now,
+      last_seen_at: null,
+      current_job: null
+    }
+  ]
 };

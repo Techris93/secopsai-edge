@@ -1,4 +1,5 @@
 from collections.abc import Generator
+from datetime import timedelta
 
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, select
@@ -7,7 +8,7 @@ from sqlalchemy.pool import StaticPool
 
 from secopsai_api.database import get_db
 from secopsai_api.main import app
-from secopsai_api.models import Base, ScanJob, Sensor, Site
+from secopsai_api.models import Base, ScanJob, Sensor, Site, utcnow
 from secopsai_api.security import hash_secret
 
 
@@ -123,3 +124,94 @@ def test_claim_returns_null_when_no_jobs_are_queued() -> None:
 
     assert response.status_code == 200
     assert response.json() is None
+
+
+def test_list_sensors_reports_online_state_and_current_job() -> None:
+    db = make_session()
+    sensor, _sensor_token = seed_sensor(db)
+    sensor.status = "scanning"
+    sensor.last_seen_at = utcnow()
+    job = ScanJob(
+        site_id=sensor.site_id,
+        sensor_id=sensor.id,
+        target_cidr="192.168.1.0/24",
+        include_wifi=False,
+        status="running",
+    )
+    db.add(job)
+    db.commit()
+    client = make_client(db)
+
+    response = client.get("/api/v1/sensors", headers=admin_headers())
+
+    assert response.status_code == 200
+    sensors = response.json()
+    assert sensors[0]["id"] == sensor.id
+    assert sensors[0]["name"] == "MacBook Sensor"
+    assert sensors[0]["site_name"] == "Test Site"
+    assert sensors[0]["connection_state"] == "online"
+    assert sensors[0]["current_job"]["id"] == job.id
+    assert sensors[0]["current_job"]["status"] == "running"
+
+
+def test_list_sensors_marks_stale_sensor_offline() -> None:
+    db = make_session()
+    sensor, _sensor_token = seed_sensor(db)
+    sensor.status = "online"
+    sensor.last_seen_at = utcnow() - timedelta(minutes=10)
+    db.commit()
+    client = make_client(db)
+
+    response = client.get("/api/v1/sensors", headers=admin_headers())
+
+    assert response.status_code == 200
+    assert response.json()[0]["connection_state"] == "offline"
+
+
+def test_retry_failed_scan_job_creates_new_queued_job() -> None:
+    db = make_session()
+    sensor, _sensor_token = seed_sensor(db)
+    failed = ScanJob(
+        site_id=sensor.site_id,
+        sensor_id=sensor.id,
+        target_cidr="192.168.1.0/24",
+        include_wifi=True,
+        status="failed",
+        error_message="worker died",
+    )
+    db.add(failed)
+    db.commit()
+    client = make_client(db)
+
+    response = client.post(f"/api/v1/scan-jobs/{failed.id}/retry", headers=admin_headers())
+
+    assert response.status_code == 200
+    retried = response.json()
+    assert retried["id"] != failed.id
+    assert retried["target_cidr"] == "192.168.1.0/24"
+    assert retried["include_wifi"] is True
+    assert retried["status"] == "queued"
+
+
+def test_claim_recovers_stale_claimed_job_before_claiming_next() -> None:
+    db = make_session()
+    sensor, sensor_token = seed_sensor(db)
+    stale = ScanJob(
+        site_id=sensor.site_id,
+        sensor_id=sensor.id,
+        target_cidr="192.168.1.0/24",
+        status="claimed",
+        updated_at=utcnow() - timedelta(minutes=30),
+    )
+    db.add(stale)
+    db.commit()
+    client = make_client(db)
+
+    response = client.post(
+        f"/api/v1/sensors/{sensor.id}/scan-jobs/claim",
+        headers=sensor_headers(sensor_token),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["id"] == stale.id
+    assert response.json()["status"] == "claimed"

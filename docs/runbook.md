@@ -93,9 +93,11 @@ Flow:
 2. Enter an authorized private CIDR in Scan Actions.
 3. Click Queue Remote Scan.
 4. Keep the local worker running.
-5. Refresh the dashboard as the job moves through queued, claimed, running, and completed.
+5. Confirm the dashboard shows the sensor as online.
+6. Refresh the dashboard as the job moves through queued, claimed, running, and completed.
+7. Use Cancel for active jobs or Retry for failed/canceled jobs when needed.
 
-Remote jobs are limited to RFC1918 IPv4 CIDRs with `/24` or narrower ranges.
+Remote jobs are limited to RFC1918 IPv4 CIDRs with `/24` or narrower ranges. Worker heartbeats update the sensor last-seen timestamp; stale claimed/running jobs are recovered so they do not remain stuck forever.
 
 ## Splunk HEC Export
 

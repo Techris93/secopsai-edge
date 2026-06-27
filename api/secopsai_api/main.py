@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from ipaddress import ip_network
+from datetime import timedelta
 
 from fastapi import Depends, FastAPI, Header, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -26,6 +27,7 @@ from secopsai_api.schemas import (
     ScanJobFailRequest,
     ScanJobOut,
     ScanJobStartRequest,
+    SensorOut,
     SensorRegisterRequest,
     SensorRegisterResponse,
     WifiNetworkOut,
@@ -48,6 +50,8 @@ PRIVATE_SCAN_RANGES = tuple(
     ip_network(cidr) for cidr in ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16")
 )
 TERMINAL_SCAN_JOB_STATUSES = {"completed", "failed", "canceled"}
+SENSOR_OFFLINE_AFTER = timedelta(minutes=3)
+STALE_SCAN_JOB_AFTER = timedelta(minutes=15)
 
 app.add_middleware(
     CORSMiddleware,
@@ -100,6 +104,47 @@ def get_sensor_job(db: Session, sensor: Sensor, job_id: str) -> ScanJob:
     if job.sensor_id != sensor.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Scan job belongs to a different sensor")
     return job
+
+
+def is_stale(timestamp, max_age: timedelta) -> bool:
+    if timestamp is None:
+        return True
+    now = utcnow()
+    if timestamp.tzinfo is None:
+        now = now.replace(tzinfo=None)
+    return now - timestamp > max_age
+
+
+def recover_stale_scan_jobs(db: Session, sensor_id: str | None = None) -> None:
+    query = select(ScanJob).where(ScanJob.status.in_(["claimed", "running"]))
+    if sensor_id:
+        query = query.where(ScanJob.sensor_id == sensor_id)
+    now = utcnow()
+    changed = False
+    for job in db.scalars(query).all():
+        if is_stale(job.updated_at, STALE_SCAN_JOB_AFTER):
+            job.status = "queued"
+            job.claimed_at = None
+            job.started_at = None
+            job.error_message = None
+            job.updated_at = now
+            changed = True
+    if changed:
+        db.flush()
+
+
+def sensor_connection_state(sensor: Sensor) -> str:
+    if is_stale(sensor.last_seen_at, SENSOR_OFFLINE_AFTER):
+        return "offline"
+    return "online"
+
+
+def current_sensor_job(db: Session, sensor: Sensor) -> ScanJob | None:
+    return db.scalar(
+        select(ScanJob)
+        .where(ScanJob.sensor_id == sensor.id, ScanJob.status.in_(["claimed", "running"]))
+        .order_by(ScanJob.updated_at.desc())
+    )
 
 
 @app.post("/api/v1/auth/session", response_model=DashboardSessionResponse)
@@ -166,6 +211,30 @@ def heartbeat(
     return {"status": "ok"}
 
 
+@app.get("/api/v1/sensors", response_model=list[SensorOut], dependencies=[Depends(require_admin)])
+def list_sensors(db: Session = Depends(get_db)) -> list[SensorOut]:
+    recover_stale_scan_jobs(db)
+    sensors = list(db.scalars(select(Sensor).order_by(Sensor.created_at.asc())).all())
+    result: list[SensorOut] = []
+    for sensor in sensors:
+        result.append(
+            SensorOut(
+                id=sensor.id,
+                site_id=sensor.site_id,
+                site_name=sensor.site.name,
+                name=sensor.name,
+                hostname=sensor.hostname,
+                status=sensor.status,
+                connection_state=sensor_connection_state(sensor),
+                created_at=sensor.created_at,
+                last_seen_at=sensor.last_seen_at,
+                current_job=current_sensor_job(db, sensor),
+            )
+        )
+    db.commit()
+    return result
+
+
 @app.post("/api/v1/scan-jobs", response_model=ScanJobOut, dependencies=[Depends(require_admin)])
 def create_scan_job(payload: ScanJobCreateRequest, db: Session = Depends(get_db)) -> ScanJob:
     target_cidr = normalize_scan_job_target(payload.target_cidr)
@@ -230,11 +299,43 @@ def cancel_scan_job(job_id: str, db: Session = Depends(get_db)) -> ScanJob:
     return job
 
 
+@app.post("/api/v1/scan-jobs/{job_id}/retry", response_model=ScanJobOut, dependencies=[Depends(require_admin)])
+def retry_scan_job(job_id: str, db: Session = Depends(get_db)) -> ScanJob:
+    original = db.get(ScanJob, job_id)
+    if original is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Scan job not found")
+    if original.status not in {"failed", "canceled"}:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only failed or canceled scan jobs can be retried")
+    retried = ScanJob(
+        site_id=original.site_id,
+        sensor_id=original.sensor_id,
+        target_cidr=original.target_cidr,
+        include_wifi=original.include_wifi,
+        status="queued",
+        preview={},
+        result_summary={},
+    )
+    db.add(retried)
+    db.flush()
+    write_audit(
+        db,
+        "scan_job.retried",
+        sensor_id=original.sensor_id,
+        resource_type="scan_job",
+        resource_id=retried.id,
+        details={"original_job_id": original.id},
+    )
+    db.commit()
+    db.refresh(retried)
+    return retried
+
+
 @app.post("/api/v1/sensors/{sensor_id}/scan-jobs/claim", response_model=ScanJobOut | None)
 def claim_scan_job(
     sensor: Sensor = Depends(require_sensor_for_path),
     db: Session = Depends(get_db),
 ) -> ScanJob | None:
+    recover_stale_scan_jobs(db, sensor.id)
     job = db.scalar(
         select(ScanJob)
         .where(ScanJob.sensor_id == sensor.id, ScanJob.status == "queued")

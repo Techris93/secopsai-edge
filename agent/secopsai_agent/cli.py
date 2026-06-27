@@ -131,6 +131,7 @@ def _run_worker(
 
     try:
         while True:
+            client.heartbeat(sensor_id, "online", {"mode": "worker", "state": "waiting"})
             job = client.claim_scan_job(sensor_id)
             if not job:
                 if once:
