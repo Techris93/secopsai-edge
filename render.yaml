@@ -29,6 +29,23 @@ services:
         value: gpt-5.4-mini
       - key: SPLUNK_HEC_ENABLED
         value: "false"
+  - type: cron
+    name: secopsai-edge-scheduler
+    runtime: python
+    schedule: "*/5 * * * *"
+    buildCommand: pip install -r api/requirements.txt -r agent/requirements.txt
+    startCommand: ./scripts/render-run-due-schedules
+    envVars:
+      - key: SECOPSAI_EDGE_API_HOSTPORT
+        fromService:
+          name: secopsai-edge-api
+          type: web
+          property: hostport
+      - key: SECOPSAI_ADMIN_TOKEN
+        fromService:
+          name: secopsai-edge-api
+          type: web
+          envVarKey: SECOPSAI_ADMIN_TOKEN
 
 databases:
   - name: secopsai-edge-postgres

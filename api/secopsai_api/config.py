@@ -43,9 +43,16 @@ class Settings:
     ai_endpoint: str | None = os.getenv("AI_ENDPOINT") or None
     ai_api_key: str | None = os.getenv("AI_API_KEY") or None
     ai_model: str = os.getenv("AI_MODEL", "gpt-5.4-mini")
+    ai_max_findings_per_report: int = int(os.getenv("AI_MAX_FINDINGS_PER_REPORT", "50"))
     splunk_hec_enabled: bool = _bool_env("SPLUNK_HEC_ENABLED", False)
     splunk_hec_url: str | None = os.getenv("SPLUNK_HEC_URL") or None
     splunk_hec_token: str | None = os.getenv("SPLUNK_HEC_TOKEN") or None
+    smtp_host: str | None = os.getenv("SMTP_HOST") or None
+    smtp_port: int = int(os.getenv("SMTP_PORT", "587"))
+    smtp_username: str | None = os.getenv("SMTP_USERNAME") or None
+    smtp_password: str | None = os.getenv("SMTP_PASSWORD") or None
+    smtp_from: str = os.getenv("SMTP_FROM", "alerts@secopsai.local")
+    telegram_bot_token: str | None = os.getenv("TELEGRAM_BOT_TOKEN") or None
 
     def __post_init__(self) -> None:
         object.__setattr__(

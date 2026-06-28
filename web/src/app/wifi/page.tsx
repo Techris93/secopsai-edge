@@ -12,6 +12,7 @@ export default function WifiPage() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [live, setLive] = useState(false);
   const [error, setError] = useState<string | undefined>();
+  const [site, setSite] = useState("all");
 
   useEffect(() => {
     fetchDashboardData().then((result) => {
@@ -21,7 +22,7 @@ export default function WifiPage() {
     });
   }, []);
 
-  const networks = data?.wifiNetworks ?? [];
+  const networks = (data?.wifiNetworks ?? []).filter((network) => site === "all" || network.site_id === site);
 
   return (
     <>
@@ -31,6 +32,19 @@ export default function WifiPage() {
         description="Track SSIDs, BSSIDs, channels, signal strength, encryption, and rogue access point indicators."
         action={<LiveState live={live} error={error} />}
       />
+
+      <div className="mb-4 flex justify-end">
+        <select
+          className="focus-ring w-full rounded-md border border-line bg-white px-3 py-2 text-sm sm:w-56"
+          value={site}
+          onChange={(event) => setSite(event.target.value)}
+        >
+          <option value="all">All sites</option>
+          {(data?.sites ?? []).map((item) => (
+            <option key={item.id} value={item.id}>{item.name}</option>
+          ))}
+        </select>
+      </div>
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {networks.map((network) => {

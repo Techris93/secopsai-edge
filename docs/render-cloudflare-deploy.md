@@ -91,13 +91,44 @@ Run a scan and submit it to Render:
 Or run the local worker so dashboard-queued jobs execute locally:
 
 ```bash
-./scripts/edge worker --cloud
+./scripts/edge worker install-service --cloud
+./scripts/edge worker start
+./scripts/edge worker status
 ```
 
 Generate a hosted report:
 
 ```bash
 ./scripts/edge report --cloud
+```
+
+## Scheduled Scans
+
+The dashboard stores scan schedules in the Render Postgres database. A scheduler trigger must call
+the API periodically so due schedules become queued scan jobs.
+
+Minimum local/manual trigger:
+
+```bash
+./scripts/edge schedules run-due --cloud
+```
+
+Render cron option:
+
+- Create a Render Cron Job.
+- Schedule it every 5 minutes.
+- Command:
+
+```bash
+curl -fsS -X POST "$SECOPSAI_EDGE_API_URL/api/v1/scan-schedules/run-due" \
+  -H "Authorization: Bearer $SECOPSAI_ADMIN_TOKEN"
+```
+
+Set cron environment variables:
+
+```text
+SECOPSAI_EDGE_API_URL=https://<your-render-api>.onrender.com
+SECOPSAI_ADMIN_TOKEN=<your-admin-token>
 ```
 
 ## Verification Checklist
@@ -107,5 +138,6 @@ Generate a hosted report:
 - Settings > API Connection accepts the admin token.
 - Assets/Findings/Reports switch from demo fallback to live API data after connection.
 - Local agent can register and scan with `--cloud`.
-- Dashboard Scan Actions can queue a remote job, and `./scripts/edge worker --cloud --once` can claim it.
+- Dashboard Scan Actions can queue a remote job, and the installed worker can claim it.
+- Schedules page can create a daily/weekly schedule, and the cron trigger queues due jobs.
 - Browser source and Cloudflare env vars do not contain `NEXT_PUBLIC_ADMIN_TOKEN`.

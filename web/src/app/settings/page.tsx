@@ -1,11 +1,14 @@
 import { Copy, Database, KeyRound, Radar, ShieldCheck, Terminal } from "lucide-react";
 import { ApiConnectionPanel } from "@/components/ApiConnectionPanel";
+import { CoreIntegrationPanel } from "@/components/CoreIntegrationPanel";
+import { NotificationPanel } from "@/components/NotificationPanel";
 import { PageHeader } from "@/components/PageHeader";
 
 const envRows = [
   ["API URL", process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000"],
   ["Dashboard Auth", "browser session token after Connect"],
-  ["AI Provider", "mock or HTTP adapter via API environment"],
+  ["AI Provider", "AI_PROVIDER with mock fallback"],
+  ["AI Cost Control", "AI_MAX_FINDINGS_PER_REPORT limits report payload size"],
   ["Splunk", "disabled until SPLUNK_HEC_ENABLED=true"]
 ];
 
@@ -33,6 +36,9 @@ export default function SettingsPage() {
             <li className="rounded-md bg-paper p-3">Raw scan output is not sent to AI providers.</li>
           </ul>
         </section>
+
+        <CoreIntegrationPanel />
+        <NotificationPanel />
 
         <section className="rounded-lg border border-line bg-white p-4 shadow-panel xl:col-span-2">
           <div className="flex items-center gap-2">

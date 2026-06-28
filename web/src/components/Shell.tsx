@@ -2,8 +2,11 @@
 
 import {
   Activity,
+  CalendarClock,
+  CheckSquare,
   FileText,
   LayoutDashboard,
+  MapPinned,
   Radar,
   Server,
   Settings,
@@ -16,9 +19,12 @@ import type { ReactNode } from "react";
 
 const navItems = [
   { href: "/", label: "Overview", icon: LayoutDashboard },
+  { href: "/onboarding", label: "Onboarding", icon: CheckSquare },
+  { href: "/sites", label: "Sites", icon: MapPinned },
   { href: "/assets", label: "Assets", icon: Server },
   { href: "/wifi", label: "Wi-Fi", icon: Wifi },
   { href: "/findings", label: "Findings", icon: ShieldAlert },
+  { href: "/schedules", label: "Schedules", icon: CalendarClock },
   { href: "/reports", label: "Reports", icon: FileText },
   { href: "/settings", label: "Settings", icon: Settings }
 ];

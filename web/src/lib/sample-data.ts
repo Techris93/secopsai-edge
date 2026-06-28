@@ -3,9 +3,17 @@ import type { DashboardData } from "./types";
 const now = new Date().toISOString();
 
 export const sampleData: DashboardData = {
+  sites: [
+    {
+      id: "site-demo",
+      name: "Demo Site",
+      created_at: now
+    }
+  ],
   assets: [
     {
       id: "asset-1",
+      site_id: "site-demo",
       ip_address: "192.168.1.12",
       mac_address: "aa:bb:cc:dd:ee:01",
       vendor: "Apple",
@@ -14,10 +22,12 @@ export const sampleData: DashboardData = {
       device_type: "workstation",
       status: "active",
       first_seen_at: now,
-      last_seen_at: now
+      last_seen_at: now,
+      services: []
     },
     {
       id: "asset-2",
+      site_id: "site-demo",
       ip_address: "192.168.1.34",
       mac_address: null,
       vendor: "Unknown",
@@ -26,12 +36,26 @@ export const sampleData: DashboardData = {
       device_type: null,
       status: "active",
       first_seen_at: now,
-      last_seen_at: now
+      last_seen_at: now,
+      services: [
+        {
+          id: "svc-1",
+          port: 22,
+          protocol: "tcp",
+          name: "ssh",
+          product: null,
+          version: null,
+          state: "open",
+          first_seen_at: now,
+          last_seen_at: now
+        }
+      ]
     }
   ],
   wifiNetworks: [
     {
       id: "wifi-1",
+      site_id: "site-demo",
       ssid: "OfficeWiFi",
       bssid: "00:11:22:33:44:55",
       channel: 6,
@@ -43,6 +67,7 @@ export const sampleData: DashboardData = {
     },
     {
       id: "wifi-2",
+      site_id: "site-demo",
       ssid: "OfficeWiFi_Open",
       bssid: "66:77:88:99:aa:bb",
       channel: 11,
@@ -56,6 +81,7 @@ export const sampleData: DashboardData = {
   findings: [
     {
       id: "finding-1",
+      site_id: "site-demo",
       asset_id: "asset-2",
       type: "new_device",
       severity: "medium",
@@ -69,6 +95,7 @@ export const sampleData: DashboardData = {
     },
     {
       id: "finding-2",
+      site_id: "site-demo",
       wifi_network_id: "wifi-2",
       type: "weak_wifi",
       severity: "high",
@@ -84,6 +111,7 @@ export const sampleData: DashboardData = {
   reports: [
     {
       id: "report-1",
+      site_id: "site-demo",
       title: "SecOpsAI Edge Weekly Security Summary",
       summary: "SecOpsAI Edge found 2 active security findings. 1 requires priority review.",
       risk_level: "high",
@@ -98,6 +126,18 @@ export const sampleData: DashboardData = {
     }
   ],
   scanJobs: [],
+  schedules: [],
+  notifications: [],
+  onboarding: {
+    api_connected: false,
+    sites_created: true,
+    sensor_registered: true,
+    worker_online: false,
+    first_scan_completed: false,
+    first_report_generated: true,
+    schedule_configured: false,
+    notifications_configured: false
+  },
   sensors: [
     {
       id: "sensor-demo",

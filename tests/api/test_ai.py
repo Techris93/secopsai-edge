@@ -1,7 +1,5 @@
 import json
 
-import pytest
-
 from secopsai_api.ai import AiReportProvider, redact_evidence
 from secopsai_api.config import Settings
 
@@ -72,8 +70,10 @@ def test_openai_provider_uses_structured_outputs_and_preserves_findings(monkeypa
     assert report["findings"] == findings
 
 
-def test_openai_provider_requires_server_side_api_key() -> None:
+def test_openai_provider_falls_back_when_api_key_is_missing() -> None:
     settings = Settings(ai_provider="openai", ai_api_key=None)
 
-    with pytest.raises(RuntimeError, match="AI_API_KEY"):
-        AiReportProvider(settings).generate({"findings": []})
+    report = AiReportProvider(settings).generate({"findings": []})
+
+    assert report["provider"] == "mock_fallback"
+    assert "AI_API_KEY" in report["provider_error"]

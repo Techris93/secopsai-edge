@@ -11,6 +11,11 @@ PIP_BIN="$ROOT_DIR/.venv/bin/pip"
 ALEMBIC_BIN="$ROOT_DIR/.venv/bin/alembic"
 UVICORN_BIN="$ROOT_DIR/.venv/bin/uvicorn"
 API_URL_DEFAULT="http://127.0.0.1:8000"
+SERVICE_LABEL="ai.secopsai.edge"
+LOG_DIR="$HOME/Library/Logs/secopsai-edge"
+LAUNCH_AGENT_FILE="$HOME/Library/LaunchAgents/$SERVICE_LABEL.plist"
+SYSTEMD_USER_DIR="$HOME/.config/systemd/user"
+SYSTEMD_SERVICE_FILE="$SYSTEMD_USER_DIR/$SERVICE_LABEL.service"
 
 usage() {
   cat <<'EOF'
@@ -18,6 +23,7 @@ SecOpsAI Edge helper
 
 Usage:
   ./scripts/edge setup                 Install local Python and web dependencies
+  ./scripts/edge onboard --cloud       Guided cloud setup, sensor registration, and worker setup
   ./scripts/edge dev                   Start Postgres, migrate DB, API, and dashboard
   ./scripts/edge db                    Start Postgres only
   ./scripts/edge api                   Start the FastAPI backend only
@@ -28,7 +34,15 @@ Usage:
   ./scripts/edge scan <cidr> [--wifi]  Submit a scan using saved local sensor credentials
   ./scripts/edge scan <cidr> --cloud   Submit a scan to the configured hosted API
   ./scripts/edge worker [--cloud]      Poll for remote scan jobs and execute them locally
+  ./scripts/edge worker install-service --cloud
+                                      Install background worker service
+  ./scripts/edge worker start|stop|status|logs
+                                      Manage background worker service
   ./scripts/edge report [--cloud]      Generate an AI-style report
+  ./scripts/edge schedules run-due [--cloud]
+                                      Queue due scheduled scans
+  ./scripts/edge core export [--cloud] --output edge-bundle.json
+                                      Export normalized graph/findings for SecOpsAI Core
   ./scripts/edge cloud configure <url> Save hosted Render API URL
   ./scripts/edge cloud register        Register this sensor against the hosted API
   ./scripts/edge test                  Run backend, frontend, build, and audit checks
@@ -46,6 +60,8 @@ Typical flow:
 Cloud flow:
   ./scripts/edge cloud configure https://secopsai-edge-api.onrender.com
   ./scripts/edge cloud register
+  ./scripts/edge worker install-service --cloud
+  ./scripts/edge worker start
   ./scripts/edge worker --cloud
   ./scripts/edge scan 192.168.1.0/24 --cloud
 EOF
@@ -167,6 +183,54 @@ cloud_admin_token() {
   printf "%s" "$token"
 }
 
+save_cloud_env() {
+  url="${1:-}"
+  token="${2:-}"
+  [ -n "$url" ] || fail "Cloud API URL is required."
+  {
+    printf "SECOPSAI_CLOUD_API_URL=%s\n" "${url%/}"
+    if [ -n "$token" ]; then
+      printf "SECOPSAI_CLOUD_ADMIN_TOKEN=%s\n" "$token"
+    elif [ -n "${SECOPSAI_CLOUD_ADMIN_TOKEN:-}" ]; then
+      printf "SECOPSAI_CLOUD_ADMIN_TOKEN=%s\n" "$SECOPSAI_CLOUD_ADMIN_TOKEN"
+    fi
+  } > "$CLOUD_ENV_FILE"
+  chmod 600 "$CLOUD_ENV_FILE"
+}
+
+require_nmap() {
+  if ! command -v nmap >/dev/null 2>&1; then
+    fail "Nmap is required for discovery. Install it with: brew install nmap"
+  fi
+}
+
+prompt_default() {
+  label="$1"
+  default="$2"
+  printf "%s [%s]: " "$label" "$default" >&2
+  read -r value
+  if [ -z "$value" ]; then
+    printf "%s" "$default"
+  else
+    printf "%s" "$value"
+  fi
+}
+
+prompt_secret_default() {
+  label="$1"
+  default_set="$2"
+  if [ "$default_set" = "yes" ]; then
+    printf "%s [saved, press enter to keep]: " "$label" >&2
+  else
+    printf "%s: " "$label" >&2
+  fi
+  stty -echo
+  read -r value
+  stty echo
+  printf "\n" >&2
+  printf "%s" "$value"
+}
+
 compose() {
   require_docker
   docker compose -f "$ROOT_DIR/infra/docker-compose.yml" "$@"
@@ -189,6 +253,110 @@ setup() {
   info "Installing web dependencies"
   (cd "$ROOT_DIR/web" && npm install)
   info "Setup complete"
+}
+
+onboard() {
+  profile="local"
+  target_api_url=""
+  target_admin_token=""
+  site_name="Default Site"
+  sensor_name="$(hostname) Edge Sensor"
+  preview_cidr=""
+  install_service="no"
+  start_service="no"
+
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --cloud)
+        profile="cloud"
+        ;;
+      --api-url)
+        shift || true
+        target_api_url="${1:-}"
+        ;;
+      --admin-token)
+        shift || true
+        target_admin_token="${1:-}"
+        ;;
+      --site-name)
+        shift || true
+        site_name="${1:-}"
+        ;;
+      --sensor-name)
+        shift || true
+        sensor_name="${1:-}"
+        ;;
+      --cidr)
+        shift || true
+        preview_cidr="${1:-}"
+        ;;
+      --install-service)
+        install_service="yes"
+        ;;
+      --start-service)
+        start_service="yes"
+        ;;
+      *)
+        fail "Unknown onboard option: $1"
+        ;;
+    esac
+    shift || true
+  done
+
+  ensure_env_file
+  ensure_python_tools
+  require_nmap
+
+  if [ "$profile" = "cloud" ]; then
+    load_cloud_env
+    if [ -z "$target_api_url" ]; then
+      target_api_url="$(prompt_default "Cloud API URL" "${SECOPSAI_CLOUD_API_URL:-https://secopsai-edge-api.onrender.com}")"
+    fi
+    if [ -z "$target_admin_token" ]; then
+      saved="no"
+      [ -n "${SECOPSAI_CLOUD_ADMIN_TOKEN:-}" ] && saved="yes"
+      entered_token="$(prompt_secret_default "Cloud API admin token" "$saved")"
+      if [ -n "$entered_token" ]; then
+        target_admin_token="$entered_token"
+      else
+        target_admin_token="${SECOPSAI_CLOUD_ADMIN_TOKEN:-}"
+      fi
+    fi
+    [ -n "$target_admin_token" ] || fail "Cloud API admin token is required."
+    save_cloud_env "$target_api_url" "$target_admin_token"
+    info "Checking cloud API health"
+    curl -fsS "${target_api_url%/}/healthz" >/dev/null
+    SECOPSAI_REGISTER_SITE_NAME="$site_name" SECOPSAI_REGISTER_SENSOR_NAME="$sensor_name" register_sensor cloud
+  else
+    load_env
+    target_api_url="${target_api_url:-$(api_url)}"
+    SECOPSAI_REGISTER_SITE_NAME="$site_name" SECOPSAI_REGISTER_SENSOR_NAME="$sensor_name" register_sensor local
+  fi
+
+  if [ -n "$preview_cidr" ]; then
+    info "Previewing authorized target $preview_cidr"
+    preview_scan "$preview_cidr"
+  fi
+
+  if [ "$install_service" = "yes" ]; then
+    if [ "$profile" = "cloud" ]; then
+      install_worker_service --cloud
+    else
+      install_worker_service
+    fi
+  fi
+
+  if [ "$start_service" = "yes" ]; then
+    start_worker_service
+  fi
+
+  info "Onboarding complete"
+  if [ "$profile" = "cloud" ]; then
+    printf "Next: ./scripts/edge worker start\n"
+    printf "Or run once in the terminal: ./scripts/edge worker --cloud\n"
+  else
+    printf "Next: ./scripts/edge worker\n"
+  fi
 }
 
 start_db() {
@@ -258,12 +426,14 @@ register_sensor() {
   fi
 
   hostname_value="$(hostname)"
+  sensor_name="${SECOPSAI_REGISTER_SENSOR_NAME:-MacBook Sensor}"
+  site_name="${SECOPSAI_REGISTER_SITE_NAME:-Default Site}"
   info "Registering sensor with API at $target_api_url"
   response="$(
     curl -sS -X POST "$target_api_url/api/v1/sensors/register" \
       -H "Authorization: Bearer $target_admin_token" \
       -H "Content-Type: application/json" \
-      -d "{\"name\":\"MacBook Sensor\",\"hostname\":\"$hostname_value\",\"site_name\":\"Default Site\"}"
+      -d "{\"name\":\"$sensor_name\",\"hostname\":\"$hostname_value\",\"site_name\":\"$site_name\"}"
   )"
 
   sensor_id="$(printf "%s" "$response" | "$PYTHON_BIN" -c 'import json,sys; print(json.load(sys.stdin)["sensor_id"])')"
@@ -373,6 +543,170 @@ run_worker() {
   PYTHONPATH="$ROOT_DIR/agent" "$PYTHON_BIN" "${command_args[@]}"
 }
 
+install_worker_service() {
+  profile="local"
+  for arg in "$@"; do
+    if [ "$arg" = "--cloud" ]; then
+      profile="cloud"
+    fi
+  done
+
+  ensure_python_tools
+  require_nmap
+  if [ "$profile" = "cloud" ]; then
+    require_cloud_sensor_env
+    service_args="--cloud"
+  else
+    require_sensor_env
+    service_args=""
+  fi
+
+  if [ "$(uname -s)" = "Darwin" ]; then
+    mkdir -p "$(dirname "$LAUNCH_AGENT_FILE")" "$LOG_DIR"
+    cat > "$LAUNCH_AGENT_FILE" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>$SERVICE_LABEL</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>$ROOT_DIR/scripts/edge</string>
+    <string>worker</string>
+EOF
+    if [ -n "$service_args" ]; then
+      cat >> "$LAUNCH_AGENT_FILE" <<EOF
+    <string>$service_args</string>
+EOF
+    fi
+    cat >> "$LAUNCH_AGENT_FILE" <<EOF
+  </array>
+  <key>WorkingDirectory</key>
+  <string>$ROOT_DIR</string>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>StandardOutPath</key>
+  <string>$LOG_DIR/worker.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>$LOG_DIR/worker.err.log</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+  </dict>
+</dict>
+</plist>
+EOF
+    info "Installed launchd worker service at $LAUNCH_AGENT_FILE"
+    printf "Start it with: ./scripts/edge worker start\n"
+    return
+  fi
+
+  mkdir -p "$SYSTEMD_USER_DIR"
+  cat > "$SYSTEMD_SERVICE_FILE" <<EOF
+[Unit]
+Description=SecOpsAI Edge worker
+After=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=$ROOT_DIR
+ExecStart=$ROOT_DIR/scripts/edge worker $service_args
+Restart=always
+RestartSec=10
+Environment=PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
+
+[Install]
+WantedBy=default.target
+EOF
+  systemctl --user daemon-reload || true
+  info "Installed systemd worker service at $SYSTEMD_SERVICE_FILE"
+  printf "Start it with: ./scripts/edge worker start\n"
+}
+
+start_worker_service() {
+  if [ "$(uname -s)" = "Darwin" ]; then
+    [ -f "$LAUNCH_AGENT_FILE" ] || fail "Worker service is not installed. Run ./scripts/edge worker install-service --cloud first."
+    launchctl bootout "gui/$(id -u)" "$LAUNCH_AGENT_FILE" >/dev/null 2>&1 || true
+    launchctl bootstrap "gui/$(id -u)" "$LAUNCH_AGENT_FILE"
+    launchctl enable "gui/$(id -u)/$SERVICE_LABEL" >/dev/null 2>&1 || true
+    info "Started $SERVICE_LABEL"
+    return
+  fi
+  [ -f "$SYSTEMD_SERVICE_FILE" ] || fail "Worker service is not installed. Run ./scripts/edge worker install-service --cloud first."
+  systemctl --user daemon-reload
+  systemctl --user enable --now "$SERVICE_LABEL.service"
+  info "Started $SERVICE_LABEL"
+}
+
+stop_worker_service() {
+  if [ "$(uname -s)" = "Darwin" ]; then
+    launchctl bootout "gui/$(id -u)" "$LAUNCH_AGENT_FILE" >/dev/null 2>&1 || true
+    info "Stopped $SERVICE_LABEL"
+    return
+  fi
+  systemctl --user stop "$SERVICE_LABEL.service"
+  info "Stopped $SERVICE_LABEL"
+}
+
+worker_service_status() {
+  if [ "$(uname -s)" = "Darwin" ]; then
+    if launchctl print "gui/$(id -u)/$SERVICE_LABEL" >/dev/null 2>&1; then
+      printf "Worker service: running (%s)\n" "$SERVICE_LABEL"
+    else
+      printf "Worker service: not running (%s)\n" "$SERVICE_LABEL"
+    fi
+    [ -f "$LAUNCH_AGENT_FILE" ] && printf "Launch agent:   %s\n" "$LAUNCH_AGENT_FILE"
+    printf "Logs:           %s\n" "$LOG_DIR"
+    return
+  fi
+  systemctl --user status "$SERVICE_LABEL.service" --no-pager || true
+}
+
+worker_service_logs() {
+  if [ "$(uname -s)" = "Darwin" ]; then
+    mkdir -p "$LOG_DIR"
+    printf "==> %s/worker.out.log\n" "$LOG_DIR"
+    tail -n 80 "$LOG_DIR/worker.out.log" 2>/dev/null || true
+    printf "\n==> %s/worker.err.log\n" "$LOG_DIR"
+    tail -n 80 "$LOG_DIR/worker.err.log" 2>/dev/null || true
+    return
+  fi
+  journalctl --user -u "$SERVICE_LABEL.service" -n 120 --no-pager
+}
+
+worker() {
+  subcommand="${1:-run}"
+  case "$subcommand" in
+    install-service)
+      shift || true
+      install_worker_service "$@"
+      ;;
+    start)
+      start_worker_service
+      ;;
+    stop)
+      stop_worker_service
+      ;;
+    status)
+      worker_service_status
+      ;;
+    logs)
+      worker_service_logs
+      ;;
+    run)
+      shift || true
+      run_worker "$@"
+      ;;
+    *)
+      run_worker "$@"
+      ;;
+  esac
+}
+
 generate_report() {
   profile="local"
   for arg in "$@"; do
@@ -396,8 +730,47 @@ generate_report() {
   printf "\n"
 }
 
+schedules() {
+  subcommand="${1:-list}"
+  shift || true
+  profile="local"
+  for arg in "$@"; do
+    if [ "$arg" = "--cloud" ]; then
+      profile="cloud"
+    fi
+  done
+
+  if [ "$profile" = "cloud" ]; then
+    target_api_url="$(cloud_api_url)"
+    target_admin_token="$(cloud_admin_token)"
+  else
+    load_env
+    target_api_url="$(api_url)"
+    target_admin_token="$(admin_token)"
+  fi
+
+  case "$subcommand" in
+    list)
+      curl -fsS "$target_api_url/api/v1/scan-schedules" \
+        -H "Authorization: Bearer $target_admin_token"
+      printf "\n"
+      ;;
+    run-due)
+      curl -fsS -X POST "$target_api_url/api/v1/scan-schedules/run-due" \
+        -H "Authorization: Bearer $target_admin_token"
+      printf "\n"
+      ;;
+    *)
+      fail "Unknown schedules command: $subcommand"
+      ;;
+  esac
+}
+
 run_tests() {
   ensure_python_tools
+  info "Checking Render scheduler script"
+  python3 -m py_compile "$ROOT_DIR/scripts/render-run-due-schedules"
+
   info "Running backend and agent tests"
   (cd "$ROOT_DIR" && PYTHONPATH="$ROOT_DIR/api:$ROOT_DIR/agent" "$PYTHON_BIN" -m pytest tests)
 
@@ -409,6 +782,65 @@ run_tests() {
 
   info "Checking frontend audit"
   (cd "$ROOT_DIR/web" && npm audit --audit-level=moderate)
+}
+
+core_export() {
+  profile="local"
+  output=""
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --cloud)
+        profile="cloud"
+        ;;
+      --output|-o)
+        shift || true
+        output="${1:-}"
+        [ -n "$output" ] || fail "Usage: ./scripts/edge core export [--cloud] --output edge-bundle.json"
+        ;;
+      *)
+        fail "Unknown core export option: $1"
+        ;;
+    esac
+    shift || true
+  done
+
+  if [ "$profile" = "cloud" ]; then
+    target_api_url="$(cloud_api_url)"
+    target_admin_token="$(cloud_admin_token)"
+  else
+    load_env
+    target_api_url="$(api_url)"
+    target_admin_token="$(admin_token)"
+  fi
+
+  info "Exporting SecOpsAI Core bundle from $target_api_url"
+  if [ -n "$output" ]; then
+    curl -fsS "$target_api_url/api/v1/core/export" \
+      -H "Authorization: Bearer $target_admin_token" \
+      -o "$output"
+    printf "Saved %s\n" "$output"
+  else
+    curl -fsS "$target_api_url/api/v1/core/export" \
+      -H "Authorization: Bearer $target_admin_token"
+    printf "\n"
+  fi
+}
+
+core() {
+  subcommand="${1:-help}"
+  shift || true
+
+  case "$subcommand" in
+    export)
+      core_export "$@"
+      ;;
+    help|-h|--help)
+      usage
+      ;;
+    *)
+      fail "Unknown core command: $subcommand"
+      ;;
+  esac
 }
 
 status() {
@@ -461,9 +893,8 @@ cloud() {
     configure)
       url="${1:-}"
       [ -n "$url" ] || fail "Usage: ./scripts/edge cloud configure <render-api-url>"
-      cat > "$CLOUD_ENV_FILE" <<EOF
-SECOPSAI_CLOUD_API_URL=${url%/}
-EOF
+      load_cloud_env
+      save_cloud_env "$url" ""
       info "Saved hosted API URL to .cloud.env"
       ;;
     register)
@@ -488,6 +919,7 @@ main() {
   case "$command" in
     help|-h|--help) usage ;;
     setup) setup ;;
+    onboard) onboard "$@" ;;
     dev) dev ;;
     db) start_db ;;
     stop-db) stop_db ;;
@@ -498,8 +930,10 @@ main() {
     cloud) cloud "$@" ;;
     preview) preview_scan "$@" ;;
     scan) submit_scan "$@" ;;
-    worker) run_worker "$@" ;;
+    worker) worker "$@" ;;
     report) generate_report "$@" ;;
+    schedules) schedules "$@" ;;
+    core) core "$@" ;;
     test) run_tests ;;
     status) status "$@" ;;
     *) usage; fail "Unknown command: $command" ;;

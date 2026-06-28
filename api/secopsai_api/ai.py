@@ -32,7 +32,7 @@ def build_report(db: Session, site_id: str, settings: Settings | None = None) ->
         select(Finding)
         .where(Finding.site_id == site_id, Finding.status.in_(["open", "acknowledged"]))
         .order_by(Finding.created_at.desc())
-        .limit(50)
+        .limit(settings.ai_max_findings_per_report)
     ).all()
     payload = {
         "site_id": site_id,
@@ -81,11 +81,17 @@ class AiReportProvider:
         self.settings = settings
 
     def generate(self, payload: dict[str, Any]) -> dict[str, Any]:
-        if self.settings.ai_provider == "openai":
-            return self._generate_openai(payload)
-        if self.settings.ai_provider == "http" and self.settings.ai_endpoint:
-            return self._generate_http(payload)
-        return self._generate_mock(payload)
+        try:
+            if self.settings.ai_provider == "openai":
+                return self._generate_openai(payload)
+            if self.settings.ai_provider == "http" and self.settings.ai_endpoint:
+                return self._generate_http(payload)
+            return self._generate_mock(payload)
+        except Exception as exc:
+            fallback = self._generate_mock(payload)
+            fallback["provider"] = "mock_fallback"
+            fallback["provider_error"] = str(exc)
+            return fallback
 
     def _generate_openai(self, payload: dict[str, Any]) -> dict[str, Any]:
         if not self.settings.ai_api_key:

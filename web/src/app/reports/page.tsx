@@ -2,10 +2,11 @@
 
 import { FilePlus2, FileText } from "lucide-react";
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { LiveState } from "@/components/LiveState";
 import { PageHeader } from "@/components/PageHeader";
 import { SeverityBadge } from "@/components/SeverityBadge";
-import { fetchDashboardData, generateReport } from "@/lib/api";
+import { fetchDashboardData, generateSiteReport } from "@/lib/api";
 import { timeAgo } from "@/lib/format";
 import type { DashboardData, Report } from "@/lib/types";
 
@@ -14,6 +15,7 @@ export default function ReportsPage() {
   const [live, setLive] = useState(false);
   const [error, setError] = useState<string | undefined>();
   const [busy, setBusy] = useState(false);
+  const [site, setSite] = useState("all");
 
   useEffect(() => {
     fetchDashboardData().then((result) => {
@@ -26,7 +28,7 @@ export default function ReportsPage() {
   async function onGenerateReport() {
     setBusy(true);
     try {
-      const report = await generateReport();
+      const report = await generateSiteReport(site === "all" ? undefined : site);
       setData((current) =>
         current ? { ...current, reports: [report, ...current.reports] } : current
       );
@@ -35,7 +37,7 @@ export default function ReportsPage() {
     }
   }
 
-  const reports = data?.reports ?? [];
+  const reports = (data?.reports ?? []).filter((report) => site === "all" || report.site_id === site);
 
   return (
     <>
@@ -46,6 +48,16 @@ export default function ReportsPage() {
         action={
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             <LiveState live={live} error={error} />
+            <select
+              className="focus-ring rounded-md border border-line bg-white px-3 py-2 text-sm"
+              value={site}
+              onChange={(event) => setSite(event.target.value)}
+            >
+              <option value="all">All sites</option>
+              {(data?.sites ?? []).map((item) => (
+                <option key={item.id} value={item.id}>{item.name}</option>
+              ))}
+            </select>
             <button
               className="focus-ring inline-flex items-center justify-center gap-2 rounded-md bg-sea px-3 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:bg-zinc-300"
               disabled={!live || busy}
@@ -82,6 +94,12 @@ function ReportCard({ report }: { report: Report }) {
         <SeverityBadge severity={report.risk_level} />
       </div>
       <p className="mt-4 text-sm leading-6 text-zinc-600">{report.summary}</p>
+      <Link
+        className="focus-ring mt-4 inline-flex h-10 items-center justify-center gap-2 rounded-md border border-line bg-white px-3 text-sm font-semibold text-ink transition hover:border-sea hover:text-sea"
+        href={`/reports/detail?id=${encodeURIComponent(report.id)}`}
+      >
+        Open Report
+      </Link>
       <div className="mt-4 grid gap-3 md:grid-cols-3">
         {(report.content.recommended_actions ?? []).map((action) => (
           <div key={action} className="rounded-md bg-paper p-3 text-sm leading-6 text-ink">

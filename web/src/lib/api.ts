@@ -1,5 +1,19 @@
 import { sampleData } from "./sample-data";
-import type { Asset, DashboardData, Finding, Report, ScanJob, Sensor, WifiNetwork } from "./types";
+import type {
+  Asset,
+  DashboardData,
+  Finding,
+  FindingDetail,
+  FindingNote,
+  NotificationEndpoint,
+  OnboardingStatus,
+  Report,
+  ScanJob,
+  ScanSchedule,
+  Sensor,
+  Site,
+  WifiNetwork
+} from "./types";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000";
 const SESSION_TOKEN_KEY = "secopsai_dashboard_session";
@@ -67,15 +81,23 @@ export function apiBaseUrl(): string {
 
 export async function fetchDashboardData(): Promise<ApiResult<DashboardData>> {
   try {
-    const [assets, wifiNetworks, findings, reports, scanJobs, sensors] = await Promise.all([
-      requestJson<Asset[]>("/api/v1/assets"),
-      requestJson<WifiNetwork[]>("/api/v1/wifi-networks"),
-      requestJson<Finding[]>("/api/v1/findings"),
-      requestJson<Report[]>("/api/v1/reports"),
-      requestJson<ScanJob[]>("/api/v1/scan-jobs"),
-      requestJson<Sensor[]>("/api/v1/sensors")
-    ]);
-    return { data: { assets, wifiNetworks, findings, reports, scanJobs, sensors }, live: true };
+    const [sites, assets, wifiNetworks, findings, reports, scanJobs, sensors, schedules, notifications, onboarding] =
+      await Promise.all([
+        requestJson<Site[]>("/api/v1/sites"),
+        requestJson<Asset[]>("/api/v1/assets"),
+        requestJson<WifiNetwork[]>("/api/v1/wifi-networks"),
+        requestJson<Finding[]>("/api/v1/findings"),
+        requestJson<Report[]>("/api/v1/reports"),
+        requestJson<ScanJob[]>("/api/v1/scan-jobs"),
+        requestJson<Sensor[]>("/api/v1/sensors"),
+        requestJson<ScanSchedule[]>("/api/v1/scan-schedules"),
+        requestJson<NotificationEndpoint[]>("/api/v1/notification-endpoints"),
+        requestJson<OnboardingStatus>("/api/v1/onboarding/status")
+      ]);
+    return {
+      data: { sites, assets, wifiNetworks, findings, reports, scanJobs, sensors, schedules, notifications, onboarding },
+      live: true
+    };
   } catch (error) {
     return {
       data: sampleData,
@@ -89,11 +111,98 @@ export async function generateReport(): Promise<Report> {
   return requestJson<Report>("/api/v1/reports/generate", { method: "POST" });
 }
 
+export async function generateSiteReport(siteId?: string): Promise<Report> {
+  const suffix = siteId ? `?site_id=${encodeURIComponent(siteId)}` : "";
+  return requestJson<Report>(`/api/v1/reports/generate${suffix}`, { method: "POST" });
+}
+
+export async function getReport(reportId: string): Promise<Report> {
+  return requestJson<Report>(`/api/v1/reports/${reportId}`);
+}
+
+export async function downloadCoreBundle(): Promise<Blob> {
+  const sessionToken = getDashboardSessionToken();
+  if (!sessionToken) {
+    throw new Error("Dashboard session required");
+  }
+
+  const response = await fetch(`${API_BASE_URL}/api/v1/core/export`, {
+    headers: {
+      Authorization: `Bearer ${sessionToken}`
+    },
+    cache: "no-store"
+  });
+  if (!response.ok) {
+    throw new Error(`${response.status} ${response.statusText}`);
+  }
+  return response.blob();
+}
+
 export async function createScanJob(targetCidr: string, includeWifi: boolean): Promise<ScanJob> {
   return requestJson<ScanJob>("/api/v1/scan-jobs", {
     method: "POST",
     body: JSON.stringify({ target_cidr: targetCidr, include_wifi: includeWifi })
   });
+}
+
+export async function createSite(name: string): Promise<Site> {
+  return requestJson<Site>("/api/v1/sites", {
+    method: "POST",
+    body: JSON.stringify({ name })
+  });
+}
+
+export async function updateSite(siteId: string, name: string): Promise<Site> {
+  return requestJson<Site>(`/api/v1/sites/${siteId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ name })
+  });
+}
+
+export async function createScanSchedule(payload: {
+  name: string;
+  site_id?: string;
+  sensor_id?: string;
+  target_cidr: string;
+  frequency: string;
+  time_of_day: string;
+  timezone: string;
+  day_of_week?: number | null;
+  include_wifi: boolean;
+  enabled: boolean;
+}): Promise<ScanSchedule> {
+  return requestJson<ScanSchedule>("/api/v1/scan-schedules", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function updateScanSchedule(
+  scheduleId: string,
+  payload: Partial<{
+    name: string;
+    target_cidr: string;
+    frequency: string;
+    time_of_day: string;
+    timezone: string;
+    day_of_week: number | null;
+    include_wifi: boolean;
+    enabled: boolean;
+    sensor_id: string;
+  }>
+): Promise<ScanSchedule> {
+  return requestJson<ScanSchedule>(`/api/v1/scan-schedules/${scheduleId}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function deleteScanSchedule(scheduleId: string): Promise<void> {
+  await requestJson<{ status: string }>(`/api/v1/scan-schedules/${scheduleId}`, { method: "DELETE" });
+}
+
+export async function runDueSchedules(): Promise<{ queued: number; job_ids: string[] }> {
+  return requestJson<{ queued: number; job_ids: string[] }>("/api/v1/scan-schedules/run-due", { method: "POST" });
 }
 
 export async function cancelScanJob(jobId: string): Promise<ScanJob> {
@@ -109,4 +218,70 @@ export async function updateFindingStatus(findingId: string, status: string): Pr
     `/api/v1/findings/${findingId}/status?status_value=${encodeURIComponent(status)}`,
     { method: "POST" }
   );
+}
+
+export async function getFinding(findingId: string): Promise<FindingDetail> {
+  return requestJson<FindingDetail>(`/api/v1/findings/${findingId}`);
+}
+
+export async function createFindingNote(findingId: string, body: string, author = "operator"): Promise<FindingNote> {
+  return requestJson<FindingNote>(`/api/v1/findings/${findingId}/notes`, {
+    method: "POST",
+    body: JSON.stringify({ body, author })
+  });
+}
+
+export async function verifyFinding(findingId: string): Promise<ScanJob> {
+  return requestJson<ScanJob>(`/api/v1/findings/${findingId}/verify`, { method: "POST" });
+}
+
+export async function updateSensor(sensorId: string, payload: { name?: string; hostname?: string }): Promise<Sensor> {
+  return requestJson<Sensor>(`/api/v1/sensors/${sensorId}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function rotateSensorToken(sensorId: string): Promise<{ sensor_id: string; sensor_token: string }> {
+  return requestJson<{ sensor_id: string; sensor_token: string }>(`/api/v1/sensors/${sensorId}/rotate-token`, {
+    method: "POST"
+  });
+}
+
+export async function disableSensor(sensorId: string): Promise<Sensor> {
+  return requestJson<Sensor>(`/api/v1/sensors/${sensorId}/disable`, { method: "POST" });
+}
+
+export async function createNotificationEndpoint(payload: {
+  name: string;
+  type: string;
+  target: string;
+  site_id?: string;
+  events: string[];
+  enabled: boolean;
+}): Promise<NotificationEndpoint> {
+  return requestJson<NotificationEndpoint>("/api/v1/notification-endpoints", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function updateNotificationEndpoint(
+  endpointId: string,
+  payload: Partial<{ name: string; target: string; events: string[]; enabled: boolean }>
+): Promise<NotificationEndpoint> {
+  return requestJson<NotificationEndpoint>(`/api/v1/notification-endpoints/${endpointId}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function deleteNotificationEndpoint(endpointId: string): Promise<void> {
+  await requestJson<{ status: string }>(`/api/v1/notification-endpoints/${endpointId}`, { method: "DELETE" });
+}
+
+export async function testNotificationEndpoint(endpointId: string): Promise<{ ok: boolean; detail: string }> {
+  return requestJson<{ ok: boolean; detail: string }>(`/api/v1/notification-endpoints/${endpointId}/test`, {
+    method: "POST"
+  });
 }

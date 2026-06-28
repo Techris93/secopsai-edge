@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertTriangle, FileText, RefreshCw, Server, ShieldAlert, Wifi } from "lucide-react";
 import { LiveState } from "@/components/LiveState";
+import { OnboardingChecklist } from "@/components/OnboardingChecklist";
 import { PageHeader } from "@/components/PageHeader";
 import { ScanActions } from "@/components/ScanActions";
 import { SeverityBadge } from "@/components/SeverityBadge";
@@ -77,6 +78,7 @@ export default function OverviewPage() {
         </section>
 
         <div className="grid gap-6">
+          <OnboardingChecklist status={data?.onboarding ?? null} />
           <ScanActions scanJobs={data?.scanJobs ?? []} sensors={data?.sensors ?? []} onChanged={loadDashboardData} />
 
           <section className="rounded-lg border border-line bg-white p-4 shadow-panel">

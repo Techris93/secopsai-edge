@@ -32,3 +32,13 @@ select {
 .focus-ring:focus-visible {
   outline-color: #0f766e;
 }
+
+@layer components {
+  .ButtonSecondary {
+    @apply focus-ring inline-flex h-10 items-center justify-center gap-2 rounded-md border border-line bg-white px-3 text-sm font-semibold text-ink transition hover:border-sea hover:text-sea disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .ButtonDanger {
+    @apply focus-ring inline-flex h-10 items-center justify-center gap-2 rounded-md border border-red-200 bg-red-50 px-3 text-sm font-semibold text-danger transition hover:border-danger disabled:cursor-not-allowed disabled:opacity-50;
+  }
+}

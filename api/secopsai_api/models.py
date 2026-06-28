@@ -39,6 +39,10 @@ class Sensor(Base):
     hostname: Mapped[str | None] = mapped_column(String(255))
     status: Mapped[str] = mapped_column(String(32), default="registered")
     token_hash: Mapped[str] = mapped_column(String(128), nullable=False)
+    version: Mapped[str | None] = mapped_column(String(80))
+    os_name: Mapped[str | None] = mapped_column(String(120))
+    last_error: Mapped[str | None] = mapped_column(Text)
+    disabled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
@@ -65,6 +69,7 @@ class ScanJob(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     site_id: Mapped[str] = mapped_column(ForeignKey("sites.id"), nullable=False)
     sensor_id: Mapped[str] = mapped_column(ForeignKey("sensors.id"), nullable=False)
+    schedule_id: Mapped[str | None] = mapped_column(ForeignKey("scan_schedules.id"))
     target_cidr: Mapped[str] = mapped_column(String(64), nullable=False)
     include_wifi: Mapped[bool] = mapped_column(Boolean, default=False)
     status: Mapped[str] = mapped_column(String(32), default="queued")
@@ -76,6 +81,26 @@ class ScanJob(Base):
     preview: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     result_summary: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     error_message: Mapped[str | None] = mapped_column(Text)
+
+
+class ScanSchedule(Base):
+    __tablename__ = "scan_schedules"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    site_id: Mapped[str] = mapped_column(ForeignKey("sites.id"), nullable=False)
+    sensor_id: Mapped[str] = mapped_column(ForeignKey("sensors.id"), nullable=False)
+    name: Mapped[str] = mapped_column(String(160), nullable=False)
+    target_cidr: Mapped[str] = mapped_column(String(64), nullable=False)
+    frequency: Mapped[str] = mapped_column(String(32), default="daily")
+    time_of_day: Mapped[str] = mapped_column(String(5), default="09:00")
+    timezone: Mapped[str] = mapped_column(String(80), default="UTC")
+    day_of_week: Mapped[int | None] = mapped_column(Integer)
+    include_wifi: Mapped[bool] = mapped_column(Boolean, default=False)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    next_run_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_run_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
 class Asset(Base):
@@ -170,6 +195,16 @@ class Finding(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
+class FindingNote(Base):
+    __tablename__ = "finding_notes"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    finding_id: Mapped[str] = mapped_column(ForeignKey("findings.id"), nullable=False)
+    author: Mapped[str] = mapped_column(String(120), default="operator")
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
 class Report(Base):
     __tablename__ = "reports"
 
@@ -206,3 +241,19 @@ class AuditLog(Base):
     resource_id: Mapped[str | None] = mapped_column(String(80))
     details: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class NotificationEndpoint(Base):
+    __tablename__ = "notification_endpoints"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    site_id: Mapped[str | None] = mapped_column(ForeignKey("sites.id"))
+    name: Mapped[str] = mapped_column(String(160), nullable=False)
+    type: Mapped[str] = mapped_column(String(32), nullable=False)
+    target: Mapped[str] = mapped_column(String(500), nullable=False)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    events: Mapped[list[str]] = mapped_column(JSON, default=list)
+    last_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_error: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

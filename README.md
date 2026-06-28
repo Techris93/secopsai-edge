@@ -6,13 +6,26 @@ Standalone MacBook-first MVP for an AI-assisted asset discovery and wireless int
 
 - Native Python collection agent using safe, allowlisted Nmap scans.
 - FastAPI backend with PostgreSQL, migrations, auth, audit logs, findings, reports, and Splunk HEC export hooks.
-- Next.js/Tailwind dashboard for assets, Wi-Fi networks, findings, reports, and sensor settings.
+- Next.js/Tailwind dashboard for onboarding, sites, assets, Wi-Fi networks, findings, schedules, reports, notifications, and sensor settings.
+- Guided onboarding, launchd/systemd worker service installation, scheduled scans, sensor token rotation, and report export.
 - Docker Compose for local PostgreSQL.
 - Tests for scan safety, Nmap parsing, detection rules, and AI payload redaction.
 
 ## Quick Start
 
-The easiest path is to use the project helper:
+The easiest hosted pilot path is:
+
+```bash
+./scripts/edge onboard --cloud --install-service --start-service
+```
+
+Or use the installer wrapper:
+
+```bash
+./scripts/install-secopsai-edge.sh --cloud --api-url https://<your-api>.onrender.com --admin-token <admin-token>
+```
+
+The local development path is:
 
 ```bash
 ./scripts/edge setup
@@ -61,6 +74,9 @@ Replace `192.168.1.0/24` with your own authorized local network.
 ```bash
 ./scripts/edge status
 ./scripts/edge test
+./scripts/edge worker status
+./scripts/edge worker logs
+./scripts/edge schedules run-due --cloud
 ./scripts/edge stop-db
 ```
 
@@ -69,6 +85,8 @@ Cloud commands:
 ```bash
 ./scripts/edge cloud configure https://<your-render-api>.onrender.com
 ./scripts/edge cloud register
+./scripts/edge worker install-service --cloud
+./scripts/edge worker start
 ./scripts/edge worker --cloud
 ./scripts/edge scan 192.168.1.0/24 --cloud
 ./scripts/edge report --cloud
@@ -79,6 +97,14 @@ execute on your MacBook/Raspberry Pi, where the LAN is actually reachable. The d
 sensor online/offline status from worker heartbeats and provides cancel/retry controls for remote jobs.
 
 See [docs/architecture.md](docs/architecture.md) and [docs/runbook.md](docs/runbook.md) for implementation details.
+
+Pilot docs:
+
+- [docs/install-sensor.md](docs/install-sensor.md)
+- [docs/pilot-guide.md](docs/pilot-guide.md)
+- [docs/demo-script.md](docs/demo-script.md)
+- [docs/security-boundaries.md](docs/security-boundaries.md)
+- [docs/msp-pilot.md](docs/msp-pilot.md)
 
 ## Hosting
 

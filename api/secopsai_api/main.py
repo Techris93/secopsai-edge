@@ -1,25 +1,50 @@
 from __future__ import annotations
 
-from ipaddress import ip_network
+from ipaddress import ip_address, ip_network
 from datetime import timedelta
 
 from fastapi import Depends, FastAPI, Header, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from secopsai_api.ai import build_report
 from secopsai_api.audit import write_audit
 from secopsai_api.config import get_settings
+from secopsai_api.core_export import build_core_export
 from secopsai_api.database import engine, get_db
 from secopsai_api.detection import ingest_scan
-from secopsai_api.models import Asset, Base, Finding, Report, ScanJob, Sensor, Site, WifiNetwork, utcnow
+from secopsai_api.models import (
+    Asset,
+    Base,
+    Finding,
+    FindingNote,
+    NotificationEndpoint,
+    Report,
+    ScanJob,
+    ScanRun,
+    ScanSchedule,
+    Sensor,
+    Site,
+    WifiNetwork,
+    utcnow,
+)
+from secopsai_api.notifications import notify_event, test_notification
+from secopsai_api.scheduling import compute_next_run_at, enqueue_due_schedules, normalize_frequency, pick_site_and_sensor
 from secopsai_api.schemas import (
     AssetOut,
     DashboardLoginRequest,
     DashboardSessionResponse,
+    FindingDetailOut,
+    FindingNoteCreateRequest,
+    FindingNoteOut,
     FindingOut,
     HeartbeatIn,
+    NotificationEndpointCreateRequest,
+    NotificationEndpointOut,
+    NotificationEndpointUpdateRequest,
+    NotificationTestResponse,
+    OnboardingStatusOut,
     ReportOut,
     ScanIn,
     ScanIngestResponse,
@@ -27,9 +52,18 @@ from secopsai_api.schemas import (
     ScanJobFailRequest,
     ScanJobOut,
     ScanJobStartRequest,
+    RunDueSchedulesResponse,
+    ScanScheduleCreateRequest,
+    ScanScheduleOut,
+    ScanScheduleUpdateRequest,
+    SensorRotateResponse,
+    SensorUpdateRequest,
     SensorOut,
     SensorRegisterRequest,
     SensorRegisterResponse,
+    SiteCreateRequest,
+    SiteOut,
+    SiteUpdateRequest,
     WifiNetworkOut,
 )
 from secopsai_api.security import (
@@ -147,6 +181,58 @@ def current_sensor_job(db: Session, sensor: Sensor) -> ScanJob | None:
     )
 
 
+def get_site_or_404(db: Session, site_id: str) -> Site:
+    site = db.get(Site, site_id)
+    if site is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Site not found")
+    return site
+
+
+def get_finding_or_404(db: Session, finding_id: str) -> Finding:
+    finding = db.get(Finding, finding_id)
+    if finding is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Finding not found")
+    return finding
+
+
+def finding_notification_payload(finding: Finding) -> dict[str, object]:
+    return {
+        "id": finding.id,
+        "title": finding.title,
+        "summary": finding.summary,
+        "severity": finding.severity,
+        "type": finding.type,
+        "status": finding.status,
+        "evidence": finding.evidence,
+    }
+
+
+def sensor_out(db: Session, sensor: Sensor) -> SensorOut:
+    return SensorOut(
+        id=sensor.id,
+        site_id=sensor.site_id,
+        site_name=sensor.site.name,
+        name=sensor.name,
+        hostname=sensor.hostname,
+        status=sensor.status,
+        connection_state="disabled" if sensor.disabled_at else sensor_connection_state(sensor),
+        version=sensor.version,
+        os_name=sensor.os_name,
+        last_error=sensor.last_error,
+        disabled_at=sensor.disabled_at,
+        created_at=sensor.created_at,
+        last_seen_at=sensor.last_seen_at,
+        current_job=current_sensor_job(db, sensor),
+    )
+
+
+def cidr_for_asset(asset: Asset) -> str:
+    ip = ip_address(asset.ip_address)
+    if ip.version != 4:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only IPv4 assets can be rescanned")
+    return str(ip_network(f"{asset.ip_address}/24", strict=False))
+
+
 @app.post("/api/v1/auth/session", response_model=DashboardSessionResponse)
 def create_session(payload: DashboardLoginRequest) -> DashboardSessionResponse:
     if not constant_time_equals(payload.admin_token, settings.admin_token):
@@ -154,6 +240,60 @@ def create_session(payload: DashboardLoginRequest) -> DashboardSessionResponse:
     return DashboardSessionResponse(
         access_token=create_dashboard_session(),
         expires_in=settings.dashboard_session_ttl_seconds,
+    )
+
+
+@app.get("/api/v1/sites", response_model=list[SiteOut], dependencies=[Depends(require_admin)])
+def list_sites(db: Session = Depends(get_db)) -> list[Site]:
+    return list(db.scalars(select(Site).order_by(Site.created_at.asc())).all())
+
+
+@app.post("/api/v1/sites", response_model=SiteOut, dependencies=[Depends(require_admin)])
+def create_site(payload: SiteCreateRequest, db: Session = Depends(get_db)) -> Site:
+    name = payload.name.strip()
+    existing = db.scalar(select(Site).where(Site.name == name))
+    if existing:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Site already exists")
+    site = Site(name=name)
+    db.add(site)
+    db.flush()
+    write_audit(db, "site.created", resource_type="site", resource_id=site.id, details={"name": site.name})
+    db.commit()
+    db.refresh(site)
+    return site
+
+
+@app.patch("/api/v1/sites/{site_id}", response_model=SiteOut, dependencies=[Depends(require_admin)])
+def update_site(site_id: str, payload: SiteUpdateRequest, db: Session = Depends(get_db)) -> Site:
+    site = get_site_or_404(db, site_id)
+    name = payload.name.strip()
+    duplicate = db.scalar(select(Site).where(Site.name == name, Site.id != site.id))
+    if duplicate:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Site already exists")
+    site.name = name
+    write_audit(db, "site.updated", resource_type="site", resource_id=site.id, details={"name": site.name})
+    db.commit()
+    db.refresh(site)
+    return site
+
+
+@app.get("/api/v1/onboarding/status", response_model=OnboardingStatusOut, dependencies=[Depends(require_admin)])
+def onboarding_status(db: Session = Depends(get_db)) -> OnboardingStatusOut:
+    sites = db.scalar(select(func.count(Site.id))) or 0
+    sensors = list(db.scalars(select(Sensor)).all())
+    completed_scans = db.scalar(select(func.count(ScanRun.id)).where(ScanRun.status == "completed")) or 0
+    reports = db.scalar(select(func.count(Report.id))) or 0
+    schedules = db.scalar(select(func.count(ScanSchedule.id))) or 0
+    notifications = db.scalar(select(func.count(NotificationEndpoint.id)).where(NotificationEndpoint.enabled.is_(True))) or 0
+    return OnboardingStatusOut(
+        api_connected=True,
+        sites_created=sites > 0,
+        sensor_registered=len(sensors) > 0,
+        worker_online=any(sensor.disabled_at is None and sensor_connection_state(sensor) == "online" for sensor in sensors),
+        first_scan_completed=completed_scans > 0,
+        first_report_generated=reports > 0,
+        schedule_configured=schedules > 0,
+        notifications_configured=notifications > 0,
     )
 
 
@@ -197,8 +337,13 @@ def heartbeat(
     sensor: Sensor = Depends(require_sensor_for_path),
     db: Session = Depends(get_db),
 ) -> dict[str, str]:
+    if sensor.disabled_at is not None:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Sensor is disabled")
     sensor.status = payload.status
     sensor.last_seen_at = utcnow()
+    sensor.version = payload.details.get("version") or sensor.version
+    sensor.os_name = payload.details.get("os") or payload.details.get("os_name") or sensor.os_name
+    sensor.last_error = payload.details.get("last_error") or None
     write_audit(
         db,
         "sensor.heartbeat",
@@ -212,27 +357,64 @@ def heartbeat(
 
 
 @app.get("/api/v1/sensors", response_model=list[SensorOut], dependencies=[Depends(require_admin)])
-def list_sensors(db: Session = Depends(get_db)) -> list[SensorOut]:
+def list_sensors(site_id: str | None = None, db: Session = Depends(get_db)) -> list[SensorOut]:
     recover_stale_scan_jobs(db)
-    sensors = list(db.scalars(select(Sensor).order_by(Sensor.created_at.asc())).all())
-    result: list[SensorOut] = []
-    for sensor in sensors:
-        result.append(
-            SensorOut(
-                id=sensor.id,
-                site_id=sensor.site_id,
-                site_name=sensor.site.name,
-                name=sensor.name,
-                hostname=sensor.hostname,
-                status=sensor.status,
-                connection_state=sensor_connection_state(sensor),
-                created_at=sensor.created_at,
-                last_seen_at=sensor.last_seen_at,
-                current_job=current_sensor_job(db, sensor),
-            )
-        )
+    query = select(Sensor).order_by(Sensor.created_at.asc())
+    if site_id:
+        query = query.where(Sensor.site_id == site_id)
+    sensors = list(db.scalars(query).all())
+    result = [sensor_out(db, sensor) for sensor in sensors]
     db.commit()
     return result
+
+
+@app.patch("/api/v1/sensors/{sensor_id}", response_model=SensorOut, dependencies=[Depends(require_admin)])
+def update_sensor(sensor_id: str, payload: SensorUpdateRequest, db: Session = Depends(get_db)) -> SensorOut:
+    sensor = db.get(Sensor, sensor_id)
+    if sensor is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sensor not found")
+    if payload.name is not None:
+        sensor.name = payload.name.strip()
+    if payload.hostname is not None:
+        sensor.hostname = payload.hostname.strip() or None
+    if payload.status is not None:
+        sensor.status = payload.status
+    if payload.last_error is not None:
+        sensor.last_error = payload.last_error
+    write_audit(db, "sensor.updated", sensor_id=sensor.id, resource_type="sensor", resource_id=sensor.id)
+    db.commit()
+    db.refresh(sensor)
+    return sensor_out(db, sensor)
+
+
+@app.post("/api/v1/sensors/{sensor_id}/rotate-token", response_model=SensorRotateResponse, dependencies=[Depends(require_admin)])
+def rotate_sensor_token(sensor_id: str, db: Session = Depends(get_db)) -> SensorRotateResponse:
+    sensor = db.get(Sensor, sensor_id)
+    if sensor is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sensor not found")
+    token = generate_sensor_token()
+    sensor.token_hash = hash_secret(token)
+    sensor.status = "registered"
+    sensor.last_seen_at = None
+    write_audit(db, "sensor.token_rotated", sensor_id=sensor.id, resource_type="sensor", resource_id=sensor.id)
+    db.commit()
+    return SensorRotateResponse(sensor_id=sensor.id, sensor_token=token)
+
+
+@app.post("/api/v1/sensors/{sensor_id}/disable", response_model=SensorOut, dependencies=[Depends(require_admin)])
+def disable_sensor(sensor_id: str, db: Session = Depends(get_db)) -> SensorOut:
+    sensor = db.get(Sensor, sensor_id)
+    if sensor is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sensor not found")
+    sensor.disabled_at = utcnow()
+    sensor.status = "disabled"
+    db.query(ScanJob).filter(ScanJob.sensor_id == sensor.id, ScanJob.status == "queued").update(
+        {"status": "canceled", "updated_at": utcnow(), "error_message": "Sensor disabled"}
+    )
+    write_audit(db, "sensor.disabled", sensor_id=sensor.id, resource_type="sensor", resource_id=sensor.id)
+    db.commit()
+    db.refresh(sensor)
+    return sensor_out(db, sensor)
 
 
 @app.post("/api/v1/scan-jobs", response_model=ScanJobOut, dependencies=[Depends(require_admin)])
@@ -241,9 +423,13 @@ def create_scan_job(payload: ScanJobCreateRequest, db: Session = Depends(get_db)
     if payload.sensor_id:
         sensor = db.get(Sensor, payload.sensor_id)
     else:
-        sensor = db.scalar(select(Sensor).order_by(Sensor.created_at.asc()))
+        sensor = db.scalar(
+            select(Sensor).where(Sensor.disabled_at.is_(None)).order_by(Sensor.created_at.asc())
+        )
     if sensor is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Register a sensor before queueing scans")
+    if sensor.disabled_at is not None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Sensor is disabled")
 
     job = ScanJob(
         site_id=sensor.site_id,
@@ -273,6 +459,7 @@ def create_scan_job(payload: ScanJobCreateRequest, db: Session = Depends(get_db)
 def list_scan_jobs(
     status_filter: str | None = None,
     sensor_id: str | None = None,
+    site_id: str | None = None,
     db: Session = Depends(get_db),
 ) -> list[ScanJob]:
     query = select(ScanJob).order_by(ScanJob.created_at.desc())
@@ -280,6 +467,8 @@ def list_scan_jobs(
         query = query.where(ScanJob.status == status_filter)
     if sensor_id:
         query = query.where(ScanJob.sensor_id == sensor_id)
+    if site_id:
+        query = query.where(ScanJob.site_id == site_id)
     return list(db.scalars(query).all())
 
 
@@ -330,11 +519,137 @@ def retry_scan_job(job_id: str, db: Session = Depends(get_db)) -> ScanJob:
     return retried
 
 
+@app.get("/api/v1/scan-schedules", response_model=list[ScanScheduleOut], dependencies=[Depends(require_admin)])
+def list_scan_schedules(site_id: str | None = None, db: Session = Depends(get_db)) -> list[ScanSchedule]:
+    query = select(ScanSchedule).order_by(ScanSchedule.created_at.desc())
+    if site_id:
+        query = query.where(ScanSchedule.site_id == site_id)
+    return list(db.scalars(query).all())
+
+
+@app.post("/api/v1/scan-schedules", response_model=ScanScheduleOut, dependencies=[Depends(require_admin)])
+def create_scan_schedule(payload: ScanScheduleCreateRequest, db: Session = Depends(get_db)) -> ScanSchedule:
+    target_cidr = normalize_scan_job_target(payload.target_cidr)
+    site, sensor = pick_site_and_sensor(db, payload.site_id, payload.sensor_id)
+    frequency = normalize_frequency(payload.frequency)
+    schedule = ScanSchedule(
+        site_id=site.id,
+        sensor_id=sensor.id,
+        name=payload.name.strip(),
+        target_cidr=target_cidr,
+        frequency=frequency,
+        time_of_day=payload.time_of_day,
+        timezone=payload.timezone,
+        day_of_week=payload.day_of_week,
+        include_wifi=payload.include_wifi,
+        enabled=payload.enabled,
+        next_run_at=compute_next_run_at(
+            frequency=frequency,
+            time_of_day=payload.time_of_day,
+            timezone_name=payload.timezone,
+            day_of_week=payload.day_of_week,
+        )
+        if payload.enabled
+        else None,
+    )
+    db.add(schedule)
+    db.flush()
+    write_audit(
+        db,
+        "scan_schedule.created",
+        sensor_id=sensor.id,
+        resource_type="scan_schedule",
+        resource_id=schedule.id,
+        details={"target_cidr": target_cidr, "frequency": frequency},
+    )
+    db.commit()
+    db.refresh(schedule)
+    return schedule
+
+
+@app.patch("/api/v1/scan-schedules/{schedule_id}", response_model=ScanScheduleOut, dependencies=[Depends(require_admin)])
+def update_scan_schedule(
+    schedule_id: str,
+    payload: ScanScheduleUpdateRequest,
+    db: Session = Depends(get_db),
+) -> ScanSchedule:
+    schedule = db.get(ScanSchedule, schedule_id)
+    if schedule is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Scan schedule not found")
+    if payload.sensor_id is not None:
+        sensor = db.get(Sensor, payload.sensor_id)
+        if sensor is None or sensor.disabled_at is not None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Enabled sensor not found")
+        if sensor.site_id != schedule.site_id:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Sensor belongs to another site")
+        schedule.sensor_id = sensor.id
+    if payload.name is not None:
+        schedule.name = payload.name.strip()
+    if payload.target_cidr is not None:
+        schedule.target_cidr = normalize_scan_job_target(payload.target_cidr)
+    if payload.frequency is not None:
+        schedule.frequency = normalize_frequency(payload.frequency)
+    if payload.time_of_day is not None:
+        schedule.time_of_day = payload.time_of_day
+    if payload.timezone is not None:
+        schedule.timezone = payload.timezone
+    if payload.day_of_week is not None:
+        schedule.day_of_week = payload.day_of_week
+    if payload.include_wifi is not None:
+        schedule.include_wifi = payload.include_wifi
+    if payload.enabled is not None:
+        schedule.enabled = payload.enabled
+    schedule.next_run_at = (
+        compute_next_run_at(
+            frequency=schedule.frequency,
+            time_of_day=schedule.time_of_day,
+            timezone_name=schedule.timezone,
+            day_of_week=schedule.day_of_week,
+        )
+        if schedule.enabled
+        else None
+    )
+    schedule.updated_at = utcnow()
+    write_audit(db, "scan_schedule.updated", resource_type="scan_schedule", resource_id=schedule.id)
+    db.commit()
+    db.refresh(schedule)
+    return schedule
+
+
+@app.delete("/api/v1/scan-schedules/{schedule_id}", dependencies=[Depends(require_admin)])
+def delete_scan_schedule(schedule_id: str, db: Session = Depends(get_db)) -> dict[str, str]:
+    schedule = db.get(ScanSchedule, schedule_id)
+    if schedule is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Scan schedule not found")
+    db.delete(schedule)
+    write_audit(db, "scan_schedule.deleted", resource_type="scan_schedule", resource_id=schedule_id)
+    db.commit()
+    return {"status": "deleted"}
+
+
+@app.post("/api/v1/scan-schedules/run-due", response_model=RunDueSchedulesResponse, dependencies=[Depends(require_admin)])
+def run_due_scan_schedules(db: Session = Depends(get_db)) -> RunDueSchedulesResponse:
+    jobs = enqueue_due_schedules(db)
+    for job in jobs:
+        write_audit(
+            db,
+            "scan_schedule.job_queued",
+            sensor_id=job.sensor_id,
+            resource_type="scan_job",
+            resource_id=job.id,
+            details={"schedule_id": job.schedule_id, "target_cidr": job.target_cidr},
+        )
+    db.commit()
+    return RunDueSchedulesResponse(queued=len(jobs), job_ids=[job.id for job in jobs])
+
+
 @app.post("/api/v1/sensors/{sensor_id}/scan-jobs/claim", response_model=ScanJobOut | None)
 def claim_scan_job(
     sensor: Sensor = Depends(require_sensor_for_path),
     db: Session = Depends(get_db),
 ) -> ScanJob | None:
+    if sensor.disabled_at is not None:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Sensor is disabled")
     recover_stale_scan_jobs(db, sensor.id)
     job = db.scalar(
         select(ScanJob)
@@ -363,6 +678,8 @@ def start_scan_job(
     sensor: Sensor = Depends(require_sensor_for_path),
     db: Session = Depends(get_db),
 ) -> ScanJob:
+    if sensor.disabled_at is not None:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Sensor is disabled")
     job = get_sensor_job(db, sensor, job_id)
     if job.status in TERMINAL_SCAN_JOB_STATUSES:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Scan job is already terminal")
@@ -386,6 +703,8 @@ def fail_scan_job(
     sensor: Sensor = Depends(require_sensor_for_path),
     db: Session = Depends(get_db),
 ) -> ScanJob:
+    if sensor.disabled_at is not None:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Sensor is disabled")
     job = get_sensor_job(db, sensor, job_id)
     if job.status in TERMINAL_SCAN_JOB_STATUSES:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Scan job is already terminal")
@@ -416,6 +735,8 @@ def ingest_scan_endpoint(
     db: Session = Depends(get_db),
 ) -> ScanIngestResponse:
     sensor = authenticate_sensor(db, payload.sensor_id, x_sensor_token)
+    if sensor.disabled_at is not None:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Sensor is disabled")
     scan_job = None
     if payload.scan_job_id:
         scan_job = get_sensor_job(db, sensor, payload.scan_job_id)
@@ -425,6 +746,27 @@ def ingest_scan_endpoint(
     scan, findings = ingest_scan(db, sensor, payload)
     for finding in findings:
         export_finding(finding)
+        if finding.severity in {"critical", "high"}:
+            notify_event(
+                db,
+                "high_finding",
+                finding_notification_payload(finding),
+                site_id=finding.site_id,
+            )
+        if finding.type == "new_device":
+            notify_event(
+                db,
+                "new_device",
+                finding_notification_payload(finding),
+                site_id=finding.site_id,
+            )
+        if finding.type == "risky_open_port":
+            notify_event(
+                db,
+                "risky_service",
+                finding_notification_payload(finding),
+                site_id=finding.site_id,
+            )
     if scan_job:
         now = utcnow()
         scan_job.status = "completed"
@@ -451,6 +793,17 @@ def ingest_scan_endpoint(
             "scan_job_id": payload.scan_job_id,
         },
     )
+    notify_event(
+        db,
+        "scan_completed",
+        {
+            "title": "Scan completed",
+            "summary": f"Scan completed with {len(payload.assets)} assets, {len(payload.wifi_networks)} Wi-Fi networks, and {len({finding.id for finding in findings})} findings.",
+            "scan_id": scan.id,
+            "scan_job_id": payload.scan_job_id,
+        },
+        site_id=sensor.site_id,
+    )
     db.commit()
     return ScanIngestResponse(
         scan_id=scan.id,
@@ -464,9 +817,12 @@ def ingest_scan_endpoint(
 def list_assets(
     status_filter: str | None = None,
     vendor: str | None = None,
+    site_id: str | None = None,
     db: Session = Depends(get_db),
 ) -> list[Asset]:
     query = select(Asset).order_by(Asset.last_seen_at.desc())
+    if site_id:
+        query = query.where(Asset.site_id == site_id)
     if status_filter:
         query = query.where(Asset.status == status_filter)
     if vendor:
@@ -475,22 +831,57 @@ def list_assets(
 
 
 @app.get("/api/v1/wifi-networks", response_model=list[WifiNetworkOut], dependencies=[Depends(require_admin)])
-def list_wifi_networks(db: Session = Depends(get_db)) -> list[WifiNetwork]:
-    return list(db.scalars(select(WifiNetwork).order_by(WifiNetwork.last_seen_at.desc())).all())
+def list_wifi_networks(site_id: str | None = None, db: Session = Depends(get_db)) -> list[WifiNetwork]:
+    query = select(WifiNetwork).order_by(WifiNetwork.last_seen_at.desc())
+    if site_id:
+        query = query.where(WifiNetwork.site_id == site_id)
+    return list(db.scalars(query).all())
 
 
 @app.get("/api/v1/findings", response_model=list[FindingOut], dependencies=[Depends(require_admin)])
 def list_findings(
     severity: str | None = None,
     status_filter: str | None = None,
+    site_id: str | None = None,
+    type_filter: str | None = None,
     db: Session = Depends(get_db),
 ) -> list[Finding]:
     query = select(Finding).order_by(Finding.created_at.desc())
+    if site_id:
+        query = query.where(Finding.site_id == site_id)
     if severity:
         query = query.where(Finding.severity == severity)
     if status_filter:
         query = query.where(Finding.status == status_filter)
+    if type_filter:
+        query = query.where(Finding.type == type_filter)
     return list(db.scalars(query).all())
+
+
+@app.get("/api/v1/findings/{finding_id}", response_model=FindingDetailOut, dependencies=[Depends(require_admin)])
+def get_finding(finding_id: str, db: Session = Depends(get_db)) -> FindingDetailOut:
+    finding = get_finding_or_404(db, finding_id)
+    notes = list(
+        db.scalars(
+            select(FindingNote).where(FindingNote.finding_id == finding.id).order_by(FindingNote.created_at.asc())
+        ).all()
+    )
+    return FindingDetailOut(
+        id=finding.id,
+        site_id=finding.site_id,
+        asset_id=finding.asset_id,
+        wifi_network_id=finding.wifi_network_id,
+        type=finding.type,
+        severity=finding.severity,
+        status=finding.status,
+        title=finding.title,
+        summary=finding.summary,
+        evidence=finding.evidence,
+        mitre_attack=finding.mitre_attack,
+        created_at=finding.created_at,
+        updated_at=finding.updated_at,
+        notes=notes,
+    )
 
 
 @app.post("/api/v1/findings/{finding_id}/status", response_model=FindingOut, dependencies=[Depends(require_admin)])
@@ -514,19 +905,212 @@ def update_finding_status(finding_id: str, status_value: str, db: Session = Depe
     return finding
 
 
+@app.post("/api/v1/findings/{finding_id}/notes", response_model=FindingNoteOut, dependencies=[Depends(require_admin)])
+def create_finding_note(
+    finding_id: str,
+    payload: FindingNoteCreateRequest,
+    db: Session = Depends(get_db),
+) -> FindingNote:
+    finding = get_finding_or_404(db, finding_id)
+    note = FindingNote(finding_id=finding.id, author=payload.author.strip(), body=payload.body.strip())
+    finding.updated_at = utcnow()
+    db.add(note)
+    db.flush()
+    write_audit(
+        db,
+        "finding.note_created",
+        resource_type="finding",
+        resource_id=finding.id,
+        details={"note_id": note.id},
+    )
+    db.commit()
+    db.refresh(note)
+    return note
+
+
+@app.post("/api/v1/findings/{finding_id}/verify", response_model=ScanJobOut, dependencies=[Depends(require_admin)])
+def verify_finding(finding_id: str, db: Session = Depends(get_db)) -> ScanJob:
+    finding = get_finding_or_404(db, finding_id)
+    if not finding.asset_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only asset findings can be verified by rescan")
+    asset = db.get(Asset, finding.asset_id)
+    if asset is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Affected asset not found")
+    sensor = db.scalar(
+        select(Sensor)
+        .where(Sensor.site_id == finding.site_id, Sensor.disabled_at.is_(None))
+        .order_by(Sensor.created_at.asc())
+    )
+    if sensor is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No enabled sensor available for this site")
+    target_cidr = normalize_scan_job_target(cidr_for_asset(asset))
+    job = ScanJob(
+        site_id=finding.site_id,
+        sensor_id=sensor.id,
+        target_cidr=target_cidr,
+        include_wifi=False,
+        status="queued",
+        preview={},
+        result_summary={},
+    )
+    db.add(job)
+    db.flush()
+    write_audit(
+        db,
+        "finding.verify_queued",
+        sensor_id=sensor.id,
+        resource_type="finding",
+        resource_id=finding.id,
+        details={"scan_job_id": job.id, "target_cidr": target_cidr},
+    )
+    db.commit()
+    db.refresh(job)
+    return job
+
+
 @app.post("/api/v1/reports/generate", response_model=ReportOut, dependencies=[Depends(require_admin)])
-def generate_report(db: Session = Depends(get_db)) -> Report:
-    site = db.scalar(select(Site).order_by(Site.created_at.asc()))
+def generate_report(site_id: str | None = None, db: Session = Depends(get_db)) -> Report:
+    site = get_site_or_404(db, site_id) if site_id else db.scalar(select(Site).order_by(Site.created_at.asc()))
     if site is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No site has been registered")
     report = build_report(db, site.id)
     export_report(report)
     write_audit(db, "report.generated", resource_type="report", resource_id=report.id)
+    notify_event(
+        db,
+        "scheduled_report_ready",
+        {"title": report.title, "summary": report.summary, "risk_level": report.risk_level, "report_id": report.id},
+        site_id=report.site_id,
+    )
     db.commit()
     db.refresh(report)
     return report
 
 
 @app.get("/api/v1/reports", response_model=list[ReportOut], dependencies=[Depends(require_admin)])
-def list_reports(db: Session = Depends(get_db)) -> list[Report]:
-    return list(db.scalars(select(Report).order_by(Report.created_at.desc())).all())
+def list_reports(site_id: str | None = None, db: Session = Depends(get_db)) -> list[Report]:
+    query = select(Report).order_by(Report.created_at.desc())
+    if site_id:
+        query = query.where(Report.site_id == site_id)
+    return list(db.scalars(query).all())
+
+
+@app.get("/api/v1/reports/{report_id}", response_model=ReportOut, dependencies=[Depends(require_admin)])
+def get_report(report_id: str, db: Session = Depends(get_db)) -> Report:
+    report = db.get(Report, report_id)
+    if report is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Report not found")
+    return report
+
+
+@app.get(
+    "/api/v1/notification-endpoints",
+    response_model=list[NotificationEndpointOut],
+    dependencies=[Depends(require_admin)],
+)
+def list_notification_endpoints(site_id: str | None = None, db: Session = Depends(get_db)) -> list[NotificationEndpoint]:
+    query = select(NotificationEndpoint).order_by(NotificationEndpoint.created_at.desc())
+    if site_id:
+        query = query.where((NotificationEndpoint.site_id == site_id) | (NotificationEndpoint.site_id.is_(None)))
+    return list(db.scalars(query).all())
+
+
+@app.post(
+    "/api/v1/notification-endpoints",
+    response_model=NotificationEndpointOut,
+    dependencies=[Depends(require_admin)],
+)
+def create_notification_endpoint(
+    payload: NotificationEndpointCreateRequest,
+    db: Session = Depends(get_db),
+) -> NotificationEndpoint:
+    if payload.site_id:
+        get_site_or_404(db, payload.site_id)
+    endpoint = NotificationEndpoint(
+        site_id=payload.site_id,
+        name=payload.name.strip(),
+        type=payload.type,
+        target=payload.target.strip(),
+        enabled=payload.enabled,
+        events=payload.events,
+    )
+    db.add(endpoint)
+    db.flush()
+    write_audit(
+        db,
+        "notification_endpoint.created",
+        resource_type="notification_endpoint",
+        resource_id=endpoint.id,
+        details={"type": endpoint.type, "name": endpoint.name},
+    )
+    db.commit()
+    db.refresh(endpoint)
+    return endpoint
+
+
+@app.patch(
+    "/api/v1/notification-endpoints/{endpoint_id}",
+    response_model=NotificationEndpointOut,
+    dependencies=[Depends(require_admin)],
+)
+def update_notification_endpoint(
+    endpoint_id: str,
+    payload: NotificationEndpointUpdateRequest,
+    db: Session = Depends(get_db),
+) -> NotificationEndpoint:
+    endpoint = db.get(NotificationEndpoint, endpoint_id)
+    if endpoint is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Notification endpoint not found")
+    if payload.name is not None:
+        endpoint.name = payload.name.strip()
+    if payload.target is not None:
+        endpoint.target = payload.target.strip()
+    if payload.events is not None:
+        endpoint.events = payload.events
+    if payload.enabled is not None:
+        endpoint.enabled = payload.enabled
+    endpoint.updated_at = utcnow()
+    write_audit(db, "notification_endpoint.updated", resource_type="notification_endpoint", resource_id=endpoint.id)
+    db.commit()
+    db.refresh(endpoint)
+    return endpoint
+
+
+@app.delete("/api/v1/notification-endpoints/{endpoint_id}", dependencies=[Depends(require_admin)])
+def delete_notification_endpoint(endpoint_id: str, db: Session = Depends(get_db)) -> dict[str, str]:
+    endpoint = db.get(NotificationEndpoint, endpoint_id)
+    if endpoint is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Notification endpoint not found")
+    db.delete(endpoint)
+    write_audit(db, "notification_endpoint.deleted", resource_type="notification_endpoint", resource_id=endpoint_id)
+    db.commit()
+    return {"status": "deleted"}
+
+
+@app.post(
+    "/api/v1/notification-endpoints/{endpoint_id}/test",
+    response_model=NotificationTestResponse,
+    dependencies=[Depends(require_admin)],
+)
+def send_test_notification(endpoint_id: str, db: Session = Depends(get_db)) -> NotificationTestResponse:
+    endpoint = db.get(NotificationEndpoint, endpoint_id)
+    if endpoint is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Notification endpoint not found")
+    ok, detail = test_notification(endpoint)
+    endpoint.last_sent_at = utcnow() if ok else endpoint.last_sent_at
+    endpoint.last_error = None if ok else detail
+    endpoint.updated_at = utcnow()
+    write_audit(
+        db,
+        "notification_endpoint.tested",
+        resource_type="notification_endpoint",
+        resource_id=endpoint.id,
+        details={"ok": ok, "detail": detail},
+    )
+    db.commit()
+    return NotificationTestResponse(ok=ok, detail=detail)
+
+
+@app.get("/api/v1/core/export", dependencies=[Depends(require_admin)])
+def export_core_bundle(db: Session = Depends(get_db)) -> dict[str, object]:
+    return build_core_export(db)
