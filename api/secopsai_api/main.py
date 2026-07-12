@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
 from html import escape
 from ipaddress import ip_address, ip_network
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 from fastapi import Depends, FastAPI, Header, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -12,6 +13,12 @@ from sqlalchemy.orm import Session
 
 from secopsai_api.ai import build_report
 from secopsai_api.audit import write_audit
+from secopsai_api.baselines import (
+    ALLOWED_FINDING_TYPES,
+    apply_rule_to_existing_findings,
+    default_finding_types,
+    release_rule_findings,
+)
 from secopsai_api.config import get_settings
 from secopsai_api.core_export import build_core_export
 from secopsai_api.database import engine, get_db
@@ -20,6 +27,7 @@ from secopsai_api.models import (
     Asset,
     AssetObservation,
     Base,
+    BaselineRule,
     Finding,
     FindingNote,
     NotificationEndpoint,
@@ -28,6 +36,7 @@ from secopsai_api.models import (
     ScanRun,
     ScanSchedule,
     Sensor,
+    Service,
     Site,
     User,
     WifiNetwork,
@@ -39,6 +48,10 @@ from secopsai_api.schemas import (
     AssetDetailOut,
     AssetTimelineEventOut,
     AssetOut,
+    BaselineFromEntityRequest,
+    BaselineRuleCreateRequest,
+    BaselineRuleOut,
+    BaselineRuleUpdateRequest,
     DashboardLoginRequest,
     DashboardSessionResponse,
     DashboardUserLoginRequest,
@@ -91,22 +104,12 @@ from secopsai_api.splunk import export_finding, export_report
 
 
 settings = get_settings()
-app = FastAPI(title="SecOpsAI Edge API", version="0.1.0")
 PRIVATE_SCAN_RANGES = tuple(
     ip_network(cidr) for cidr in ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16")
 )
 TERMINAL_SCAN_JOB_STATUSES = {"completed", "failed", "canceled"}
 SENSOR_OFFLINE_AFTER = timedelta(minutes=3)
 STALE_SCAN_JOB_AFTER = timedelta(minutes=15)
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=settings.cors_origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
 
 def bootstrap_dashboard_admin(db: Session) -> None:
     if not settings.dashboard_admin_email or not settings.dashboard_admin_password:
@@ -124,12 +127,23 @@ def bootstrap_dashboard_admin(db: Session) -> None:
     db.commit()
 
 
-@app.on_event("startup")
-def startup() -> None:
+@asynccontextmanager
+async def lifespan(_: FastAPI):
     if settings.auto_create_tables:
         Base.metadata.create_all(bind=engine)
     with Session(engine) as db:
         bootstrap_dashboard_admin(db)
+    yield
+
+
+app = FastAPI(title="SecOpsAI Edge API", version="0.1.0", lifespan=lifespan)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 @app.get("/healthz")
@@ -223,6 +237,101 @@ def get_asset_or_404(db: Session, asset_id: str) -> Asset:
     if asset is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Asset not found")
     return asset
+
+
+def get_service_or_404(db: Session, service_id: str) -> Service:
+    service = db.get(Service, service_id)
+    if service is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Service not found")
+    return service
+
+
+def get_wifi_or_404(db: Session, wifi_id: str) -> WifiNetwork:
+    wifi = db.get(WifiNetwork, wifi_id)
+    if wifi is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Wi-Fi network not found")
+    return wifi
+
+
+def get_baseline_or_404(db: Session, baseline_id: str) -> BaselineRule:
+    rule = db.get(BaselineRule, baseline_id)
+    if rule is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Baseline rule not found")
+    return rule
+
+
+def create_or_update_baseline(
+    db: Session,
+    *,
+    site_id: str,
+    kind: str,
+    matcher: dict[str, object],
+    finding_types: list[str],
+    reason: str | None,
+    created_by: str,
+    expires_at: datetime | None,
+) -> tuple[BaselineRule, int]:
+    get_site_or_404(db, site_id)
+    normalized_matcher = {
+        key: value for key, value in matcher.items() if value is not None and value != ""
+    }
+    if not normalized_matcher:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Baseline matcher cannot be empty")
+    required_identity = {
+        "asset": {"asset_id", "ip_address", "mac_address"},
+        "service": {"service_id", "asset_id", "ip_address", "mac_address"},
+        "wifi": {"wifi_network_id", "bssid"},
+    }[kind]
+    if not required_identity.intersection(normalized_matcher):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"{kind} baseline requires a stable entity identifier",
+        )
+    if kind == "service" and "port" not in normalized_matcher:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Service baseline requires a port")
+    unsupported = set(finding_types) - ALLOWED_FINDING_TYPES[kind]
+    if unsupported:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unsupported finding types for {kind}: {', '.join(sorted(unsupported))}",
+        )
+
+    existing = db.scalar(
+        select(BaselineRule).where(
+            BaselineRule.site_id == site_id,
+            BaselineRule.kind == kind,
+            BaselineRule.status == "active",
+            BaselineRule.matcher == normalized_matcher,
+        )
+    )
+    if existing:
+        existing.finding_types = list(dict.fromkeys(finding_types))
+        existing.reason = reason.strip() if reason else existing.reason
+        existing.created_by = created_by.strip()
+        existing.expires_at = expires_at
+        existing.updated_at = utcnow()
+        rule = existing
+    else:
+        rule = BaselineRule(
+            site_id=site_id,
+            kind=kind,
+            matcher=normalized_matcher,
+            finding_types=list(dict.fromkeys(finding_types)),
+            reason=reason.strip() if reason else None,
+            created_by=created_by.strip(),
+            expires_at=expires_at,
+        )
+        db.add(rule)
+        db.flush()
+    changed = apply_rule_to_existing_findings(db, rule)
+    write_audit(
+        db,
+        "baseline.saved",
+        resource_type="baseline",
+        resource_id=rule.id,
+        details={"kind": kind, "finding_types": rule.finding_types, "findings_acknowledged": changed},
+    )
+    return rule, changed
 
 
 def get_finding_or_404(db: Session, finding_id: str) -> Finding:
@@ -1117,6 +1226,189 @@ def list_wifi_networks(site_id: str | None = None, db: Session = Depends(get_db)
     if site_id:
         query = query.where(WifiNetwork.site_id == site_id)
     return list(db.scalars(query).all())
+
+
+@app.get("/api/v1/baselines", response_model=list[BaselineRuleOut], dependencies=[Depends(require_admin)])
+def list_baselines(
+    site_id: str | None = None,
+    kind: str | None = None,
+    status_filter: str | None = "active",
+    db: Session = Depends(get_db),
+) -> list[BaselineRule]:
+    query = select(BaselineRule).order_by(BaselineRule.created_at.desc())
+    if site_id:
+        query = query.where(BaselineRule.site_id == site_id)
+    if kind:
+        if kind not in ALLOWED_FINDING_TYPES:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid baseline kind")
+        query = query.where(BaselineRule.kind == kind)
+    if status_filter:
+        query = query.where(BaselineRule.status == status_filter)
+    return list(db.scalars(query).all())
+
+
+@app.post("/api/v1/baselines", response_model=BaselineRuleOut, dependencies=[Depends(require_admin)])
+def create_baseline(payload: BaselineRuleCreateRequest, db: Session = Depends(get_db)) -> BaselineRule:
+    rule, _ = create_or_update_baseline(
+        db,
+        site_id=payload.site_id,
+        kind=payload.kind,
+        matcher=payload.matcher,
+        finding_types=payload.finding_types,
+        reason=payload.reason,
+        created_by=payload.created_by,
+        expires_at=payload.expires_at,
+    )
+    db.commit()
+    db.refresh(rule)
+    return rule
+
+
+@app.post(
+    "/api/v1/assets/{asset_id}/baseline",
+    response_model=BaselineRuleOut,
+    dependencies=[Depends(require_admin)],
+)
+def create_asset_baseline(
+    asset_id: str,
+    payload: BaselineFromEntityRequest,
+    db: Session = Depends(get_db),
+) -> BaselineRule:
+    asset = get_asset_or_404(db, asset_id)
+    rule, _ = create_or_update_baseline(
+        db,
+        site_id=asset.site_id,
+        kind="asset",
+        matcher={"asset_id": asset.id},
+        finding_types=payload.finding_types or default_finding_types("asset"),
+        reason=payload.reason,
+        created_by=payload.created_by,
+        expires_at=payload.expires_at,
+    )
+    db.commit()
+    db.refresh(rule)
+    return rule
+
+
+@app.post(
+    "/api/v1/services/{service_id}/baseline",
+    response_model=BaselineRuleOut,
+    dependencies=[Depends(require_admin)],
+)
+def create_service_baseline(
+    service_id: str,
+    payload: BaselineFromEntityRequest,
+    db: Session = Depends(get_db),
+) -> BaselineRule:
+    service = get_service_or_404(db, service_id)
+    asset = get_asset_or_404(db, service.asset_id)
+    rule, _ = create_or_update_baseline(
+        db,
+        site_id=asset.site_id,
+        kind="service",
+        matcher={
+            "asset_id": asset.id,
+            "port": service.port,
+            "protocol": service.protocol,
+        },
+        finding_types=payload.finding_types or default_finding_types("service"),
+        reason=payload.reason,
+        created_by=payload.created_by,
+        expires_at=payload.expires_at,
+    )
+    db.commit()
+    db.refresh(rule)
+    return rule
+
+
+@app.post(
+    "/api/v1/wifi-networks/{wifi_id}/baseline",
+    response_model=BaselineRuleOut,
+    dependencies=[Depends(require_admin)],
+)
+def create_wifi_baseline(
+    wifi_id: str,
+    payload: BaselineFromEntityRequest,
+    db: Session = Depends(get_db),
+) -> BaselineRule:
+    wifi = get_wifi_or_404(db, wifi_id)
+    if not wifi.bssid:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Wi-Fi baseline requires an observed BSSID",
+        )
+    rule, _ = create_or_update_baseline(
+        db,
+        site_id=wifi.site_id,
+        kind="wifi",
+        matcher={"bssid": wifi.bssid},
+        finding_types=payload.finding_types or default_finding_types("wifi"),
+        reason=payload.reason,
+        created_by=payload.created_by,
+        expires_at=payload.expires_at,
+    )
+    db.commit()
+    db.refresh(rule)
+    return rule
+
+
+@app.patch(
+    "/api/v1/baselines/{baseline_id}",
+    response_model=BaselineRuleOut,
+    dependencies=[Depends(require_admin)],
+)
+def update_baseline(
+    baseline_id: str,
+    payload: BaselineRuleUpdateRequest,
+    db: Session = Depends(get_db),
+) -> BaselineRule:
+    rule = get_baseline_or_404(db, baseline_id)
+    old_status = rule.status
+    fields = payload.model_fields_set
+    if "reason" in fields:
+        rule.reason = payload.reason.strip() if payload.reason else None
+    if "expires_at" in fields:
+        rule.expires_at = payload.expires_at
+    if payload.status:
+        rule.status = payload.status
+    rule.updated_at = utcnow()
+    affected = 0
+    if old_status != rule.status and rule.status == "disabled":
+        affected = release_rule_findings(db, rule)
+    elif rule.status == "active":
+        affected = apply_rule_to_existing_findings(db, rule)
+    write_audit(
+        db,
+        "baseline.updated",
+        resource_type="baseline",
+        resource_id=rule.id,
+        details={"status": rule.status, "findings_updated": affected},
+    )
+    db.commit()
+    db.refresh(rule)
+    return rule
+
+
+@app.delete(
+    "/api/v1/baselines/{baseline_id}",
+    response_model=BaselineRuleOut,
+    dependencies=[Depends(require_admin)],
+)
+def disable_baseline(baseline_id: str, db: Session = Depends(get_db)) -> BaselineRule:
+    rule = get_baseline_or_404(db, baseline_id)
+    rule.status = "disabled"
+    rule.updated_at = utcnow()
+    affected = release_rule_findings(db, rule)
+    write_audit(
+        db,
+        "baseline.disabled",
+        resource_type="baseline",
+        resource_id=rule.id,
+        details={"findings_reopened": affected},
+    )
+    db.commit()
+    db.refresh(rule)
+    return rule
 
 
 @app.get("/api/v1/findings", response_model=list[FindingOut], dependencies=[Depends(require_admin)])

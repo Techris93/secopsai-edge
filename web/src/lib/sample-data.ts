@@ -78,6 +78,7 @@ export const sampleData: DashboardData = {
       last_seen_at: now
     }
   ],
+  baselines: [],
   findings: [
     {
       id: "finding-1",

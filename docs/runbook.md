@@ -57,6 +57,15 @@ Use the dashboard Reports page or run:
 
 This runs backend and agent tests, frontend tests, a production dashboard build, and a frontend dependency audit.
 
+## Manage Approved Baselines
+
+1. Open Assets and select an asset.
+2. Add an approval note and choose `Approve Asset`, or choose `Accept Risk` beside an exact service.
+3. Open Wi-Fi and choose `Trust BSSID` for an authorized access point.
+4. Review or disable rules under Settings > Approved Baselines.
+
+Baseline changes are audit logged. Disabling a rule reopens findings that were acknowledged by that rule. A trusted BSSID does not suppress weak/open-encryption findings.
+
 ## Hosted API Workflow
 
 After deploying the API to Render and the dashboard to Cloudflare Pages:

@@ -1,5 +1,6 @@
 import { Copy, Database, KeyRound, Radar, ShieldCheck, Terminal } from "lucide-react";
 import { ApiConnectionPanel } from "@/components/ApiConnectionPanel";
+import { BaselinePanel } from "@/components/BaselinePanel";
 import { CoreIntegrationPanel } from "@/components/CoreIntegrationPanel";
 import { NotificationPanel } from "@/components/NotificationPanel";
 import { PageHeader } from "@/components/PageHeader";
@@ -39,6 +40,7 @@ export default function SettingsPage() {
 
         <CoreIntegrationPanel />
         <NotificationPanel />
+        <BaselinePanel />
 
         <section className="rounded-lg border border-line bg-white p-4 shadow-panel xl:col-span-2">
           <div className="flex items-center gap-2">

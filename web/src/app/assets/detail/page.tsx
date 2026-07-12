@@ -1,12 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { Activity, Clock3, EthernetPort, History, Laptop, Server } from "lucide-react";
+import { Activity, Clock3, EthernetPort, History, Laptop, Server, ShieldCheck } from "lucide-react";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { PageHeader } from "@/components/PageHeader";
 import { SeverityBadge } from "@/components/SeverityBadge";
-import { getAsset } from "@/lib/api";
+import { createAssetBaseline, createServiceBaseline, getAsset } from "@/lib/api";
 import { timeAgo, titleize } from "@/lib/format";
 import type { AssetDetail, AssetTimelineEvent } from "@/lib/types";
 
@@ -23,6 +23,13 @@ function AssetDetailView() {
   const assetId = searchParams.get("id");
   const [detail, setDetail] = useState<AssetDetail | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [baselineReason, setBaselineReason] = useState("Approved for this site");
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  async function reload() {
+    if (!assetId) return;
+    setDetail(await getAsset(assetId));
+  }
 
   useEffect(() => {
     async function load() {
@@ -44,6 +51,33 @@ function AssetDetailView() {
     [detail]
   );
 
+  async function approveAsset() {
+    if (!detail) return;
+    setBusyId(detail.asset.id);
+    try {
+      await createAssetBaseline(detail.asset.id, baselineReason.trim() || "Approved for this site");
+      await reload();
+      setMessage("Asset approved. New-device and unknown-vendor noise is now acknowledged for this site.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to approve asset");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function approveService(serviceId: string) {
+    setBusyId(serviceId);
+    try {
+      await createServiceBaseline(serviceId, baselineReason.trim() || "Approved service for this site");
+      await reload();
+      setMessage("Service approved. Findings for this exact asset, port, and protocol are now acknowledged.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to approve service");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   return (
     <>
       <PageHeader
@@ -52,6 +86,8 @@ function AssetDetailView() {
         description="Review identity, exposed services, related findings, and scan history for this network asset."
         action={detail ? <StatusPill status={detail.asset.status} /> : null}
       />
+
+      {message && detail ? <p className="mb-4 rounded-md border border-line bg-paper px-4 py-3 text-sm text-zinc-700">{message}</p> : null}
 
       {!detail ? (
         <section className="rounded-lg border border-line bg-white p-4 shadow-panel">
@@ -74,6 +110,28 @@ function AssetDetailView() {
               <Metric label="First Seen" value={timeAgo(detail.asset.first_seen_at)} />
               <Metric label="Last Seen" value={timeAgo(detail.asset.last_seen_at)} />
             </dl>
+            <div className="mt-4 border-t border-line pt-4">
+              <label className="text-sm font-semibold text-ink" htmlFor="baseline-reason">Approval note</label>
+              <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+                <input
+                  id="baseline-reason"
+                  className="focus-ring min-w-0 flex-1 rounded-md border border-line bg-white px-3 py-2 text-sm"
+                  maxLength={2000}
+                  onChange={(event) => setBaselineReason(event.target.value)}
+                  value={baselineReason}
+                />
+                <button
+                  className="ButtonSecondary"
+                  disabled={busyId === detail.asset.id}
+                  onClick={() => void approveAsset()}
+                  type="button"
+                >
+                  <ShieldCheck size={16} aria-hidden="true" />
+                  {busyId === detail.asset.id ? "Approving..." : "Approve Asset"}
+                </button>
+              </div>
+              <p className="mt-2 text-xs leading-5 text-zinc-500">This acknowledges new-device and unknown-vendor findings. Missing-device changes remain visible.</p>
+            </div>
           </section>
 
           <section className="rounded-lg border border-line bg-white p-4 shadow-panel">
@@ -83,7 +141,7 @@ function AssetDetailView() {
             </div>
             <div className="mt-4 divide-y divide-line rounded-md border border-line">
               {openServices.map((service) => (
-                <div key={service.id} className="grid gap-2 p-3 sm:grid-cols-[9rem_1fr_auto] sm:items-center">
+                <div key={service.id} className="grid gap-2 p-3 sm:grid-cols-[9rem_1fr_auto_auto] sm:items-center">
                   <span className="font-mono text-sm font-semibold text-ink">
                     {service.protocol}/{service.port}
                   </span>
@@ -93,6 +151,16 @@ function AssetDetailView() {
                   <span className="rounded border border-line bg-paper px-2 py-1 text-xs font-semibold uppercase text-ink">
                     {service.state}
                   </span>
+                  <button
+                    className="ButtonSecondary"
+                    disabled={busyId === service.id}
+                    onClick={() => void approveService(service.id)}
+                    title={`Accept ${service.protocol}/${service.port} for this asset`}
+                    type="button"
+                  >
+                    <ShieldCheck size={16} aria-hidden="true" />
+                    {busyId === service.id ? "Approving..." : "Accept Risk"}
+                  </button>
                 </div>
               ))}
               {!openServices.length ? <p className="p-3 text-sm text-zinc-600">No open services observed.</p> : null}

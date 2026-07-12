@@ -1,11 +1,11 @@
 "use client";
 
-import { Router, Wifi } from "lucide-react";
+import { Router, ShieldCheck, Wifi } from "lucide-react";
 import { useEffect, useState } from "react";
 import { DataStatePanel } from "@/components/DataStatePanel";
 import { LiveState } from "@/components/LiveState";
 import { PageHeader } from "@/components/PageHeader";
-import { fetchDashboardData } from "@/lib/api";
+import { createWifiBaseline, fetchDashboardData } from "@/lib/api";
 import { timeAgo } from "@/lib/format";
 import type { DashboardDataMode } from "@/lib/api";
 import type { DashboardData } from "@/lib/types";
@@ -16,17 +16,35 @@ export default function WifiPage() {
   const [mode, setMode] = useState<DashboardDataMode>("blocked");
   const [error, setError] = useState<string | undefined>();
   const [site, setSite] = useState("all");
+  const [message, setMessage] = useState<string | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  async function load() {
+    const result = await fetchDashboardData();
+    setData(result.data);
+    setLive(result.live);
+    setMode(result.mode);
+    setError(result.error);
+  }
 
   useEffect(() => {
-    fetchDashboardData().then((result) => {
-      setData(result.data);
-      setLive(result.live);
-      setMode(result.mode);
-      setError(result.error);
-    });
+    void load();
   }, []);
 
   const networks = (data?.wifiNetworks ?? []).filter((network) => site === "all" || network.site_id === site);
+
+  async function trustBssid(networkId: string) {
+    setBusyId(networkId);
+    try {
+      await createWifiBaseline(networkId, "Approved access point for this site");
+      await load();
+      setMessage("Access point trusted. Duplicate-SSID alerts for this BSSID are now acknowledged; weak encryption remains visible.");
+    } catch (approvalError) {
+      setMessage(approvalError instanceof Error ? approvalError.message : "Unable to trust access point");
+    } finally {
+      setBusyId(null);
+    }
+  }
 
   return (
     <>
@@ -37,6 +55,7 @@ export default function WifiPage() {
         action={<LiveState live={live} mode={mode} error={error} />}
       />
       <DataStatePanel mode={mode} error={error} />
+      {message ? <p className="mb-4 rounded-md border border-line bg-paper px-4 py-3 text-sm text-zinc-700">{message}</p> : null}
 
       <div className="mb-4 flex justify-end">
         <select
@@ -54,6 +73,9 @@ export default function WifiPage() {
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {networks.map((network) => {
           const weak = (network.encryption ?? "").toLowerCase().includes("open");
+          const trusted = (data?.baselines ?? []).some(
+            (rule) => rule.kind === "wifi" && rule.status === "active" && rule.matcher.bssid === network.bssid
+          );
           return (
             <section key={network.id} className="rounded-lg border border-line bg-white p-4 shadow-panel">
               <div className="flex items-start justify-between gap-3">
@@ -83,6 +105,16 @@ export default function WifiPage() {
                   <dd className="mt-1 font-medium text-ink">{timeAgo(network.last_seen_at)}</dd>
                 </div>
               </dl>
+              <button
+                className="ButtonSecondary mt-4 w-full"
+                disabled={!live || !network.bssid || trusted || busyId === network.id}
+                onClick={() => void trustBssid(network.id)}
+                title="Trust this exact BSSID without suppressing weak-encryption findings"
+                type="button"
+              >
+                <ShieldCheck size={16} aria-hidden="true" />
+                {trusted ? "Trusted BSSID" : busyId === network.id ? "Saving..." : "Trust BSSID"}
+              </button>
             </section>
           );
         })}

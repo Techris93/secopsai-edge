@@ -193,6 +193,45 @@ class WifiNetworkOut(BaseModel):
     last_seen_at: datetime
 
 
+class BaselineRuleCreateRequest(BaseModel):
+    site_id: str
+    kind: str = Field(pattern="^(asset|service|wifi)$")
+    matcher: dict[str, Any]
+    finding_types: list[str] = Field(min_length=1)
+    reason: str | None = Field(default=None, max_length=2000)
+    created_by: str = Field(default="operator", min_length=1, max_length=120)
+    expires_at: datetime | None = None
+
+
+class BaselineFromEntityRequest(BaseModel):
+    reason: str | None = Field(default=None, max_length=2000)
+    finding_types: list[str] | None = None
+    created_by: str = Field(default="operator", min_length=1, max_length=120)
+    expires_at: datetime | None = None
+
+
+class BaselineRuleUpdateRequest(BaseModel):
+    status: str | None = Field(default=None, pattern="^(active|disabled)$")
+    reason: str | None = Field(default=None, max_length=2000)
+    expires_at: datetime | None = None
+
+
+class BaselineRuleOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    site_id: str
+    kind: str
+    status: str
+    matcher: dict[str, Any]
+    finding_types: list[str]
+    reason: str | None = None
+    created_by: str
+    expires_at: datetime | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
 class FindingOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

@@ -20,10 +20,20 @@ SecOpsAI Edge discovers internal network assets, records service exposure, monit
 5. Queue a scan or configure a schedule.
 6. Review Assets, Wi-Fi, and Findings.
 7. Add notes and mark findings acknowledged/resolved/false positive.
-8. Generate a report.
-9. Open the report detail page, copy the executive summary or client brief, print, or download the report.
-10. Configure webhook/email/Telegram notifications.
-11. Sync Edge findings into SecOpsAI Core when needed.
+8. Approve known assets, accepted services, and trusted BSSIDs to establish the site baseline.
+9. Generate a report.
+10. Open the report detail page, copy the executive summary or client brief, print, or download the report.
+11. Configure webhook/email/Telegram notifications.
+12. Sync Edge findings into SecOpsAI Core when needed.
+
+## Establish The Baseline
+
+Use Asset Detail to approve an owned device or accept an intentionally exposed service. Use Wi-Fi to trust an exact BSSID. Active rules are visible and reversible under Settings > Approved Baselines.
+
+- Approving an asset acknowledges `new_device` and `vendor_unknown`; missing-device changes remain visible.
+- Accepting a service applies only to that asset, port, and protocol.
+- Trusting a BSSID acknowledges duplicate-SSID noise; weak/open encryption remains a finding.
+- Disabling a baseline reopens findings that were acknowledged by that rule.
 
 ## Dashboard Data States
 

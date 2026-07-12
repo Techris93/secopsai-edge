@@ -67,13 +67,18 @@ def finding_to_ai_payload(finding: Finding) -> dict[str, Any]:
 
 
 def redact_evidence(evidence: dict[str, Any]) -> dict[str, Any]:
-    redacted: dict[str, Any] = {}
-    for key, value in evidence.items():
-        if key.lower() in SENSITIVE_EVIDENCE_KEYS:
-            redacted[key] = "[redacted]"
-        else:
-            redacted[key] = value
-    return redacted
+    return _redact_value(evidence)
+
+
+def _redact_value(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {
+            key: "[redacted]" if key.lower() in SENSITIVE_EVIDENCE_KEYS else _redact_value(item)
+            for key, item in value.items()
+        }
+    if isinstance(value, list):
+        return [_redact_value(item) for item in value]
+    return value
 
 
 class AiReportProvider:

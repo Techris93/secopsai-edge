@@ -36,6 +36,7 @@ Core tables:
 - `asset_observations`
 - `services`
 - `wifi_networks`
+- `baseline_rules`
 - `findings`
 - `reports`
 - `users`
@@ -52,6 +53,8 @@ Version one includes deterministic findings for:
 - Open port changes.
 - Weak or open Wi-Fi networks.
 - Duplicate SSID with a newly observed BSSID.
+
+Operators can approve known assets, accepted services, and trusted BSSIDs with site-scoped baseline rules. Asset approval acknowledges new-device and unknown-vendor noise. Service approval is exact to an asset, port, and protocol. BSSID approval suppresses duplicate-SSID noise but intentionally leaves weak/open-encryption findings active. Rules can expire or be disabled, and disabling a rule reopens findings acknowledged by that rule.
 
 Suspicious scan-like behavior is left as a future rule because the MVP does not yet collect netflow or firewall/session telemetry.
 

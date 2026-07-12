@@ -70,6 +70,20 @@ export type WifiNetwork = {
   last_seen_at: string;
 };
 
+export type BaselineRule = {
+  id: string;
+  site_id: string;
+  kind: "asset" | "service" | "wifi" | string;
+  status: "active" | "disabled" | string;
+  matcher: Record<string, string | number | null>;
+  finding_types: string[];
+  reason?: string | null;
+  created_by: string;
+  expires_at?: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export type Finding = {
   id: string;
   site_id: string;
@@ -208,6 +222,7 @@ export type DashboardData = {
   sites: Site[];
   assets: Asset[];
   wifiNetworks: WifiNetwork[];
+  baselines: BaselineRule[];
   findings: Finding[];
   reports: Report[];
   scanJobs: ScanJob[];

@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, JSON, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Index, Integer, JSON, String, Text, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -175,6 +175,26 @@ class WifiNetwork(Base):
     status: Mapped[str] = mapped_column(String(32), default="active")
     first_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class BaselineRule(Base):
+    __tablename__ = "baseline_rules"
+    __table_args__ = (
+        Index("ix_baseline_rules_site_kind_status", "site_id", "kind", "status"),
+        Index("ix_baseline_rules_expires_at", "expires_at"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    site_id: Mapped[str] = mapped_column(ForeignKey("sites.id"), nullable=False)
+    kind: Mapped[str] = mapped_column(String(32), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), default="active", nullable=False)
+    matcher: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
+    finding_types: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
+    reason: Mapped[str | None] = mapped_column(Text)
+    created_by: Mapped[str] = mapped_column(String(120), default="operator", nullable=False)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
 class Finding(Base):

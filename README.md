@@ -5,7 +5,7 @@ Standalone MacBook-first MVP for an AI-assisted asset discovery and wireless int
 ## What Is Included
 
 - Native Python collection agent using safe, allowlisted Nmap scans.
-- FastAPI backend with PostgreSQL, migrations, auth, audit logs, findings, reports, and Splunk HEC export hooks.
+- FastAPI backend with PostgreSQL, migrations, auth, audit logs, approved baselines, findings, reports, and Splunk HEC export hooks.
 - Next.js/Tailwind dashboard for onboarding, sites, assets, Wi-Fi networks, findings, schedules, reports, notifications, and sensor settings.
 - Guided onboarding, launchd/systemd worker service installation, scheduled scans, sensor token rotation, and report export.
 - Docker Compose for local PostgreSQL.
@@ -84,6 +84,7 @@ Replace `192.168.1.0/24` with your own authorized local network.
 - Scans are limited to private CIDR ranges with a maximum host count.
 - Nmap uses conservative timing, retries, and timeouts.
 - Raw Nmap output is retained by the agent only; AI reports receive normalized findings.
+- Approved baselines are site-scoped, audited, reversible, and never hide weak Wi-Fi encryption by default.
 
 ## Useful Commands
 

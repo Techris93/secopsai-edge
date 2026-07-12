@@ -31,3 +31,7 @@ Email requires `SMTP_HOST`. Telegram requires `TELEGRAM_BOT_TOKEN`.
 Dashboard auth should use a short-lived browser session created from a dashboard user login. The
 server-side admin token remains available for automation, cron, Core sync, and emergency recovery.
 Sensor tokens are separate from dashboard auth and can be rotated from the Sites page.
+
+## Baseline Boundary
+
+Approved baselines are scoped to one site and a stable entity identifier. The API rejects empty or broad matchers, restricts each baseline kind to compatible finding types, records changes in the audit log, and reopens baseline-acknowledged findings when a rule is disabled. Trusting a BSSID does not approve weak or open encryption unless an operator deliberately creates that separate policy through the API.

@@ -2,6 +2,7 @@ import { sampleData } from "./sample-data";
 import type {
   Asset,
   AssetDetail,
+  BaselineRule,
   DashboardData,
   Finding,
   FindingDetail,
@@ -108,11 +109,12 @@ export function apiBaseUrl(): string {
 
 export async function fetchDashboardData(): Promise<ApiResult<DashboardData>> {
   try {
-    const [sites, assets, wifiNetworks, findings, reports, scanJobs, sensors, schedules, notifications, onboarding] =
+    const [sites, assets, wifiNetworks, baselines, findings, reports, scanJobs, sensors, schedules, notifications, onboarding] =
       await Promise.all([
         requestJson<Site[]>("/api/v1/sites"),
         requestJson<Asset[]>("/api/v1/assets"),
         requestJson<WifiNetwork[]>("/api/v1/wifi-networks"),
+        requestJson<BaselineRule[]>("/api/v1/baselines"),
         requestJson<Finding[]>("/api/v1/findings"),
         requestJson<Report[]>("/api/v1/reports"),
         requestJson<ScanJob[]>("/api/v1/scan-jobs"),
@@ -122,7 +124,7 @@ export async function fetchDashboardData(): Promise<ApiResult<DashboardData>> {
         requestJson<OnboardingStatus>("/api/v1/onboarding/status")
       ]);
     return {
-      data: { sites, assets, wifiNetworks, findings, reports, scanJobs, sensors, schedules, notifications, onboarding },
+      data: { sites, assets, wifiNetworks, baselines, findings, reports, scanJobs, sensors, schedules, notifications, onboarding },
       live: true,
       mode: "live"
     };
@@ -272,6 +274,35 @@ export async function retryScanJob(jobId: string): Promise<ScanJob> {
 
 export async function getAsset(assetId: string): Promise<AssetDetail> {
   return requestJson<AssetDetail>(`/api/v1/assets/${assetId}`);
+}
+
+export async function fetchBaselines(): Promise<BaselineRule[]> {
+  return requestJson<BaselineRule[]>("/api/v1/baselines");
+}
+
+export async function createAssetBaseline(assetId: string, reason: string): Promise<BaselineRule> {
+  return requestJson<BaselineRule>(`/api/v1/assets/${assetId}/baseline`, {
+    method: "POST",
+    body: JSON.stringify({ reason })
+  });
+}
+
+export async function createServiceBaseline(serviceId: string, reason: string): Promise<BaselineRule> {
+  return requestJson<BaselineRule>(`/api/v1/services/${serviceId}/baseline`, {
+    method: "POST",
+    body: JSON.stringify({ reason })
+  });
+}
+
+export async function createWifiBaseline(wifiId: string, reason: string): Promise<BaselineRule> {
+  return requestJson<BaselineRule>(`/api/v1/wifi-networks/${wifiId}/baseline`, {
+    method: "POST",
+    body: JSON.stringify({ reason })
+  });
+}
+
+export async function disableBaseline(baselineId: string): Promise<BaselineRule> {
+  return requestJson<BaselineRule>(`/api/v1/baselines/${baselineId}`, { method: "DELETE" });
 }
 
 export async function updateFindingStatus(findingId: string, status: string): Promise<Finding> {

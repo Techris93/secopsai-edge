@@ -62,18 +62,18 @@ Validation:
 - `./scripts/edge test`: 31 backend/agent tests passed, 5 frontend tests
   passed, production dashboard build passed, npm audit found 0 vulnerabilities.
 
-Known risks:
+Known risks at checkpoint close:
 
-- Main SecOpsAI remains a dirty worktree and was intentionally not changed in
-  this checkpoint.
+- Main SecOpsAI was still a dirty worktree at this checkpoint; Checkpoint 005
+  later isolated the generated content and committed Core integration cleanly.
 - The dashboard still needs stronger empty/error panels for blocked API state;
   this checkpoint fixed truthfulness before redesigning every state surface.
 - Existing FastAPI startup event deprecation warnings remain and should be
   handled in a later backend hygiene pass.
 
-Do not touch yet:
+Deferred at this checkpoint:
 
-- Main SecOpsAI dirty worktree at `/Users/chrixchange/secopsai`.
+- Main SecOpsAI cleanup and integration work, completed in Checkpoint 005.
 - OpenClaw plugin.
 - Cloud deployment.
 - Billing, SaaS multi-tenancy, or hardware image work.
@@ -254,12 +254,11 @@ Scope:
 - Add dashboard and docs buttons/commands for the one-step sync path.
 - Validate Edge and focused Core integration tests.
 
-Core worktree note:
+Core worktree result:
 
-- `/Users/chrixchange/secopsai` contains unrelated generated blog/news changes
-  that are not part of this checkpoint.
-- This checkpoint should only modify or validate Edge/Core integration files
-  unless a defect blocks the sync path.
+- `/Users/chrixchange/secopsai` is clean on `codex/core-edge-hygiene`.
+- Generated blog/news output is isolated on `codex/blog-news-generated-review`
+  for an explicit content-release decision.
 
 Validation to run before closing:
 
@@ -370,6 +369,59 @@ Known risks:
   Render cron, Core sync, and recovery operations.
 - Browser login now uses dashboard users; production deployments must configure
   `SECOPSAI_DASHBOARD_ADMIN_EMAIL` and `SECOPSAI_DASHBOARD_ADMIN_PASSWORD`.
+
+## Checkpoint 007 - Approved Baseline Management
+
+Status: complete
+
+Branch:
+
+- Edge repo: `codex/pilot-hardening-foundation`
+
+Scope:
+
+- Add durable, site-scoped baseline rules for known assets, accepted services,
+  and trusted Wi-Fi BSSIDs.
+- Apply baselines inside detection before findings are created or refreshed.
+- Acknowledge existing matching findings and reopen them when the rule is
+  disabled.
+- Add clickable approval controls to Asset Detail and Wi-Fi, plus centralized
+  management in Settings.
+- Replace deprecated FastAPI startup events with the lifespan API.
+
+Completed changes:
+
+- Added Alembic revision `0004_baseline_rules` and the `baseline_rules` model.
+- Added safe matcher validation, compatible finding-type validation, optional
+  expiry, audit logs, reversible disable behavior, and deduplication.
+- Asset approval covers `new_device` and `vendor_unknown` while preserving
+  missing-device visibility.
+- Service approval is scoped to asset, port, and protocol.
+- Trusted BSSID approval suppresses `duplicate_ssid` but intentionally leaves
+  `weak_wifi` active.
+- Added baseline API CRUD and entity convenience endpoints.
+- Added Asset, Wi-Fi, and Settings dashboard controls.
+- Updated architecture, pilot, runbook, privacy, and README documentation.
+
+Validation:
+
+- Focused baseline and detection tests: 6 passed.
+- `./scripts/edge test`: 42 backend/agent tests passed, 5 frontend test files
+  with 8 tests passed, the Next.js static production build passed, and npm
+  audit reported 0 vulnerabilities.
+- Recursive AI evidence redaction is covered by regression tests.
+- The FastAPI startup-event deprecation warning was removed; the remaining
+  warning is from the upstream FastAPI/Starlette TestClient compatibility shim.
+- SQLite migration replay reaches historical revision `0002`; revision `0003`
+  uses PostgreSQL ALTER constraints, so the full Alembic chain must be replayed
+  against PostgreSQL. Render remains the authoritative migration target.
+
+Known risks:
+
+- Baseline rules are single-deployment/site scoped; organization and tenant
+  scoping belongs to the SaaS data-model checkpoint.
+- The UI creates safe default rule types. Advanced custom rule selection is API
+  only until policy administration is designed.
 
 ## Completion Rules
 
