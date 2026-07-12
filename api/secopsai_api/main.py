@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+from html import escape
 from ipaddress import ip_address, ip_network
 from datetime import timedelta
 
 from fastapi import Depends, FastAPI, Header, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -16,6 +18,7 @@ from secopsai_api.database import engine, get_db
 from secopsai_api.detection import ingest_scan
 from secopsai_api.models import (
     Asset,
+    AssetObservation,
     Base,
     Finding,
     FindingNote,
@@ -32,6 +35,8 @@ from secopsai_api.models import (
 from secopsai_api.notifications import notify_event, test_notification
 from secopsai_api.scheduling import compute_next_run_at, enqueue_due_schedules, normalize_frequency, pick_site_and_sensor
 from secopsai_api.schemas import (
+    AssetDetailOut,
+    AssetTimelineEventOut,
     AssetOut,
     DashboardLoginRequest,
     DashboardSessionResponse,
@@ -188,11 +193,210 @@ def get_site_or_404(db: Session, site_id: str) -> Site:
     return site
 
 
+def get_asset_or_404(db: Session, asset_id: str) -> Asset:
+    asset = db.get(Asset, asset_id)
+    if asset is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Asset not found")
+    return asset
+
+
 def get_finding_or_404(db: Session, finding_id: str) -> Finding:
     finding = db.get(Finding, finding_id)
     if finding is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Finding not found")
     return finding
+
+
+def get_report_or_404(db: Session, report_id: str) -> Report:
+    report = db.get(Report, report_id)
+    if report is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Report not found")
+    return report
+
+
+def report_export_filename(report: Report) -> str:
+    slug = "".join(char.lower() if char.isalnum() else "-" for char in report.title)
+    slug = "-".join(part for part in slug.split("-") if part)
+    return f"{slug or 'secopsai-edge-report'}.html"
+
+
+def render_report_html(report: Report, site: Site | None) -> str:
+    content = report.content if isinstance(report.content, dict) else {}
+    findings = content.get("findings", [])
+    recommended_actions = content.get("recommended_actions", [])
+    provider = str(content.get("provider", "unknown"))
+    model = str(content.get("model", "n/a"))
+    site_name = site.name if site else "Unknown site"
+    generated_at = report.created_at.strftime("%Y-%m-%d %H:%M UTC")
+
+    def finding_card(item: object) -> str:
+        finding = item if isinstance(item, dict) else {}
+        severity = escape(str(finding.get("severity", "info")))
+        title = escape(str(finding.get("title", "Untitled finding")))
+        summary = escape(str(finding.get("summary", "No summary provided.")))
+        status_value = escape(str(finding.get("status", "open")))
+        finding_type = escape(str(finding.get("type", "finding")))
+        return (
+            '<article class="finding">'
+            f'<div><span class="severity">{severity}</span><span class="muted">{finding_type} · {status_value}</span></div>'
+            f"<h3>{title}</h3><p>{summary}</p>"
+            "</article>"
+        )
+
+    actions_html = "".join(f"<li>{escape(str(action))}</li>" for action in recommended_actions)
+    findings_html = "".join(finding_card(item) for item in findings)
+
+    return f"""<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{escape(report.title)}</title>
+  <style>
+    :root {{
+      color-scheme: light;
+      --ink: #1f2933;
+      --muted: #52606d;
+      --line: #d9ded7;
+      --paper: #f6f8f5;
+      --sea: #0f766e;
+      --danger: #b42318;
+      --amber: #b54708;
+    }}
+    * {{ box-sizing: border-box; }}
+    body {{ margin: 0; font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: var(--ink); background: #fff; }}
+    main {{ max-width: 980px; margin: 0 auto; padding: 40px 28px 56px; }}
+    header {{ border-bottom: 1px solid var(--line); padding-bottom: 24px; margin-bottom: 28px; }}
+    .eyebrow {{ color: var(--sea); font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }}
+    h1 {{ margin: 10px 0 12px; font-size: 32px; line-height: 1.2; }}
+    h2 {{ margin: 28px 0 12px; font-size: 20px; }}
+    h3 {{ margin: 12px 0 6px; font-size: 16px; }}
+    p {{ line-height: 1.65; }}
+    .summary {{ max-width: 820px; font-size: 15px; color: #334155; }}
+    .meta {{ display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-top: 20px; }}
+    .box {{ border: 1px solid var(--line); border-radius: 8px; background: var(--paper); padding: 12px; }}
+    .label {{ color: var(--muted); font-size: 12px; }}
+    .value {{ margin-top: 4px; font-weight: 700; }}
+    .severity {{ display: inline-flex; border: 1px solid var(--line); border-radius: 4px; padding: 3px 8px; margin-right: 8px; font-size: 12px; font-weight: 800; text-transform: uppercase; }}
+    .muted {{ color: var(--muted); font-size: 13px; }}
+    ol {{ padding-left: 22px; }}
+    li {{ margin: 8px 0; line-height: 1.55; }}
+    .finding {{ border: 1px solid var(--line); border-radius: 8px; padding: 14px; margin: 12px 0; break-inside: avoid; }}
+    footer {{ margin-top: 36px; padding-top: 18px; border-top: 1px solid var(--line); color: var(--muted); font-size: 12px; }}
+    @media print {{
+      main {{ max-width: none; padding: 24px; }}
+      .meta {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
+    }}
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div class="eyebrow">SecOpsAI Edge Report</div>
+      <h1>{escape(report.title)}</h1>
+      <p class="summary">{escape(report.summary)}</p>
+      <section class="meta">
+        <div class="box"><div class="label">Site</div><div class="value">{escape(site_name)}</div></div>
+        <div class="box"><div class="label">Generated</div><div class="value">{escape(generated_at)}</div></div>
+        <div class="box"><div class="label">Risk</div><div class="value">{escape(report.risk_level.upper())}</div></div>
+        <div class="box"><div class="label">AI Provider</div><div class="value">{escape(provider)} / {escape(model)}</div></div>
+      </section>
+    </header>
+    <section>
+      <h2>Recommended Actions</h2>
+      <ol>{actions_html or "<li>No recommended actions were included.</li>"}</ol>
+    </section>
+    <section>
+      <h2>Findings Included</h2>
+      {findings_html or "<p>No active findings were included.</p>"}
+    </section>
+    <footer>
+      Raw Nmap output, packet captures, and full scan logs are not included in this report.
+    </footer>
+  </main>
+</body>
+</html>"""
+
+
+def build_asset_timeline(
+    asset: Asset,
+    observations: list[AssetObservation],
+    findings: list[Finding],
+) -> list[AssetTimelineEventOut]:
+    events: list[AssetTimelineEventOut] = [
+        AssetTimelineEventOut(
+            id=f"asset-first-seen-{asset.id}",
+            kind="asset_first_seen",
+            title="Asset first observed",
+            summary=f"{asset.hostname or asset.ip_address} first appeared in the site inventory.",
+            occurred_at=asset.first_seen_at,
+            metadata={"ip_address": asset.ip_address, "vendor": asset.vendor, "device_type": asset.device_type},
+        )
+    ]
+
+    if asset.status == "missing":
+        events.append(
+            AssetTimelineEventOut(
+                id=f"asset-missing-{asset.id}",
+                kind="asset_missing",
+                title="Asset currently missing",
+                summary=f"{asset.hostname or asset.ip_address} has not been observed in the latest scan window.",
+                occurred_at=asset.last_seen_at,
+                severity="medium",
+                metadata={"ip_address": asset.ip_address},
+            )
+        )
+
+    for service in sorted(asset.services or [], key=lambda item: (item.first_seen_at, item.port)):
+        events.append(
+            AssetTimelineEventOut(
+                id=f"service-{service.id}",
+                kind="service_observed",
+                title="Service observed",
+                summary=f"{service.protocol}/{service.port} {service.name or ''}".strip(),
+                occurred_at=service.first_seen_at,
+                severity="medium" if service.state == "open" else "info",
+                metadata={
+                    "port": service.port,
+                    "protocol": service.protocol,
+                    "state": service.state,
+                    "product": service.product,
+                    "version": service.version,
+                },
+            )
+        )
+
+    for observation in observations:
+        events.append(
+            AssetTimelineEventOut(
+                id=f"observation-{observation.id}",
+                kind="asset_observed",
+                title="Asset observed",
+                summary=f"Observed from {observation.raw_source or 'sensor scan'} with hostname {observation.hostname or 'unknown'}.",
+                occurred_at=observation.observed_at,
+                metadata={
+                    "sensor_id": observation.sensor_id,
+                    "scan_id": observation.scan_id,
+                    "vendor": observation.vendor,
+                    "os_guess": observation.os_guess,
+                },
+            )
+        )
+
+    for finding in findings:
+        events.append(
+            AssetTimelineEventOut(
+                id=f"finding-{finding.id}",
+                kind="finding_created",
+                title=finding.title,
+                summary=finding.summary,
+                occurred_at=finding.created_at,
+                severity=finding.severity,
+                metadata={"finding_id": finding.id, "type": finding.type, "status": finding.status},
+            )
+        )
+
+    return sorted(events, key=lambda event: event.occurred_at, reverse=True)
 
 
 def finding_notification_payload(finding: Finding) -> dict[str, object]:
@@ -830,6 +1034,28 @@ def list_assets(
     return list(db.scalars(query).all())
 
 
+@app.get("/api/v1/assets/{asset_id}", response_model=AssetDetailOut, dependencies=[Depends(require_admin)])
+def get_asset(asset_id: str, db: Session = Depends(get_db)) -> AssetDetailOut:
+    asset = get_asset_or_404(db, asset_id)
+    observations = list(
+        db.scalars(
+            select(AssetObservation)
+            .where(AssetObservation.asset_id == asset.id)
+            .order_by(AssetObservation.observed_at.desc())
+            .limit(50)
+        ).all()
+    )
+    findings = list(
+        db.scalars(select(Finding).where(Finding.asset_id == asset.id).order_by(Finding.created_at.desc())).all()
+    )
+    return AssetDetailOut(
+        asset=asset,
+        observations=observations,
+        findings=findings,
+        timeline=build_asset_timeline(asset, observations, findings),
+    )
+
+
 @app.get("/api/v1/wifi-networks", response_model=list[WifiNetworkOut], dependencies=[Depends(require_admin)])
 def list_wifi_networks(site_id: str | None = None, db: Session = Depends(get_db)) -> list[WifiNetwork]:
     query = select(WifiNetwork).order_by(WifiNetwork.last_seen_at.desc())
@@ -997,10 +1223,17 @@ def list_reports(site_id: str | None = None, db: Session = Depends(get_db)) -> l
 
 @app.get("/api/v1/reports/{report_id}", response_model=ReportOut, dependencies=[Depends(require_admin)])
 def get_report(report_id: str, db: Session = Depends(get_db)) -> Report:
-    report = db.get(Report, report_id)
-    if report is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Report not found")
-    return report
+    return get_report_or_404(db, report_id)
+
+
+@app.get("/api/v1/reports/{report_id}/export.html", response_class=HTMLResponse, dependencies=[Depends(require_admin)])
+def export_report_html(report_id: str, db: Session = Depends(get_db)) -> HTMLResponse:
+    report = get_report_or_404(db, report_id)
+    site = db.get(Site, report.site_id)
+    return HTMLResponse(
+        content=render_report_html(report, site),
+        headers={"Content-Disposition": f'attachment; filename="{report_export_filename(report)}"'},
+    )
 
 
 @app.get(

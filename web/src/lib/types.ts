@@ -25,6 +25,38 @@ export type Asset = {
   }>;
 };
 
+export type AssetObservation = {
+  id: string;
+  site_id: string;
+  sensor_id: string;
+  scan_id: string;
+  asset_id: string;
+  ip_address: string;
+  mac_address?: string | null;
+  vendor?: string | null;
+  hostname?: string | null;
+  os_guess?: string | null;
+  raw_source?: string | null;
+  observed_at: string;
+};
+
+export type AssetTimelineEvent = {
+  id: string;
+  kind: string;
+  title: string;
+  summary: string;
+  occurred_at: string;
+  severity: Severity | "info" | string;
+  metadata: Record<string, unknown>;
+};
+
+export type AssetDetail = {
+  asset: Asset;
+  observations: AssetObservation[];
+  findings: Finding[];
+  timeline: AssetTimelineEvent[];
+};
+
 export type WifiNetwork = {
   id: string;
   site_id: string;

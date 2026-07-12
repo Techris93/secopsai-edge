@@ -122,6 +122,40 @@ class AssetOut(BaseModel):
     services: list[ServiceOut] = Field(default_factory=list)
 
 
+class AssetObservationOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    site_id: str
+    sensor_id: str
+    scan_id: str
+    asset_id: str
+    ip_address: str
+    mac_address: str | None = None
+    vendor: str | None = None
+    hostname: str | None = None
+    os_guess: str | None = None
+    raw_source: str | None = None
+    observed_at: datetime
+
+
+class AssetTimelineEventOut(BaseModel):
+    id: str
+    kind: str
+    title: str
+    summary: str
+    occurred_at: datetime
+    severity: str = "info"
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class AssetDetailOut(BaseModel):
+    asset: AssetOut
+    observations: list[AssetObservationOut] = Field(default_factory=list)
+    findings: list["FindingOut"] = Field(default_factory=list)
+    timeline: list[AssetTimelineEventOut] = Field(default_factory=list)
+
+
 class WifiNetworkOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

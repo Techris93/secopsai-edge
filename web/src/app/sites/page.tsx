@@ -2,6 +2,7 @@
 
 import { KeyRound, MapPinned, Pencil, Plus, PowerOff, RotateCw, Save } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import { DataStatePanel } from "@/components/DataStatePanel";
 import { LiveState } from "@/components/LiveState";
 import { PageHeader } from "@/components/PageHeader";
 import {
@@ -13,11 +14,13 @@ import {
   updateSite
 } from "@/lib/api";
 import { timeAgo } from "@/lib/format";
+import type { DashboardDataMode } from "@/lib/api";
 import type { DashboardData, Sensor, Site } from "@/lib/types";
 
 export default function SitesPage() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [live, setLive] = useState(false);
+  const [mode, setMode] = useState<DashboardDataMode>("blocked");
   const [error, setError] = useState<string | undefined>();
   const [siteName, setSiteName] = useState("");
   const [message, setMessage] = useState<string | null>(null);
@@ -27,6 +30,7 @@ export default function SitesPage() {
     const result = await fetchDashboardData();
     setData(result.data);
     setLive(result.live);
+    setMode(result.mode);
     setError(result.error);
   }
 
@@ -62,8 +66,9 @@ export default function SitesPage() {
         eyebrow="Customers"
         title="Sites"
         description="Manage customer locations, sensors, and recovery actions from one operator view."
-        action={<LiveState live={live} error={error} />}
+        action={<LiveState live={live} mode={mode} error={error} />}
       />
+      <DataStatePanel mode={mode} error={error} />
 
       <div className="grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
         <section className="rounded-lg border border-line bg-white p-4 shadow-panel">

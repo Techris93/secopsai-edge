@@ -8,7 +8,7 @@ from sqlalchemy.pool import StaticPool
 
 from secopsai_api.database import get_db
 from secopsai_api.main import app
-from secopsai_api.models import Asset, Base, Finding, NotificationEndpoint, ScanJob, ScanRun, ScanSchedule, Sensor, Site, utcnow
+from secopsai_api.models import Asset, Base, Finding, NotificationEndpoint, Report, ScanJob, ScanRun, ScanSchedule, Sensor, Site, utcnow
 from secopsai_api.security import hash_secret
 
 
@@ -194,3 +194,46 @@ def test_notification_endpoint_crud_without_delivery() -> None:
 
     delete_response = client.delete(f"/api/v1/notification-endpoints/{endpoint_id}", headers=admin_headers())
     assert delete_response.status_code == 200
+
+
+def test_report_html_export_requires_admin_and_returns_branded_report() -> None:
+    db = make_session()
+    sensor = seed_sensor(db)
+    report = Report(
+        site_id=sensor.site_id,
+        title="Weekly Edge Risk Summary",
+        summary="A new unmanaged device exposed SSH.",
+        risk_level="high",
+        content={
+            "provider": "mock",
+            "model": "deterministic",
+            "recommended_actions": ["Verify device ownership.", "Review SSH authentication logs."],
+            "findings": [
+                {
+                    "type": "risky_open_port",
+                    "severity": "high",
+                    "status": "open",
+                    "title": "SSH exposed internally",
+                    "summary": "192.168.1.42 exposes tcp/22.",
+                    "raw_nmap": "<host>secret raw scan</host>",
+                }
+            ],
+        },
+    )
+    db.add(report)
+    db.commit()
+    client = make_client(db)
+
+    unauthorized = client.get(f"/api/v1/reports/{report.id}/export.html")
+    assert unauthorized.status_code == 401
+
+    response = client.get(f"/api/v1/reports/{report.id}/export.html", headers=admin_headers())
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/html")
+    assert "attachment;" in response.headers["content-disposition"]
+    assert "SecOpsAI Edge Report" in response.text
+    assert "Weekly Edge Risk Summary" in response.text
+    assert "Pilot Office" in response.text
+    assert "Verify device ownership." in response.text
+    assert "secret raw scan" not in response.text

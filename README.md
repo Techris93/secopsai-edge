@@ -11,6 +11,16 @@ Standalone MacBook-first MVP for an AI-assisted asset discovery and wireless int
 - Docker Compose for local PostgreSQL.
 - Tests for scan safety, Nmap parsing, detection rules, and AI payload redaction.
 
+## Product Role
+
+SecOpsAI Edge is the network discovery and sensor module for the wider SecOpsAI product:
+
+- Main product: [secopsai.dev](https://secopsai.dev)
+- Research and advisories: [blog.secopsai.dev](https://blog.secopsai.dev)
+- Operator documentation: [docs.secopsai.dev](https://docs.secopsai.dev)
+
+Edge owns local LAN discovery, Wi-Fi inventory, scan jobs, worker heartbeat, and safe telemetry minimization. Main SecOpsAI should own long-term graph context, canonical findings, triage, reports, research intelligence, and AI memory.
+
 ## Quick Start
 
 The easiest hosted pilot path is:
@@ -35,6 +45,12 @@ The local development path is:
 Then open:
 
 [http://127.0.0.1:3000](http://127.0.0.1:3000)
+
+The dashboard shows one of three data states:
+
+- `Live API data`: connected to the configured API with a browser session.
+- `API not connected`: no usable API/session, so pilot telemetry is not being displayed.
+- `Demo data only`: sample telemetry is shown only when `NEXT_PUBLIC_SECOPSAI_DEMO_MODE=true` is explicitly configured.
 
 In another terminal, register this MacBook as a sensor:
 
@@ -90,6 +106,7 @@ Cloud commands:
 ./scripts/edge worker --cloud
 ./scripts/edge scan 192.168.1.0/24 --cloud
 ./scripts/edge report --cloud
+./scripts/edge core sync --cloud --core-root /Users/chrixchange/secopsai --output edge-bundle.json
 ```
 
 The hosted dashboard can also queue remote scan jobs. Keep the worker running locally so queued jobs

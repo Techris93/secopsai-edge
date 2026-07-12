@@ -46,6 +46,11 @@ export function CoreIntegrationPanel() {
         command: `cd ${CORE_ROOT}\nSECOPSAI_EDGE_API_URL=${apiBaseUrl()} \\\nSECOPSAI_EDGE_ADMIN_TOKEN=<your-admin-token> \\\n.venv/bin/python -m secopsai.cli edge sync`
       },
       {
+        label: "Copy One-Step Sync",
+        icon: GitBranch,
+        command: `cd ${EDGE_ROOT}\n./scripts/edge core sync --cloud --core-root ${CORE_ROOT} --output edge-bundle.json`
+      },
+      {
         label: "Copy Edge Test",
         icon: Terminal,
         command: `cd ${EDGE_ROOT}\n./scripts/edge test`

@@ -43,6 +43,8 @@ Usage:
                                       Queue due scheduled scans
   ./scripts/edge core export [--cloud] --output edge-bundle.json
                                       Export normalized graph/findings for SecOpsAI Core
+  ./scripts/edge core sync [--cloud] [--core-root ~/secopsai]
+                                      Export Edge data and import it into SecOpsAI Core
   ./scripts/edge cloud configure <url> Save hosted Render API URL
   ./scripts/edge cloud register        Register this sensor against the hosted API
   ./scripts/edge test                  Run backend, frontend, build, and audit checks
@@ -826,6 +828,73 @@ core_export() {
   fi
 }
 
+resolve_path() {
+  path="${1:-}"
+  [ -n "$path" ] || fail "resolve_path requires a path"
+  case "$path" in
+    /*) printf "%s\n" "$path" ;;
+    *) printf "%s/%s\n" "$(pwd)" "$path" ;;
+  esac
+}
+
+core_sync() {
+  profile="local"
+  output="$ROOT_DIR/edge-bundle.json"
+  core_root="${SECOPSAI_CORE_ROOT:-$HOME/secopsai}"
+  db_path=""
+
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --cloud)
+        profile="cloud"
+        ;;
+      --output|-o)
+        shift || true
+        output="${1:-}"
+        [ -n "$output" ] || fail "Usage: ./scripts/edge core sync [--cloud] [--core-root ~/secopsai] [--output edge-bundle.json]"
+        ;;
+      --core-root)
+        shift || true
+        core_root="${1:-}"
+        [ -n "$core_root" ] || fail "--core-root requires a path"
+        ;;
+      --db-path)
+        shift || true
+        db_path="${1:-}"
+        [ -n "$db_path" ] || fail "--db-path requires a SQLite path"
+        ;;
+      *)
+        fail "Unknown core sync option: $1"
+        ;;
+    esac
+    shift || true
+  done
+
+  bundle_path="$(resolve_path "$output")"
+  core_root="$(resolve_path "$core_root")"
+  [ -d "$core_root" ] || fail "SecOpsAI Core root not found: $core_root"
+
+  core_python="$core_root/.venv/bin/python"
+  if [ ! -x "$core_python" ]; then
+    warn "Core virtualenv Python not found at $core_python; using python3 from PATH"
+    core_python="python3"
+  fi
+
+  info "Exporting Edge bundle for SecOpsAI Core"
+  export_args=(--output "$bundle_path")
+  if [ "$profile" = "cloud" ]; then
+    export_args=(--cloud "${export_args[@]}")
+  fi
+  core_export "${export_args[@]}"
+
+  info "Importing Edge bundle into SecOpsAI Core at $core_root"
+  import_args=(-m secopsai.cli edge import --bundle "$bundle_path")
+  if [ -n "$db_path" ]; then
+    import_args+=(--db-path "$db_path")
+  fi
+  (cd "$core_root" && "$core_python" "${import_args[@]}")
+}
+
 core() {
   subcommand="${1:-help}"
   shift || true
@@ -833,6 +902,9 @@ core() {
   case "$subcommand" in
     export)
       core_export "$@"
+      ;;
+    sync)
+      core_sync "$@"
       ;;
     help|-h|--help)
       usage

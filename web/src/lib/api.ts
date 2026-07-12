@@ -1,6 +1,7 @@
 import { sampleData } from "./sample-data";
 import type {
   Asset,
+  AssetDetail,
   DashboardData,
   Finding,
   FindingDetail,
@@ -17,10 +18,14 @@ import type {
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000";
 const SESSION_TOKEN_KEY = "secopsai_dashboard_session";
+const DEMO_FALLBACK_ENABLED = process.env.NEXT_PUBLIC_SECOPSAI_DEMO_MODE === "true";
 
-type ApiResult<T> = {
-  data: T;
+export type DashboardDataMode = "live" | "demo" | "blocked";
+
+export type ApiResult<T> = {
+  data: T | null;
   live: boolean;
+  mode: DashboardDataMode;
   error?: string;
 };
 
@@ -96,13 +101,25 @@ export async function fetchDashboardData(): Promise<ApiResult<DashboardData>> {
       ]);
     return {
       data: { sites, assets, wifiNetworks, findings, reports, scanJobs, sensors, schedules, notifications, onboarding },
-      live: true
+      live: true,
+      mode: "live"
     };
   } catch (error) {
+    const message = error instanceof Error ? error.message : "API unavailable";
+    if (DEMO_FALLBACK_ENABLED) {
+      return {
+        data: sampleData,
+        live: false,
+        mode: "demo",
+        error: message
+      };
+    }
+
     return {
-      data: sampleData,
+      data: null,
       live: false,
-      error: error instanceof Error ? error.message : "API unavailable"
+      mode: "blocked",
+      error: message
     };
   }
 }
@@ -118,6 +135,24 @@ export async function generateSiteReport(siteId?: string): Promise<Report> {
 
 export async function getReport(reportId: string): Promise<Report> {
   return requestJson<Report>(`/api/v1/reports/${reportId}`);
+}
+
+export async function downloadReportHtml(reportId: string): Promise<Blob> {
+  const sessionToken = getDashboardSessionToken();
+  if (!sessionToken) {
+    throw new Error("Dashboard session required");
+  }
+
+  const response = await fetch(`${API_BASE_URL}/api/v1/reports/${reportId}/export.html`, {
+    headers: {
+      Authorization: `Bearer ${sessionToken}`
+    },
+    cache: "no-store"
+  });
+  if (!response.ok) {
+    throw new Error(`${response.status} ${response.statusText}`);
+  }
+  return response.blob();
 }
 
 export async function downloadCoreBundle(): Promise<Blob> {
@@ -211,6 +246,10 @@ export async function cancelScanJob(jobId: string): Promise<ScanJob> {
 
 export async function retryScanJob(jobId: string): Promise<ScanJob> {
   return requestJson<ScanJob>(`/api/v1/scan-jobs/${jobId}/retry`, { method: "POST" });
+}
+
+export async function getAsset(assetId: string): Promise<AssetDetail> {
+  return requestJson<AssetDetail>(`/api/v1/assets/${assetId}`);
 }
 
 export async function updateFindingStatus(findingId: string, status: string): Promise<Finding> {

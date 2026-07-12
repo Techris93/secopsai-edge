@@ -3,16 +3,19 @@
 import { FilePlus2, FileText } from "lucide-react";
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { DataStatePanel } from "@/components/DataStatePanel";
 import { LiveState } from "@/components/LiveState";
 import { PageHeader } from "@/components/PageHeader";
 import { SeverityBadge } from "@/components/SeverityBadge";
 import { fetchDashboardData, generateSiteReport } from "@/lib/api";
 import { timeAgo } from "@/lib/format";
+import type { DashboardDataMode } from "@/lib/api";
 import type { DashboardData, Report } from "@/lib/types";
 
 export default function ReportsPage() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [live, setLive] = useState(false);
+  const [mode, setMode] = useState<DashboardDataMode>("blocked");
   const [error, setError] = useState<string | undefined>();
   const [busy, setBusy] = useState(false);
   const [site, setSite] = useState("all");
@@ -21,6 +24,7 @@ export default function ReportsPage() {
     fetchDashboardData().then((result) => {
       setData(result.data);
       setLive(result.live);
+      setMode(result.mode);
       setError(result.error);
     });
   }, []);
@@ -47,7 +51,7 @@ export default function ReportsPage() {
         description="Generate executive and technical summaries from normalized findings while raw scan data remains local."
         action={
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <LiveState live={live} error={error} />
+            <LiveState live={live} mode={mode} error={error} />
             <select
               className="focus-ring rounded-md border border-line bg-white px-3 py-2 text-sm"
               value={site}
@@ -70,6 +74,7 @@ export default function ReportsPage() {
           </div>
         }
       />
+      <DataStatePanel mode={mode} error={error} />
 
       <div className="grid gap-4">
         {reports.map((report) => (

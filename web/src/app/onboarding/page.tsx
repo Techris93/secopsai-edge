@@ -2,10 +2,12 @@
 
 import { Clipboard, Play, ServerCog } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { DataStatePanel } from "@/components/DataStatePanel";
 import { LiveState } from "@/components/LiveState";
 import { OnboardingChecklist } from "@/components/OnboardingChecklist";
 import { PageHeader } from "@/components/PageHeader";
 import { apiBaseUrl, fetchDashboardData } from "@/lib/api";
+import type { DashboardDataMode } from "@/lib/api";
 import type { DashboardData } from "@/lib/types";
 
 const EDGE_ROOT = "/Users/chrixchange/Documents/Codex/2026-06-15/i-want-to-build-this-make";
@@ -13,6 +15,7 @@ const EDGE_ROOT = "/Users/chrixchange/Documents/Codex/2026-06-15/i-want-to-build
 export default function OnboardingPage() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [live, setLive] = useState(false);
+  const [mode, setMode] = useState<DashboardDataMode>("blocked");
   const [error, setError] = useState<string | undefined>();
   const [message, setMessage] = useState<string | null>(null);
 
@@ -20,6 +23,7 @@ export default function OnboardingPage() {
     fetchDashboardData().then((result) => {
       setData(result.data);
       setLive(result.live);
+      setMode(result.mode);
       setError(result.error);
     });
   }, []);
@@ -61,8 +65,9 @@ export default function OnboardingPage() {
         eyebrow="Pilot Setup"
         title="Onboarding"
         description="Track the steps that make this deployment usable as a real sensor-backed SecOpsAI pilot."
-        action={<LiveState live={live} error={error} />}
+        action={<LiveState live={live} mode={mode} error={error} />}
       />
+      <DataStatePanel mode={mode} error={error} />
 
       <div className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
         <OnboardingChecklist status={data?.onboarding ?? null} />

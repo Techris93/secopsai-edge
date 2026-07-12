@@ -2,15 +2,18 @@
 
 import { Router, Wifi } from "lucide-react";
 import { useEffect, useState } from "react";
+import { DataStatePanel } from "@/components/DataStatePanel";
 import { LiveState } from "@/components/LiveState";
 import { PageHeader } from "@/components/PageHeader";
 import { fetchDashboardData } from "@/lib/api";
 import { timeAgo } from "@/lib/format";
+import type { DashboardDataMode } from "@/lib/api";
 import type { DashboardData } from "@/lib/types";
 
 export default function WifiPage() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [live, setLive] = useState(false);
+  const [mode, setMode] = useState<DashboardDataMode>("blocked");
   const [error, setError] = useState<string | undefined>();
   const [site, setSite] = useState("all");
 
@@ -18,6 +21,7 @@ export default function WifiPage() {
     fetchDashboardData().then((result) => {
       setData(result.data);
       setLive(result.live);
+      setMode(result.mode);
       setError(result.error);
     });
   }, []);
@@ -30,8 +34,9 @@ export default function WifiPage() {
         eyebrow="Wireless"
         title="Wi-Fi Networks"
         description="Track SSIDs, BSSIDs, channels, signal strength, encryption, and rogue access point indicators."
-        action={<LiveState live={live} error={error} />}
+        action={<LiveState live={live} mode={mode} error={error} />}
       />
+      <DataStatePanel mode={mode} error={error} />
 
       <div className="mb-4 flex justify-end">
         <select

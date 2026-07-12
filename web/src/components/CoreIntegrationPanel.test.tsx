@@ -13,6 +13,7 @@ test("renders Core integration action buttons", () => {
   expect(screen.getByRole("button", { name: /Copy Assets/ })).toBeInTheDocument();
   expect(screen.getByRole("button", { name: /Copy Triage/ })).toBeInTheDocument();
   expect(screen.getByRole("button", { name: /Copy API Sync/ })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: /Copy One-Step Sync/ })).toBeInTheDocument();
 });
 
 test("copies Core import command", async () => {

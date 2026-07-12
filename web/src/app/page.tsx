@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertTriangle, FileText, RefreshCw, Server, ShieldAlert, Wifi } from "lucide-react";
+import { DataStatePanel } from "@/components/DataStatePanel";
 import { LiveState } from "@/components/LiveState";
 import { OnboardingChecklist } from "@/components/OnboardingChecklist";
 import { PageHeader } from "@/components/PageHeader";
@@ -10,17 +11,20 @@ import { SeverityBadge } from "@/components/SeverityBadge";
 import { StatCard } from "@/components/StatCard";
 import { fetchDashboardData } from "@/lib/api";
 import { timeAgo } from "@/lib/format";
+import type { DashboardDataMode } from "@/lib/api";
 import type { DashboardData } from "@/lib/types";
 
 export default function OverviewPage() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [live, setLive] = useState(false);
+  const [mode, setMode] = useState<DashboardDataMode>("blocked");
   const [error, setError] = useState<string | undefined>();
 
   const loadDashboardData = useCallback(async () => {
     const result = await fetchDashboardData();
     setData(result.data);
     setLive(result.live);
+    setMode(result.mode);
     setError(result.error);
   }, []);
 
@@ -47,8 +51,9 @@ export default function OverviewPage() {
         eyebrow="SecOpsAI Console"
         title="Wireless Intelligence & Asset Discovery"
         description="Track local assets, risky exposed services, Wi-Fi changes, and AI-generated security summaries from your MacBook sensor."
-        action={<LiveState live={live} error={error} />}
+        action={<LiveState live={live} mode={mode} error={error} />}
       />
+      <DataStatePanel mode={mode} error={error} />
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Assets" value={summary.activeAssets} detail="Currently active inventory" icon={Server} />

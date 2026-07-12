@@ -4,6 +4,14 @@ SecOpsAI Edge exports a normalized graph and finding bundle for the main SecOpsA
 
 ## Export
 
+One-step local Core sync:
+
+```bash
+./scripts/edge core sync --cloud --core-root /Users/chrixchange/secopsai --output edge-bundle.json
+```
+
+This exports the normalized Edge bundle from the configured API, saves it for audit/review, and imports it into the main SecOpsAI Core SQLite SOC/graph store.
+
 Local API:
 
 ```bash

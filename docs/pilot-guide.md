@@ -13,16 +13,23 @@ SecOpsAI Edge discovers internal network assets, records service exposure, monit
 
 ## Pilot Workflow
 
-1. Create or select a site in the dashboard.
-2. Install and onboard the local sensor.
-3. Confirm the worker is online.
-4. Queue a scan or configure a schedule.
-5. Review Assets, Wi-Fi, and Findings.
-6. Add notes and mark findings acknowledged/resolved/false positive.
-7. Generate a report.
-8. Open the report detail page, copy the executive summary, print, or download HTML.
-9. Configure webhook/email/Telegram notifications.
-10. Sync Edge findings into SecOpsAI Core when needed.
+1. Connect the dashboard to the API from Settings and confirm it shows `Live API data`.
+2. Create or select a site in the dashboard.
+3. Install and onboard the local sensor.
+4. Confirm the worker is online.
+5. Queue a scan or configure a schedule.
+6. Review Assets, Wi-Fi, and Findings.
+7. Add notes and mark findings acknowledged/resolved/false positive.
+8. Generate a report.
+9. Open the report detail page, copy the executive summary or client brief, print, or download the report.
+10. Configure webhook/email/Telegram notifications.
+11. Sync Edge findings into SecOpsAI Core when needed.
+
+## Dashboard Data States
+
+- `Live API data`: the dashboard is connected to the configured API and is showing real pilot telemetry.
+- `API not connected`: the dashboard cannot read pilot telemetry yet. Open Settings, create an API session, and confirm the API URL is correct.
+- `Demo data only`: sample telemetry is visible only when demo mode is explicitly enabled with `NEXT_PUBLIC_SECOPSAI_DEMO_MODE=true`. Do not use demo mode for customer pilots.
 
 ## Required Permission
 

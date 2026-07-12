@@ -63,10 +63,15 @@ Use these settings:
 - Build output directory: `out`
 - Environment variable:
   - `NEXT_PUBLIC_API_BASE_URL=https://<your-render-api>.onrender.com`
+  - `NEXT_PUBLIC_SECOPSAI_DEMO_MODE=false` or leave unset for real pilots.
 
 The dashboard is a static Next.js export. It does not include `NEXT_PUBLIC_ADMIN_TOKEN`.
 Open Settings in the dashboard and use the API Connection panel to create a browser session with
 your Render API admin token.
+
+For customer pilots, the dashboard should show `API not connected` until the browser session is
+created, then `Live API data` after the API is reachable. `Demo data only` should be used only for
+sales screenshots or local design review, never to represent real telemetry.
 
 ## Local Agent Against Cloud
 
@@ -136,8 +141,9 @@ SECOPSAI_ADMIN_TOKEN=<your-admin-token>
 - Render `/healthz` returns `{"status":"ok"}`.
 - Cloudflare dashboard loads from the Pages URL.
 - Settings > API Connection accepts the admin token.
-- Assets/Findings/Reports switch from demo fallback to live API data after connection.
+- Assets/Findings/Reports switch from `API not connected` to `Live API data` after connection.
 - Local agent can register and scan with `--cloud`.
 - Dashboard Scan Actions can queue a remote job, and the installed worker can claim it.
 - Schedules page can create a daily/weekly schedule, and the cron trigger queues due jobs.
 - Browser source and Cloudflare env vars do not contain `NEXT_PUBLIC_ADMIN_TOKEN`.
+- Demo mode is unset or false for customer pilots.
