@@ -317,6 +317,60 @@ Known risks:
   later API milestone.
 - Core Edge integration is committed locally but not pushed.
 
+## Checkpoint 006 - Production Auth Foundation
+
+Status: complete
+
+Branch:
+
+- Edge repo: `codex/pilot-hardening-foundation`
+
+Scope:
+
+- Add real dashboard user login while preserving admin-token compatibility for
+  scripts, cron, and existing deployments.
+- Support environment-driven bootstrap of an initial dashboard admin user.
+- Update the dashboard Settings connection panel to prefer email/password login
+  and move the admin token path into a legacy/automation fallback.
+- Add focused API and frontend tests.
+
+Files changed:
+
+- `.env.example`
+- `render.yaml`
+- `api/secopsai_api/config.py`
+- `api/secopsai_api/main.py`
+- `api/secopsai_api/schemas.py`
+- `api/secopsai_api/security.py`
+- `tests/api/test_auth.py`
+- `web/src/components/ApiConnectionPanel.tsx`
+- `web/src/components/ApiConnectionPanel.test.tsx`
+- `web/src/lib/api.ts`
+- `web/src/lib/types.ts`
+- `docs/render-cloudflare-deploy.md`
+- `docs/runbook.md`
+- `docs/security-boundaries.md`
+- `docs/implementation-checkpoints.md`
+
+Validation:
+
+- `PYTHONPATH=api:agent .venv/bin/python -m pytest tests/api/test_auth.py tests/api/test_security.py`
+  passed with 7 tests.
+- `cd web && npm test -- --run ApiConnectionPanel` passed with 2 tests.
+- `python3 -m py_compile scripts/render-run-due-schedules` passed.
+- `bash -n scripts/edge` passed.
+- `./scripts/edge test` passed with 39 backend/agent tests, 7 frontend
+  tests, Next.js production build, and npm audit reporting 0 vulnerabilities.
+
+Known risks:
+
+- This is an auth foundation, not full SaaS auth. Organization/workspace roles,
+  invites, password reset, MFA, and tenant isolation remain future checkpoints.
+- Existing admin token compatibility is intentionally preserved for scripts,
+  Render cron, Core sync, and recovery operations.
+- Browser login now uses dashboard users; production deployments must configure
+  `SECOPSAI_DASHBOARD_ADMIN_EMAIL` and `SECOPSAI_DASHBOARD_ADMIN_PASSWORD`.
+
 ## Completion Rules
 
 A checkpoint is complete only when:

@@ -22,7 +22,9 @@ The repository includes `render.yaml`.
 1. Commit and push `render.yaml`, `runtime.txt`, and `scripts/render-start-api`.
 2. In Render, create a new Blueprint from your Git repository.
 3. Fill these prompted values:
-   - `SECOPSAI_ADMIN_TOKEN`: a long random operator token.
+   - `SECOPSAI_ADMIN_TOKEN`: a long random automation/recovery token.
+   - `SECOPSAI_DASHBOARD_ADMIN_EMAIL`: the first dashboard admin user email.
+   - `SECOPSAI_DASHBOARD_ADMIN_PASSWORD`: a long random first dashboard admin password.
    - `SECOPSAI_CORS_ORIGINS`: your Cloudflare Pages URL, plus local dev if needed.
    - `AI_API_KEY`: optional; add an OpenAI API key to enable live reports.
 4. Apply the Blueprint.
@@ -39,6 +41,12 @@ Expected response:
 ```
 
 The Render start script runs Alembic migrations before starting Uvicorn.
+
+### Dashboard Login
+
+For hosted pilots, use the dashboard user login in Settings > API Connection. The admin token flow
+still exists for scripts, Render cron, Core sync automation, and emergency recovery, but it should
+not be the normal browser login method.
 
 ### Live OpenAI Reports
 
@@ -67,7 +75,7 @@ Use these settings:
 
 The dashboard is a static Next.js export. It does not include `NEXT_PUBLIC_ADMIN_TOKEN`.
 Open Settings in the dashboard and use the API Connection panel to create a browser session with
-your Render API admin token.
+your dashboard admin email and password.
 
 For customer pilots, the dashboard should show `API not connected` until the browser session is
 created, then `Live API data` after the API is reachable. `Demo data only` should be used only for
@@ -140,7 +148,7 @@ SECOPSAI_ADMIN_TOKEN=<your-admin-token>
 
 - Render `/healthz` returns `{"status":"ok"}`.
 - Cloudflare dashboard loads from the Pages URL.
-- Settings > API Connection accepts the admin token.
+- Settings > API Connection accepts the dashboard admin user login.
 - Assets/Findings/Reports switch from `API not connected` to `Live API data` after connection.
 - Local agent can register and scan with `--cloud`.
 - Dashboard Scan Actions can queue a remote job, and the installed worker can claim it.

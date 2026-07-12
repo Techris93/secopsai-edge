@@ -13,6 +13,7 @@ import type {
   ScanSchedule,
   Sensor,
   Site,
+  User,
   WifiNetwork
 } from "./types";
 
@@ -78,6 +79,27 @@ export async function loginDashboard(adminToken: string): Promise<void> {
 
   const payload = (await response.json()) as { access_token: string };
   window.sessionStorage.setItem(SESSION_TOKEN_KEY, payload.access_token);
+}
+
+export async function loginDashboardUser(email: string, password: string): Promise<User | null> {
+  const response = await fetch(`${API_BASE_URL}/api/v1/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password }),
+    cache: "no-store"
+  });
+
+  if (!response.ok) {
+    throw new Error(`${response.status} ${response.statusText}`);
+  }
+
+  const payload = (await response.json()) as { access_token: string; user?: User | null };
+  window.sessionStorage.setItem(SESSION_TOKEN_KEY, payload.access_token);
+  return payload.user ?? null;
+}
+
+export async function fetchAuthIdentity(): Promise<{ subject: string; role: string; user?: User | null }> {
+  return requestJson<{ subject: string; role: string; user?: User | null }>("/api/v1/auth/me");
 }
 
 export function apiBaseUrl(): string {

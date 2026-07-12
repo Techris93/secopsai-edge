@@ -28,4 +28,6 @@ Email requires `SMTP_HOST`. Telegram requires `TELEGRAM_BOT_TOKEN`.
 
 ## Credential Boundary
 
-Dashboard auth uses a short-lived browser session created from the server-side admin token. Sensor tokens are separate from dashboard auth and can be rotated from the Sites page.
+Dashboard auth should use a short-lived browser session created from a dashboard user login. The
+server-side admin token remains available for automation, cron, Core sync, and emergency recovery.
+Sensor tokens are separate from dashboard auth and can be rotated from the Sites page.

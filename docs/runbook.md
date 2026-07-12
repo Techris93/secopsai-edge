@@ -68,8 +68,8 @@ After deploying the API to Render and the dashboard to Cloudflare Pages:
 ./scripts/edge report --cloud
 ```
 
-Use the dashboard Settings page to connect to the hosted API with your admin token. The token is
-exchanged for a browser session and is not baked into the Cloudflare Pages build.
+Use the dashboard Settings page to connect to the hosted API with the dashboard admin email and
+password. The admin token remains available only for automation, cron, Core sync, and recovery.
 
 ## Remote Scan Jobs
 

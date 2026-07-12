@@ -118,6 +118,14 @@ export type Site = {
   created_at: string;
 };
 
+export type User = {
+  id: string;
+  email: string;
+  role: string;
+  created_at: string;
+  last_login_at?: string | null;
+};
+
 export type ScanJob = {
   id: string;
   site_id: string;

@@ -6,6 +6,7 @@ import hmac
 import json
 import secrets
 import time
+from typing import Any
 
 from fastapi import Depends, Header, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -18,6 +19,8 @@ from secopsai_api.models import Sensor
 
 bearer = HTTPBearer(auto_error=False)
 DASHBOARD_SESSION_PREFIX = "secopsai_session"
+PASSWORD_HASH_PREFIX = "pbkdf2_sha256"
+PASSWORD_HASH_ITERATIONS = 260_000
 
 
 def generate_sensor_token() -> str:
@@ -37,53 +40,98 @@ def constant_time_equals(left: str, right: str) -> bool:
     return hmac.compare_digest(left.encode("utf-8"), right.encode("utf-8"))
 
 
-def create_dashboard_session() -> str:
+def hash_password(password: str) -> str:
+    salt = secrets.token_urlsafe(16)
+    digest = hashlib.pbkdf2_hmac(
+        "sha256",
+        password.encode("utf-8"),
+        salt.encode("utf-8"),
+        PASSWORD_HASH_ITERATIONS,
+    )
+    return f"{PASSWORD_HASH_PREFIX}${PASSWORD_HASH_ITERATIONS}${salt}${_b64url_encode(digest)}"
+
+
+def verify_password(password: str, password_hash: str) -> bool:
+    try:
+        prefix, iterations_raw, salt, expected = password_hash.split("$", 3)
+        iterations = int(iterations_raw)
+    except ValueError:
+        return False
+    if prefix != PASSWORD_HASH_PREFIX:
+        return False
+    digest = hashlib.pbkdf2_hmac(
+        "sha256",
+        password.encode("utf-8"),
+        salt.encode("utf-8"),
+        iterations,
+    )
+    return constant_time_equals(_b64url_encode(digest), expected)
+
+
+def create_dashboard_session(subject: str = "dashboard", role: str = "admin", user_id: str | None = None) -> str:
     settings = get_settings()
     payload = {
-        "sub": "dashboard",
+        "sub": subject,
+        "role": role,
         "exp": int(time.time()) + settings.dashboard_session_ttl_seconds,
         "nonce": secrets.token_urlsafe(12),
     }
+    if user_id:
+        payload["uid"] = user_id
     payload_part = _b64url_encode(json.dumps(payload, separators=(",", ":")).encode("utf-8"))
     signature = _sign(payload_part)
     return f"{DASHBOARD_SESSION_PREFIX}.{payload_part}.{signature}"
 
 
-def verify_dashboard_session(token: str) -> bool:
+def decode_dashboard_session(token: str) -> dict[str, Any] | None:
     parts = token.split(".")
     if len(parts) != 3 or parts[0] != DASHBOARD_SESSION_PREFIX:
-        return False
+        return None
 
     payload_part = parts[1]
     signature = parts[2]
     if not constant_time_equals(signature, _sign(payload_part)):
-        return False
+        return None
 
     try:
         payload = json.loads(_b64url_decode(payload_part))
     except (ValueError, json.JSONDecodeError):
-        return False
+        return None
 
-    if payload.get("sub") != "dashboard":
-        return False
+    if not payload.get("sub"):
+        return None
     try:
         expires_at = int(payload["exp"])
     except (KeyError, TypeError, ValueError):
-        return False
-    return expires_at > int(time.time())
+        return None
+    if expires_at <= int(time.time()):
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
+def verify_dashboard_session(token: str) -> bool:
+    return decode_dashboard_session(token) is not None
 
 
 def require_admin(
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer),
 ) -> None:
+    get_dashboard_auth_context(credentials)
+
+
+def get_dashboard_auth_context(
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer),
+) -> dict[str, Any]:
     settings = get_settings()
     if not credentials or credentials.scheme.lower() != "bearer":
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing admin token")
     credential = credentials.credentials
-    if constant_time_equals(credential, settings.admin_token) or verify_dashboard_session(credential):
-        return
-    else:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid admin token")
+    if constant_time_equals(credential, settings.admin_token):
+        return {"sub": "admin-token", "role": "admin", "legacy": True}
+    session = decode_dashboard_session(credential)
+    if session is not None:
+        return session
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid admin token")
 
 
 def authenticate_sensor(db: Session, sensor_id: str, sensor_token: str | None) -> Sensor:

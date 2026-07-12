@@ -34,6 +34,8 @@ class Settings:
     )
     admin_token: str = os.getenv("SECOPSAI_ADMIN_TOKEN", "dev-admin-token")
     token_secret: str = os.getenv("SECOPSAI_TOKEN_SECRET", "dev-token-secret")
+    dashboard_admin_email: str | None = os.getenv("SECOPSAI_DASHBOARD_ADMIN_EMAIL") or None
+    dashboard_admin_password: str | None = os.getenv("SECOPSAI_DASHBOARD_ADMIN_PASSWORD") or None
     dashboard_session_ttl_seconds: int = int(
         os.getenv("SECOPSAI_DASHBOARD_SESSION_TTL_SECONDS", "28800")
     )

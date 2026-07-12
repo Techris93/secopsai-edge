@@ -29,6 +29,7 @@ from secopsai_api.models import (
     ScanSchedule,
     Sensor,
     Site,
+    User,
     WifiNetwork,
     utcnow,
 )
@@ -40,6 +41,7 @@ from secopsai_api.schemas import (
     AssetOut,
     DashboardLoginRequest,
     DashboardSessionResponse,
+    DashboardUserLoginRequest,
     FindingDetailOut,
     FindingNoteCreateRequest,
     FindingNoteOut,
@@ -69,16 +71,21 @@ from secopsai_api.schemas import (
     SiteCreateRequest,
     SiteOut,
     SiteUpdateRequest,
+    AuthMeOut,
+    UserOut,
     WifiNetworkOut,
 )
 from secopsai_api.security import (
     authenticate_sensor,
     constant_time_equals,
     create_dashboard_session,
+    get_dashboard_auth_context,
     generate_sensor_token,
+    hash_password,
     hash_secret,
     require_admin,
     require_sensor_for_path,
+    verify_password,
 )
 from secopsai_api.splunk import export_finding, export_report
 
@@ -101,10 +108,28 @@ app.add_middleware(
 )
 
 
+def bootstrap_dashboard_admin(db: Session) -> None:
+    if not settings.dashboard_admin_email or not settings.dashboard_admin_password:
+        return
+    email = settings.dashboard_admin_email.strip().lower()
+    if not email:
+        return
+    user = db.scalar(select(User).where(func.lower(User.email) == email))
+    password_hash = hash_password(settings.dashboard_admin_password)
+    if user is None:
+        db.add(User(email=email, password_hash=password_hash, role="admin"))
+    else:
+        user.password_hash = password_hash
+        user.role = "admin"
+    db.commit()
+
+
 @app.on_event("startup")
 def startup() -> None:
     if settings.auto_create_tables:
         Base.metadata.create_all(bind=engine)
+    with Session(engine) as db:
+        bootstrap_dashboard_admin(db)
 
 
 @app.get("/healthz")
@@ -442,8 +467,38 @@ def create_session(payload: DashboardLoginRequest) -> DashboardSessionResponse:
     if not constant_time_equals(payload.admin_token, settings.admin_token):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid admin token")
     return DashboardSessionResponse(
-        access_token=create_dashboard_session(),
+        access_token=create_dashboard_session(subject="admin-token", role="admin"),
         expires_in=settings.dashboard_session_ttl_seconds,
+    )
+
+
+@app.post("/api/v1/auth/login", response_model=DashboardSessionResponse)
+def login_dashboard_user(payload: DashboardUserLoginRequest, db: Session = Depends(get_db)) -> DashboardSessionResponse:
+    email = payload.email.strip().lower()
+    user = db.scalar(select(User).where(func.lower(User.email) == email))
+    if user is None or not verify_password(payload.password, user.password_hash):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid email or password")
+    user.last_login_at = utcnow()
+    write_audit(db, "auth.login", user_id=user.id, resource_type="user", resource_id=user.id)
+    db.commit()
+    db.refresh(user)
+    return DashboardSessionResponse(
+        access_token=create_dashboard_session(subject=user.email, role=user.role, user_id=user.id),
+        expires_in=settings.dashboard_session_ttl_seconds,
+        user=user,
+    )
+
+
+@app.get("/api/v1/auth/me", response_model=AuthMeOut)
+def auth_me(
+    auth_context: dict = Depends(get_dashboard_auth_context),
+    db: Session = Depends(get_db),
+) -> AuthMeOut:
+    user = db.get(User, auth_context.get("uid")) if auth_context.get("uid") else None
+    return AuthMeOut(
+        subject=str(auth_context.get("sub") or "dashboard"),
+        role=str(auth_context.get("role") or "admin"),
+        user=user,
     )
 
 
