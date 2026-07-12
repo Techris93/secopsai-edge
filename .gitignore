@@ -12,6 +12,7 @@ __pycache__/
 .mypy_cache/
 .ruff_cache/
 .wrangler/
+.brv/
 *.pyc
 *.egg-info/
 node_modules/
