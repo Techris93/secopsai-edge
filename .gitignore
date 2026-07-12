@@ -6,6 +6,8 @@
 .env*.local
 work/
 outputs/
+output/
+.playwright-cli/
 .venv/
 __pycache__/
 .pytest_cache/

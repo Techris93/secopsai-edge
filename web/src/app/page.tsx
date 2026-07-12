@@ -62,29 +62,26 @@ export default function OverviewPage() {
         <StatCard label="Open Findings" value={summary.openFindings} detail="Waiting for review" icon={ShieldAlert} tone="amber" />
       </div>
 
-      <div className="mt-6 grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
-        <section className="rounded-lg border border-line bg-white shadow-panel">
-          <div className="flex items-center justify-between border-b border-line px-4 py-3">
-            <h2 className="text-lg font-semibold text-ink">Recent Findings</h2>
-            <RefreshCw size={18} className="text-zinc-500" aria-hidden="true" />
-          </div>
-          <div className="divide-y divide-line">
-            {latestFindings.map((finding) => (
-              <article key={finding.id} className="grid gap-3 px-4 py-4 sm:grid-cols-[8rem_1fr_auto] sm:items-center">
-                <SeverityBadge severity={finding.severity} />
-                <div>
-                  <h3 className="font-medium text-ink">{finding.title}</h3>
-                  <p className="mt-1 text-sm leading-6 text-zinc-600">{finding.summary}</p>
-                </div>
-                <span className="text-sm text-zinc-500">{timeAgo(finding.created_at)}</span>
-              </article>
-            ))}
-          </div>
-        </section>
-
+      <div className="mt-6 grid items-start gap-6 xl:grid-cols-[1.15fr_0.85fr]">
         <div className="grid gap-6">
-          <OnboardingChecklist status={data?.onboarding ?? null} />
-          <ScanActions scanJobs={data?.scanJobs ?? []} sensors={data?.sensors ?? []} onChanged={loadDashboardData} />
+          <section className="rounded-lg border border-line bg-white shadow-panel">
+            <div className="flex items-center justify-between border-b border-line px-4 py-3">
+              <h2 className="text-lg font-semibold text-ink">Recent Findings</h2>
+              <RefreshCw size={18} className="text-zinc-500" aria-hidden="true" />
+            </div>
+            <div className="divide-y divide-line">
+              {latestFindings.map((finding) => (
+                <article key={finding.id} className="grid gap-3 px-4 py-4 sm:grid-cols-[8rem_1fr_auto] sm:items-center">
+                  <SeverityBadge severity={finding.severity} />
+                  <div>
+                    <h3 className="font-medium text-ink">{finding.title}</h3>
+                    <p className="mt-1 text-sm leading-6 text-zinc-600">{finding.summary}</p>
+                  </div>
+                  <span className="text-sm text-zinc-500">{timeAgo(finding.created_at)}</span>
+                </article>
+              ))}
+            </div>
+          </section>
 
           <section className="rounded-lg border border-line bg-white p-4 shadow-panel">
             <div className="flex items-center gap-2">
@@ -108,6 +105,11 @@ export default function OverviewPage() {
               <p className="mt-4 text-sm text-zinc-600">Generate a report after ingesting scan findings.</p>
             )}
           </section>
+        </div>
+
+        <div className="grid gap-6">
+          <OnboardingChecklist status={data?.onboarding ?? null} />
+          <ScanActions scanJobs={data?.scanJobs ?? []} sensors={data?.sensors ?? []} onChanged={loadDashboardData} />
         </div>
       </div>
     </>

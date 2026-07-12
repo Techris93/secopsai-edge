@@ -78,6 +78,8 @@ Create a redacted diagnostics bundle when a sensor needs support:
 
 The command records release, platform, dependency, API, worker-service, and recent worker-log status without copying credential files or printing tokens. The output is created with owner-only permissions. Review local paths and network ranges before sharing it.
 
+The Core Integration panel defaults to `$HOME/secopsai-edge` and `$HOME/secopsai`. Update the two install-path fields once if the repositories live elsewhere; the dashboard stores those path preferences in that browser and regenerates every copyable command without exposing founder-specific paths publicly.
+
 ## Hosted API Workflow
 
 After deploying the API to Render and the dashboard to Cloudflare Pages:

@@ -470,6 +470,49 @@ Known risks:
 - Support bundles intentionally preserve some local paths and authorized network
   ranges for troubleshooting; operators are warned to review before sharing.
 
+## Checkpoint 009 - Operator UI Truth and Command Safety
+
+Status: complete
+
+Branch:
+
+- Edge repo: `codex/pilot-hardening-foundation`
+
+Scope:
+
+- Validate the real dashboard at desktop and mobile viewports.
+- Fix layout imbalance and non-functional command controls.
+- Remove founder-specific local paths from the hosted dashboard defaults.
+
+Completed changes:
+
+- Rebalanced Overview into two independent operator columns, placing AI Insight
+  below recent findings instead of stretching a mostly empty panel.
+- Converted Local Commands into real keyboard-focusable copy buttons with
+  success feedback.
+- Replaced hard-coded `/Users/chrixchange/...` command paths with generic
+  `$HOME/secopsai-edge` and `$HOME/secopsai` defaults.
+- Added editable Edge/Core install-path fields that persist in browser local
+  storage and immediately regenerate all commands.
+- Added optional static-build path environment variables and ignored local
+  Playwright artifacts.
+
+Validation:
+
+- `./scripts/edge test`: 44 backend/agent tests passed, 6 frontend test files
+  with 10 tests passed, the Next.js static production build passed with all 15
+  routes, and npm audit reported 0 vulnerabilities.
+- Playwright screenshots were inspected at `1440x1000` and `390x844`.
+- Final browser console check reported zero errors and zero warnings.
+- Browser geometry confirmed Settings content remains within the 390px mobile
+  viewport without overlap.
+
+Known risks:
+
+- Settings remains a long page on mobile. Splitting integrations and policy
+  administration into dedicated routes is a later information-architecture
+  improvement, not a pilot blocker.
+
 ## Completion Rules
 
 A checkpoint is complete only when:

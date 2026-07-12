@@ -74,6 +74,7 @@ Use these settings:
   - `NEXT_PUBLIC_SECOPSAI_DEMO_MODE=false` or leave unset for real pilots.
 
 The dashboard is a static Next.js export. It does not include `NEXT_PUBLIC_ADMIN_TOKEN`.
+Optional `NEXT_PUBLIC_EDGE_ROOT` and `NEXT_PUBLIC_CORE_ROOT` values control the generic defaults shown in copyable local commands. Operators can override both paths in Settings, where they are stored only in browser local storage.
 Open Settings in the dashboard and use the API Connection panel to create a browser session with
 your dashboard admin email and password.
 

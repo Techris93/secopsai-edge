@@ -1,7 +1,10 @@
-import { Copy, Database, KeyRound, Radar, ShieldCheck, Terminal } from "lucide-react";
+"use client";
+
+import { Database, Radar, ShieldCheck, Terminal } from "lucide-react";
 import { ApiConnectionPanel } from "@/components/ApiConnectionPanel";
 import { BaselinePanel } from "@/components/BaselinePanel";
 import { CoreIntegrationPanel } from "@/components/CoreIntegrationPanel";
+import { CopyCommand } from "@/components/CopyCommand";
 import { NotificationPanel } from "@/components/NotificationPanel";
 import { PageHeader } from "@/components/PageHeader";
 
@@ -48,15 +51,15 @@ export default function SettingsPage() {
             <h2 className="text-lg font-semibold text-ink">Local Commands</h2>
           </div>
           <div className="mt-4 space-y-3">
-            <Command text="docker compose -f infra/docker-compose.yml up -d" icon={Database} />
-            <Command text="PYTHONPATH=api:agent uvicorn secopsai_api.main:app --reload --host 127.0.0.1 --port 8000" icon={Radar} />
-            <Command text="PYTHONPATH=agent python -m secopsai_agent.cli preview 192.168.1.0/24" icon={ShieldCheck} />
-            <Command text="PYTHONPATH=agent python -m secopsai_agent.cli submit 192.168.1.0/24 --sensor-id <id> --sensor-token <token>" icon={KeyRound} />
+            <CopyCommand command="./scripts/edge dev" icon={Database} />
+            <CopyCommand command="./scripts/edge status --cloud" icon={Radar} />
+            <CopyCommand command="./scripts/edge preview 192.168.1.0/24" icon={ShieldCheck} />
+            <CopyCommand command="./scripts/edge scan 192.168.1.0/24 --cloud" icon={Terminal} />
           </div>
         </section>
       </div>
 
-      <section className="mt-6 rounded-lg border border-line bg-white shadow-panel">
+      <section className="mt-6 w-full rounded-lg border border-line bg-white shadow-panel">
         <div className="border-b border-line px-4 py-3">
           <h2 className="text-lg font-semibold text-ink">Environment</h2>
         </div>
@@ -70,15 +73,5 @@ export default function SettingsPage() {
         </dl>
       </section>
     </>
-  );
-}
-
-function Command({ text, icon: Icon }: { text: string; icon: typeof Terminal }) {
-  return (
-    <div className="flex items-center gap-3 rounded-md bg-ink p-3 text-sm text-white">
-      <Icon size={17} className="shrink-0 text-teal-200" aria-hidden="true" />
-      <code className="min-w-0 flex-1 overflow-x-auto whitespace-nowrap">{text}</code>
-      <Copy size={16} className="shrink-0 text-zinc-300" aria-hidden="true" />
-    </div>
   );
 }

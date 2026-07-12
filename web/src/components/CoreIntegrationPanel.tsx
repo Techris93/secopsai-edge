@@ -2,71 +2,87 @@
 
 import { CheckCircle2, Clipboard, Download, GitBranch, LifeBuoy, ListTree, ShieldCheck, Terminal } from "lucide-react";
 import type { ComponentType } from "react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { apiBaseUrl, downloadCoreBundle } from "@/lib/api";
 
-const EDGE_ROOT = "/Users/chrixchange/Documents/Codex/2026-06-15/i-want-to-build-this-make";
-const CORE_ROOT = "/Users/chrixchange/secopsai";
-const BUNDLE_PATH = `${EDGE_ROOT}/edge-bundle.json`;
+const DEFAULT_EDGE_ROOT = process.env.NEXT_PUBLIC_EDGE_ROOT ?? "$HOME/secopsai-edge";
+const DEFAULT_CORE_ROOT = process.env.NEXT_PUBLIC_CORE_ROOT ?? "$HOME/secopsai";
+const EDGE_ROOT_KEY = "secopsai_edge_root";
+const CORE_ROOT_KEY = "secopsai_core_root";
 
 export function CoreIntegrationPanel() {
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [edgeRoot, setEdgeRoot] = useState(DEFAULT_EDGE_ROOT);
+  const [coreRoot, setCoreRoot] = useState(DEFAULT_CORE_ROOT);
+
+  useEffect(() => {
+    setEdgeRoot(window.localStorage.getItem(EDGE_ROOT_KEY) || DEFAULT_EDGE_ROOT);
+    setCoreRoot(window.localStorage.getItem(CORE_ROOT_KEY) || DEFAULT_CORE_ROOT);
+  }, []);
+
+  function updateRoot(key: string, value: string, setter: (next: string) => void) {
+    setter(value);
+    window.localStorage.setItem(key, value);
+  }
 
   const commands = useMemo(
-    () => [
+    () => {
+      const bundlePath = `${edgeRoot}/edge-bundle.json`;
+      return [
       {
         label: "Copy Export",
         icon: Download,
-        command: `cd ${EDGE_ROOT}\n./scripts/edge core export --cloud --output edge-bundle.json`
+        command: `cd "${edgeRoot}"\n./scripts/edge core export --cloud --output edge-bundle.json`
       },
       {
         label: "Copy Import",
         icon: GitBranch,
-        command: `cd ${CORE_ROOT}\n.venv/bin/python -m secopsai.cli edge import --bundle ${BUNDLE_PATH}`
+        command: `cd "${coreRoot}"\n.venv/bin/python -m secopsai.cli edge import --bundle "${bundlePath}"`
       },
       {
         label: "Copy Assets",
         icon: ListTree,
-        command: `cd ${CORE_ROOT}\n.venv/bin/python -m secopsai.cli graph assets`
+        command: `cd "${coreRoot}"\n.venv/bin/python -m secopsai.cli graph assets`
       },
       {
         label: "Copy Changes",
         icon: ListTree,
-        command: `cd ${CORE_ROOT}\n.venv/bin/python -m secopsai.cli graph changes`
+        command: `cd "${coreRoot}"\n.venv/bin/python -m secopsai.cli graph changes`
       },
       {
         label: "Copy Triage",
         icon: ShieldCheck,
-        command: `cd ${CORE_ROOT}\n.venv/bin/python -m secopsai.cli triage list --source secopsai_edge`
+        command: `cd "${coreRoot}"\n.venv/bin/python -m secopsai.cli triage list --source secopsai_edge`
       },
       {
         label: "Copy API Sync",
         icon: GitBranch,
-        command: `cd ${CORE_ROOT}\nSECOPSAI_EDGE_API_URL=${apiBaseUrl()} \\\nSECOPSAI_EDGE_ADMIN_TOKEN=<your-admin-token> \\\n.venv/bin/python -m secopsai.cli edge sync`
+        command: `cd "${coreRoot}"\nSECOPSAI_EDGE_API_URL=${apiBaseUrl()} \\\nSECOPSAI_EDGE_ADMIN_TOKEN=<your-admin-token> \\\n.venv/bin/python -m secopsai.cli edge sync`
       },
       {
         label: "Copy One-Step Sync",
         icon: GitBranch,
-        command: `cd ${EDGE_ROOT}\n./scripts/edge core sync --cloud --core-root ${CORE_ROOT} --output edge-bundle.json`
+        command: `cd "${edgeRoot}"\n./scripts/edge core sync --cloud --core-root "${coreRoot}" --output edge-bundle.json`
       },
       {
         label: "Copy Edge Test",
         icon: Terminal,
-        command: `cd ${EDGE_ROOT}\n./scripts/edge test`
+        command: `cd "${edgeRoot}"\n./scripts/edge test`
       },
       {
         label: "Copy Core Test",
         icon: Terminal,
-        command: `cd ${CORE_ROOT}\n.venv/bin/python -m pytest tests`
+        command: `cd "${coreRoot}"\n.venv/bin/python -m pytest tests`
       },
       {
         label: "Copy Support Bundle",
         icon: LifeBuoy,
-        command: `cd ${EDGE_ROOT}\n./scripts/edge support-bundle --cloud`
+        command: `cd "${edgeRoot}"\n./scripts/edge support-bundle --cloud`
       }
-    ],
-    []
+      ];
+    },
+    [coreRoot, edgeRoot]
   );
 
   async function copyCommand(label: string, command: string) {
@@ -115,6 +131,27 @@ export function CoreIntegrationPanel() {
           <Download size={16} aria-hidden={true} />
           Download Bundle
         </button>
+      </div>
+
+      <div className="mt-4 grid gap-3 md:grid-cols-2">
+        <label className="text-sm font-semibold text-ink">
+          Edge install path
+          <input
+            className="focus-ring mt-2 w-full rounded-md border border-line bg-white px-3 py-2 font-mono text-sm font-normal"
+            onChange={(event) => updateRoot(EDGE_ROOT_KEY, event.target.value, setEdgeRoot)}
+            spellCheck={false}
+            value={edgeRoot}
+          />
+        </label>
+        <label className="text-sm font-semibold text-ink">
+          Core install path
+          <input
+            className="focus-ring mt-2 w-full rounded-md border border-line bg-white px-3 py-2 font-mono text-sm font-normal"
+            onChange={(event) => updateRoot(CORE_ROOT_KEY, event.target.value, setCoreRoot)}
+            spellCheck={false}
+            value={coreRoot}
+          />
+        </label>
       </div>
 
       <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
