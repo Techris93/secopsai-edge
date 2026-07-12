@@ -22,7 +22,7 @@ The hosted API cannot see a private office LAN. The local worker must run on the
 
 ## Notification Boundary
 
-Notifications export normalized event summaries. Webhook targets receive event type, title, summary, severity/type when applicable, and minimized evidence.
+Notifications export normalized event summaries. Webhook targets receive event type, title, summary, severity/type when applicable, and minimized evidence. Every webhook is HMAC-SHA256 signed over its timestamp and exact request body. Delivery records retain retry metadata and minimized payload server-side; the dashboard/API delivery history deliberately excludes payload bodies.
 
 Email requires `SMTP_HOST`. Telegram requires `TELEGRAM_BOT_TOKEN`.
 

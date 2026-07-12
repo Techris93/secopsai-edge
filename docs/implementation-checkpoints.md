@@ -557,6 +557,118 @@ Known risks:
 - Unknown-email attempts use timing-resistant password verification but are not
   stored per address to avoid creating attacker-controlled account records.
 
+## Checkpoint 011 - Core Product Story and Public Surface Alignment
+
+Status: complete
+
+Branches:
+
+- Edge repo: `codex/pilot-hardening-foundation`
+- Core repo: `codex/core-edge-hygiene`
+
+Core commit:
+
+- `ac13462 Make SecOpsAI Edge a first-class Core module`
+
+Completed changes:
+
+- Added SecOpsAI Edge to Core README positioning and platform support.
+- Added Edge to the docs navigation, docs homepage, operator links, and Core
+  ownership model.
+- Removed founder-specific paths from Core Edge integration examples.
+- Updated both maintained public-site sources so Edge asset/Wi-Fi discovery is
+  visible in the hero, capabilities, terminal context, and platform matrix.
+- Added the product-story change to the Core changelog.
+
+Validation:
+
+- Strict MkDocs build completed successfully to a temporary output directory.
+- Focused Core integration and documentation tests: 9 passed.
+- Full Core test suite: 221 passed.
+- Public `www/` surface was inspected at `1440x1000` and `390x844` with
+  Playwright; the browser console reported zero errors and zero warnings.
+
+Known risks:
+
+- The main operator console is still the Edge pilot dashboard. Public wording
+  is unified, but canonical Core-backed web workflows remain a later product
+  architecture milestone.
+
+## Checkpoint 012 - OpenClaw Edge Context
+
+Status: complete
+
+Branch:
+
+- OpenClaw plugin: `codex/plugin-release-hygiene`
+
+Plugin commit:
+
+- `9fab71c Expose Edge graph context to OpenClaw`
+
+Completed changes:
+
+- Added read-only OpenClaw tools for Edge assets, graph changes, and Edge-origin
+  findings already synchronized into Core.
+- Extended finding validation to accept canonical `EDGE-...` identifiers.
+- Kept Edge/Core synchronization outside the plugin because write operations
+  require an explicit approval design rather than an implicit tool call.
+- Added executable contract tests for exact Core CLI arguments, database-path
+  propagation, result rendering, and Edge identifier handling.
+
+Validation:
+
+- Plugin TypeScript build and two contract tests passed.
+- npm audit reported 0 vulnerabilities.
+- The real Core CLI returned valid JSON for graph assets, graph changes, and
+  Edge-origin triage findings.
+
+## Checkpoint 013 - Reliable Notification Delivery
+
+Status: complete
+
+Branch:
+
+- Edge repo: `codex/pilot-hardening-foundation`
+
+Completed changes:
+
+- Replaced one-shot notification delivery with durable delivery records,
+  immediate recorded attempts, bounded backoff, and terminal failure state.
+- Added HMAC-SHA256 signatures, timestamps, event names, and delivery IDs to
+  every webhook request.
+- Added authenticated delivery-history, run-due, and manual-retry APIs without
+  exposing retained payload bodies in API responses.
+- Extended the existing Render scheduler to process both scan schedules and
+  notification retries every five minutes.
+- Added delivery history and one-click retry to Settings, with a degraded mode
+  that preserves endpoint administration if history retrieval fails.
+- Fixed the Settings mobile grid so long Core commands cannot widen the page,
+  and added the missing branded browser icon.
+- Documented server configuration and exact raw-body signature verification.
+
+Validation:
+
+- Notification tests cover signatures, site isolation, persisted retries,
+  retry exhaustion, payload exclusion, history, and manual retry.
+- `./scripts/edge test`: 51 backend/agent tests passed, 7 frontend test files
+  with 11 tests passed, the static production build passed, and npm audit
+  reported 0 vulnerabilities.
+- Render scheduler and Edge shell script syntax checks passed.
+- Playwright at `390x844` confirmed a 390px document width, contained Settings
+  panels, and zero browser console errors or warnings.
+
+Known risks:
+
+- Delivery execution still occurs in API/cron processes. A dedicated queue
+  worker becomes appropriate at higher tenant volume, but is not required for
+  bounded pilot traffic.
+- SMTP and Telegram credentials remain deployment-managed secrets and require
+  provider-specific production configuration.
+- Alembic reports `0006_notification_delivery` as the single head. The
+  PostgreSQL migration was not replayed locally because Docker was unavailable;
+  it must be verified by the normal Render migration step before pilot use.
+
 ## Completion Rules
 
 A checkpoint is complete only when:

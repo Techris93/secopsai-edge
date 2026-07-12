@@ -444,6 +444,31 @@ class NotificationEndpointOut(BaseModel):
     updated_at: datetime
 
 
+class NotificationDeliveryOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    endpoint_id: str
+    site_id: str | None = None
+    event_type: str
+    status: str
+    attempts: int
+    max_attempts: int
+    next_attempt_at: datetime
+    last_attempt_at: datetime | None = None
+    delivered_at: datetime | None = None
+    response_detail: str | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class NotificationRunResponse(BaseModel):
+    processed: int
+    delivered: int
+    retrying: int
+    failed: int
+
+
 class NotificationTestResponse(BaseModel):
     ok: bool
     detail: str

@@ -116,7 +116,7 @@ export function CoreIntegrationPanel() {
   }
 
   return (
-    <section className="rounded-lg border border-line bg-white p-4 shadow-panel xl:col-span-2">
+    <section className="min-w-0 rounded-lg border border-line bg-white p-4 shadow-panel xl:col-span-2">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2">
           <GitBranch size={20} className="text-sea" aria-hidden={true} />
@@ -133,8 +133,8 @@ export function CoreIntegrationPanel() {
         </button>
       </div>
 
-      <div className="mt-4 grid gap-3 md:grid-cols-2">
-        <label className="text-sm font-semibold text-ink">
+      <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
+        <label className="min-w-0 text-sm font-semibold text-ink">
           Edge install path
           <input
             className="focus-ring mt-2 w-full rounded-md border border-line bg-white px-3 py-2 font-mono text-sm font-normal"
@@ -143,7 +143,7 @@ export function CoreIntegrationPanel() {
             value={edgeRoot}
           />
         </label>
-        <label className="text-sm font-semibold text-ink">
+        <label className="min-w-0 text-sm font-semibold text-ink">
           Core install path
           <input
             className="focus-ring mt-2 w-full rounded-md border border-line bg-white px-3 py-2 font-mono text-sm font-normal"
@@ -154,7 +154,7 @@ export function CoreIntegrationPanel() {
         </label>
       </div>
 
-      <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+      <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
         {commands.map((item) => (
           <CommandButton
             key={item.label}
@@ -191,7 +191,7 @@ function CommandButton({ label, command, icon: Icon, disabled, onCopy }: Command
       type="button"
       onClick={() => onCopy(label, command)}
       disabled={disabled}
-      className="focus-ring grid min-h-32 grid-rows-[auto_1fr] rounded-md border border-line bg-paper p-3 text-left transition hover:border-sea hover:bg-white disabled:cursor-wait disabled:opacity-60"
+      className="focus-ring grid min-h-32 min-w-0 grid-rows-[auto_1fr] rounded-md border border-line bg-paper p-3 text-left transition hover:border-sea hover:bg-white disabled:cursor-wait disabled:opacity-60"
     >
       <span className="flex items-center gap-2 text-sm font-semibold text-ink">
         <Icon size={16} className="text-sea" aria-hidden={true} />

@@ -31,6 +31,7 @@ from secopsai_api.models import (
     BaselineRule,
     Finding,
     FindingNote,
+    NotificationDelivery,
     NotificationEndpoint,
     Report,
     ScanJob,
@@ -43,7 +44,7 @@ from secopsai_api.models import (
     WifiNetwork,
     utcnow,
 )
-from secopsai_api.notifications import notify_event, test_notification
+from secopsai_api.notifications import attempt_delivery, notify_event, process_due_deliveries, test_notification
 from secopsai_api.scheduling import compute_next_run_at, enqueue_due_schedules, normalize_frequency, pick_site_and_sensor
 from secopsai_api.schemas import (
     AssetDetailOut,
@@ -63,7 +64,9 @@ from secopsai_api.schemas import (
     FindingOut,
     HeartbeatIn,
     NotificationEndpointCreateRequest,
+    NotificationDeliveryOut,
     NotificationEndpointOut,
+    NotificationRunResponse,
     NotificationEndpointUpdateRequest,
     NotificationTestResponse,
     OnboardingStatusOut,
@@ -1730,19 +1733,84 @@ def send_test_notification(endpoint_id: str, db: Session = Depends(get_db)) -> N
     endpoint = db.get(NotificationEndpoint, endpoint_id)
     if endpoint is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Notification endpoint not found")
-    ok, detail = test_notification(endpoint)
-    endpoint.last_sent_at = utcnow() if ok else endpoint.last_sent_at
-    endpoint.last_error = None if ok else detail
-    endpoint.updated_at = utcnow()
+    delivery = test_notification(db, endpoint)
+    ok = delivery.status == "delivered"
+    detail = delivery.response_detail or delivery.status
     write_audit(
         db,
         "notification_endpoint.tested",
         resource_type="notification_endpoint",
         resource_id=endpoint.id,
-        details={"ok": ok, "detail": detail},
+        details={"ok": ok, "detail": detail, "delivery_id": delivery.id},
     )
     db.commit()
     return NotificationTestResponse(ok=ok, detail=detail)
+
+
+@app.get(
+    "/api/v1/notification-deliveries",
+    response_model=list[NotificationDeliveryOut],
+    dependencies=[Depends(require_admin)],
+)
+def list_notification_deliveries(
+    endpoint_id: str | None = None,
+    delivery_status: str | None = Query(default=None, alias="status", pattern="^(queued|retrying|delivered|failed)$"),
+    limit: int = Query(default=50, ge=1, le=250),
+    db: Session = Depends(get_db),
+) -> list[NotificationDelivery]:
+    query = select(NotificationDelivery)
+    if endpoint_id:
+        query = query.where(NotificationDelivery.endpoint_id == endpoint_id)
+    if delivery_status:
+        query = query.where(NotificationDelivery.status == delivery_status)
+    query = query.order_by(NotificationDelivery.created_at.desc()).limit(limit)
+    return list(db.scalars(query).all())
+
+
+@app.post(
+    "/api/v1/notification-deliveries/run-due",
+    response_model=NotificationRunResponse,
+    dependencies=[Depends(require_admin)],
+)
+def run_due_notification_deliveries(db: Session = Depends(get_db)) -> NotificationRunResponse:
+    result = process_due_deliveries(db)
+    write_audit(
+        db,
+        "notification_delivery.run_due",
+        resource_type="notification_delivery",
+        details=result,
+    )
+    db.commit()
+    return NotificationRunResponse(**result)
+
+
+@app.post(
+    "/api/v1/notification-deliveries/{delivery_id}/retry",
+    response_model=NotificationDeliveryOut,
+    dependencies=[Depends(require_admin)],
+)
+def retry_notification_delivery(delivery_id: str, db: Session = Depends(get_db)) -> NotificationDelivery:
+    delivery = db.get(NotificationDelivery, delivery_id)
+    if delivery is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Notification delivery not found")
+    endpoint = db.get(NotificationEndpoint, delivery.endpoint_id)
+    if endpoint is None or not endpoint.enabled:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Notification endpoint is disabled or unavailable")
+    delivery.status = "queued"
+    delivery.attempts = 0
+    delivery.next_attempt_at = utcnow()
+    delivery.response_detail = None
+    attempt_delivery(db, delivery, endpoint=endpoint, settings=settings)
+    write_audit(
+        db,
+        "notification_delivery.retried",
+        resource_type="notification_delivery",
+        resource_id=delivery.id,
+        details={"status": delivery.status, "attempts": delivery.attempts},
+    )
+    db.commit()
+    db.refresh(delivery)
+    return delivery
 
 
 @app.get("/api/v1/core/export", dependencies=[Depends(require_admin)])

@@ -402,3 +402,13 @@ export async function testNotificationEndpoint(endpointId: string): Promise<{ ok
     method: "POST"
   });
 }
+
+export async function listNotificationDeliveries(limit = 50): Promise<import("@/lib/types").NotificationDelivery[]> {
+  return requestJson<import("@/lib/types").NotificationDelivery[]>(`/api/v1/notification-deliveries?limit=${limit}`);
+}
+
+export async function retryNotificationDelivery(deliveryId: string): Promise<import("@/lib/types").NotificationDelivery> {
+  return requestJson<import("@/lib/types").NotificationDelivery>(`/api/v1/notification-deliveries/${deliveryId}/retry`, {
+    method: "POST"
+  });
+}

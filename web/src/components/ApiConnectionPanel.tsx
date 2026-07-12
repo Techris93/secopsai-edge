@@ -72,7 +72,7 @@ export function ApiConnectionPanel() {
   }
 
   return (
-    <section className="rounded-lg border border-line bg-white p-4 shadow-panel">
+    <section className="min-w-0 rounded-lg border border-line bg-white p-4 shadow-panel">
       <div className="flex items-center gap-2">
         <PlugZap size={20} className="text-sea" aria-hidden="true" />
         <h2 className="text-lg font-semibold text-ink">API Connection</h2>
@@ -82,19 +82,19 @@ export function ApiConnectionPanel() {
         the admin token path for scripts, cron, and emergency recovery.
       </p>
 
-      <dl className="mt-4 grid gap-2 text-sm sm:grid-cols-[8rem_1fr]">
+      <dl className="mt-4 grid grid-cols-1 gap-2 text-sm sm:grid-cols-[8rem_minmax(0,1fr)]">
         <dt className="font-medium text-zinc-600">API URL</dt>
-        <dd className="font-mono text-ink">{apiBaseUrl()}</dd>
+        <dd className="break-all font-mono text-ink">{apiBaseUrl()}</dd>
         <dt className="font-medium text-zinc-600">Session</dt>
         <dd className={connected ? "font-medium text-sea" : "font-medium text-amber"}>
           {connected ? `Connected${identity ? ` as ${identity}` : ""}` : "Not connected"}
         </dd>
       </dl>
 
-      <form className="mt-4 grid gap-3 sm:grid-cols-[1fr_auto]" onSubmit={onSubmit}>
-        <div className="grid gap-3 sm:grid-cols-2">
+      <form className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_auto]" onSubmit={onSubmit}>
+        <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
           <input
-            className="focus-ring rounded-md border border-line bg-white px-3 py-2 text-sm"
+            className="focus-ring min-w-0 w-full rounded-md border border-line bg-white px-3 py-2 text-sm"
             value={email}
             onChange={(event) => setEmail(event.target.value)}
             placeholder="admin@example.com"
@@ -118,7 +118,7 @@ export function ApiConnectionPanel() {
           </label>
         </div>
         <button
-          className="focus-ring inline-flex items-center justify-center gap-2 rounded-md bg-sea px-3 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:bg-zinc-300"
+          className="focus-ring inline-flex w-full items-center justify-center gap-2 rounded-md bg-sea px-3 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:bg-zinc-300 sm:w-auto"
           disabled={busy || email.trim().length === 0 || password.length === 0}
           type="submit"
         >
@@ -133,7 +133,7 @@ export function ApiConnectionPanel() {
           Use this only for local development, automation recovery, or bootstrap flows. Do not expose
           the admin token in browser environment variables.
         </p>
-        <form className="mt-3 grid gap-3 sm:grid-cols-[1fr_auto]" onSubmit={onLegacySubmit}>
+        <form className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_auto]" onSubmit={onLegacySubmit}>
           <label className="relative">
             <KeyRound
               className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500"

@@ -218,6 +218,22 @@ export type NotificationEndpoint = {
   updated_at: string;
 };
 
+export type NotificationDelivery = {
+  id: string;
+  endpoint_id: string;
+  site_id?: string | null;
+  event_type: string;
+  status: "queued" | "retrying" | "delivered" | "failed" | string;
+  attempts: number;
+  max_attempts: number;
+  next_attempt_at: string;
+  last_attempt_at?: string | null;
+  delivered_at?: string | null;
+  response_detail?: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export type OnboardingStatus = {
   api_connected: boolean;
   sites_created: boolean;

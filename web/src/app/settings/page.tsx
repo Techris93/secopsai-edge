@@ -25,10 +25,10 @@ export default function SettingsPage() {
         description="Use these operational defaults to run the MacBook MVP safely before packaging it as a Raspberry Pi appliance."
       />
 
-      <div className="grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
+      <div className="grid min-w-0 grid-cols-1 gap-6 xl:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
         <ApiConnectionPanel />
 
-        <section className="rounded-lg border border-line bg-white p-4 shadow-panel">
+        <section className="min-w-0 rounded-lg border border-line bg-white p-4 shadow-panel">
           <div className="flex items-center gap-2">
             <ShieldCheck size={20} className="text-sea" aria-hidden="true" />
             <h2 className="text-lg font-semibold text-ink">Safety Controls</h2>

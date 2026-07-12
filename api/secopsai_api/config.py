@@ -57,6 +57,11 @@ class Settings:
     smtp_password: str | None = os.getenv("SMTP_PASSWORD") or None
     smtp_from: str = os.getenv("SMTP_FROM", "alerts@secopsai.local")
     telegram_bot_token: str | None = os.getenv("TELEGRAM_BOT_TOKEN") or None
+    webhook_signing_secret: str = os.getenv("SECOPSAI_WEBHOOK_SIGNING_SECRET") or os.getenv(
+        "SECOPSAI_TOKEN_SECRET", "dev-token-secret"
+    )
+    notification_max_attempts: int = int(os.getenv("SECOPSAI_NOTIFICATION_MAX_ATTEMPTS", "4"))
+    notification_batch_size: int = int(os.getenv("SECOPSAI_NOTIFICATION_BATCH_SIZE", "50"))
 
     def __post_init__(self) -> None:
         object.__setattr__(

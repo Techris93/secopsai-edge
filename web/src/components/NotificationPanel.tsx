@@ -1,15 +1,17 @@
 "use client";
 
-import { Bell, Send, Trash2 } from "lucide-react";
+import { Bell, RefreshCw, Send, Trash2 } from "lucide-react";
 import { FormEvent, useEffect, useState } from "react";
 import {
   createNotificationEndpoint,
   deleteNotificationEndpoint,
   fetchDashboardData,
+  listNotificationDeliveries,
+  retryNotificationDelivery,
   testNotificationEndpoint,
   updateNotificationEndpoint
 } from "@/lib/api";
-import type { DashboardData, NotificationEndpoint } from "@/lib/types";
+import type { DashboardData, NotificationDelivery, NotificationEndpoint } from "@/lib/types";
 
 const events = [
   "scan_completed",
@@ -21,6 +23,7 @@ const events = [
 
 export function NotificationPanel() {
   const [data, setData] = useState<DashboardData | null>(null);
+  const [deliveries, setDeliveries] = useState<NotificationDelivery[]>([]);
   const [message, setMessage] = useState<string | null>(null);
   const [form, setForm] = useState({
     name: "Pilot webhook",
@@ -34,6 +37,15 @@ export function NotificationPanel() {
   async function load() {
     const result = await fetchDashboardData();
     setData(result.data);
+    if (result.mode !== "live") {
+      setDeliveries([]);
+      return;
+    }
+    try {
+      setDeliveries(await listNotificationDeliveries());
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to load delivery history");
+    }
   }
 
   useEffect(() => {
@@ -63,13 +75,13 @@ export function NotificationPanel() {
   }
 
   return (
-    <section className="rounded-lg border border-line bg-white p-4 shadow-panel xl:col-span-2">
+    <section className="min-w-0 rounded-lg border border-line bg-white p-4 shadow-panel xl:col-span-2">
       <div className="flex items-center gap-2">
         <Bell size={20} className="text-sea" aria-hidden="true" />
         <h2 className="text-lg font-semibold text-ink">Notifications</h2>
       </div>
 
-      <form className="mt-4 grid gap-3 lg:grid-cols-[1fr_9rem_1fr_12rem_auto]" onSubmit={onSubmit}>
+      <form className="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1fr)_9rem_minmax(0,1fr)_12rem_auto]" onSubmit={onSubmit}>
         <input
           className="focus-ring rounded-md border border-line bg-white px-3 py-2 text-sm"
           value={form.name}
@@ -127,8 +139,76 @@ export function NotificationPanel() {
         ))}
         {!(data?.notifications ?? []).length ? <p className="p-3 text-sm text-zinc-600">No notification endpoints configured.</p> : null}
       </div>
+      <div className="mt-5 flex items-center justify-between gap-3">
+        <div>
+          <h3 className="text-sm font-semibold text-ink">Delivery history</h3>
+          <p className="text-xs text-zinc-600">Signed webhook, email, and Telegram attempts are retained with bounded retry state.</p>
+        </div>
+        <button className="ButtonSecondary" onClick={load} type="button">
+          <RefreshCw size={16} aria-hidden="true" />
+          Refresh
+        </button>
+      </div>
+      <div className="mt-3 overflow-x-auto rounded-md border border-line">
+        <table className="min-w-full text-left text-sm">
+          <thead className="bg-paper text-xs uppercase text-zinc-600">
+            <tr>
+              <th className="px-3 py-2">Event</th>
+              <th className="px-3 py-2">Status</th>
+              <th className="px-3 py-2">Attempts</th>
+              <th className="px-3 py-2">Result</th>
+              <th className="px-3 py-2"><span className="sr-only">Actions</span></th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-line">
+            {deliveries.map((delivery) => (
+              <DeliveryRow key={delivery.id} delivery={delivery} onChanged={load} onMessage={setMessage} />
+            ))}
+            {!deliveries.length ? (
+              <tr><td className="px-3 py-4 text-zinc-600" colSpan={5}>No delivery attempts recorded yet.</td></tr>
+            ) : null}
+          </tbody>
+        </table>
+      </div>
       {message ? <p className="mt-3 rounded-md bg-paper px-3 py-2 text-sm text-ink">{message}</p> : null}
     </section>
+  );
+}
+
+function DeliveryRow({
+  delivery,
+  onChanged,
+  onMessage
+}: {
+  delivery: NotificationDelivery;
+  onChanged: () => Promise<void>;
+  onMessage: (value: string) => void;
+}) {
+  async function retry() {
+    try {
+      const updated = await retryNotificationDelivery(delivery.id);
+      onMessage(`Delivery ${updated.status}`);
+      await onChanged();
+    } catch (error) {
+      onMessage(error instanceof Error ? error.message : "Unable to retry delivery");
+    }
+  }
+
+  return (
+    <tr>
+      <td className="whitespace-nowrap px-3 py-3 font-medium text-ink">{delivery.event_type}</td>
+      <td className="px-3 py-3"><span className="rounded border border-line bg-paper px-2 py-1 text-xs font-semibold uppercase">{delivery.status}</span></td>
+      <td className="whitespace-nowrap px-3 py-3 text-zinc-700">{delivery.attempts}/{delivery.max_attempts}</td>
+      <td className="max-w-md px-3 py-3 text-xs text-zinc-600">{delivery.response_detail ?? "Waiting for delivery"}</td>
+      <td className="px-3 py-3 text-right">
+        {delivery.status === "failed" ? (
+          <button className="ButtonSecondary" onClick={retry} type="button">
+            <RefreshCw size={16} aria-hidden="true" />
+            Retry
+          </button>
+        ) : null}
+      </td>
+    </tr>
   );
 }
 

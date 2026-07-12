@@ -29,6 +29,10 @@ services:
         value: "5"
       - key: SECOPSAI_LOGIN_LOCKOUT_SECONDS
         value: "900"
+      - key: SECOPSAI_WEBHOOK_SIGNING_SECRET
+        generateValue: true
+      - key: SECOPSAI_NOTIFICATION_MAX_ATTEMPTS
+        value: "4"
       - key: AI_PROVIDER
         value: mock
       - key: AI_API_KEY
