@@ -21,6 +21,7 @@ bearer = HTTPBearer(auto_error=False)
 DASHBOARD_SESSION_PREFIX = "secopsai_session"
 PASSWORD_HASH_PREFIX = "pbkdf2_sha256"
 PASSWORD_HASH_ITERATIONS = 260_000
+DUMMY_PASSWORD_HASH = f"{PASSWORD_HASH_PREFIX}${PASSWORD_HASH_ITERATIONS}$secopsai-dummy$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
 
 
 def generate_sensor_token() -> str:
@@ -116,7 +117,9 @@ def verify_dashboard_session(token: str) -> bool:
 def require_admin(
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer),
 ) -> None:
-    get_dashboard_auth_context(credentials)
+    context = get_dashboard_auth_context(credentials)
+    if str(context.get("role") or "").lower() not in {"owner", "admin"}:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Administrator role required")
 
 
 def get_dashboard_auth_context(

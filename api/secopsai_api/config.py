@@ -39,6 +39,8 @@ class Settings:
     dashboard_session_ttl_seconds: int = int(
         os.getenv("SECOPSAI_DASHBOARD_SESSION_TTL_SECONDS", "28800")
     )
+    login_max_attempts: int = int(os.getenv("SECOPSAI_LOGIN_MAX_ATTEMPTS", "5"))
+    login_lockout_seconds: int = int(os.getenv("SECOPSAI_LOGIN_LOCKOUT_SECONDS", "900"))
     auto_create_tables: bool = _bool_env("SECOPSAI_AUTO_CREATE_TABLES", True)
     cors_origins: list[str] = None  # type: ignore[assignment]
     ai_provider: str = os.getenv("AI_PROVIDER", "mock")

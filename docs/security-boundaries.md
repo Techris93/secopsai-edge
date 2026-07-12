@@ -32,6 +32,8 @@ Dashboard auth should use a short-lived browser session created from a dashboard
 server-side admin token remains available for automation, cron, Core sync, and emergency recovery.
 Sensor tokens are separate from dashboard auth and can be rotated from the Sites page.
 
+Dashboard bootstrap passwords must contain at least 12 characters. Repeated failures are stored on the user record and lock the account temporarily after five attempts by default. Lockouts and blocked attempts are audit logged. Admin-protected endpoints explicitly require an `owner` or `admin` role; a valid viewer session is not sufficient.
+
 ## Baseline Boundary
 
 Approved baselines are scoped to one site and a stable entity identifier. The API rejects empty or broad matchers, restricts each baseline kind to compatible finding types, records changes in the audit log, and reopens baseline-acknowledged findings when a rule is disabled. Trusting a BSSID does not approve weak or open encryption unless an operator deliberately creates that separate policy through the API.

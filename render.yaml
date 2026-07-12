@@ -25,6 +25,10 @@ services:
         generateValue: true
       - key: SECOPSAI_DASHBOARD_SESSION_TTL_SECONDS
         value: "28800"
+      - key: SECOPSAI_LOGIN_MAX_ATTEMPTS
+        value: "5"
+      - key: SECOPSAI_LOGIN_LOCKOUT_SECONDS
+        value: "900"
       - key: AI_PROVIDER
         value: mock
       - key: AI_API_KEY

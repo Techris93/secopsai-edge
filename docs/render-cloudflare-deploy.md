@@ -25,6 +25,8 @@ The repository includes `render.yaml`.
    - `SECOPSAI_ADMIN_TOKEN`: a long random automation/recovery token.
    - `SECOPSAI_DASHBOARD_ADMIN_EMAIL`: the first dashboard admin user email.
    - `SECOPSAI_DASHBOARD_ADMIN_PASSWORD`: a long random first dashboard admin password.
+   - `SECOPSAI_LOGIN_MAX_ATTEMPTS`: failed attempts before temporary lockout; default `5`.
+   - `SECOPSAI_LOGIN_LOCKOUT_SECONDS`: lockout duration; default `900` seconds.
    - `SECOPSAI_CORS_ORIGINS`: your Cloudflare Pages URL, plus local dev if needed.
    - `AI_API_KEY`: optional; add an OpenAI API key to enable live reports.
 4. Apply the Blueprint.

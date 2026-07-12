@@ -32,6 +32,16 @@ export type ApiResult<T> = {
   error?: string;
 };
 
+async function responseError(response: Response): Promise<Error> {
+  try {
+    const payload = (await response.json()) as { detail?: string };
+    if (payload.detail) return new Error(payload.detail);
+  } catch {
+    // Non-JSON responses fall back to the HTTP status below.
+  }
+  return new Error(`${response.status} ${response.statusText}`);
+}
+
 async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
   const sessionToken = getDashboardSessionToken();
   if (!sessionToken) {
@@ -48,7 +58,7 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
     cache: "no-store"
   });
   if (!response.ok) {
-    throw new Error(`${response.status} ${response.statusText}`);
+    throw await responseError(response);
   }
   return response.json() as Promise<T>;
 }
@@ -76,7 +86,7 @@ export async function loginDashboard(adminToken: string): Promise<void> {
   });
 
   if (!response.ok) {
-    throw new Error(`${response.status} ${response.statusText}`);
+    throw await responseError(response);
   }
 
   const payload = (await response.json()) as { access_token: string };
@@ -92,7 +102,7 @@ export async function loginDashboardUser(email: string, password: string): Promi
   });
 
   if (!response.ok) {
-    throw new Error(`${response.status} ${response.statusText}`);
+    throw await responseError(response);
   }
 
   const payload = (await response.json()) as { access_token: string; user?: User | null };
@@ -175,7 +185,7 @@ export async function downloadReportHtml(reportId: string): Promise<Blob> {
     cache: "no-store"
   });
   if (!response.ok) {
-    throw new Error(`${response.status} ${response.statusText}`);
+    throw await responseError(response);
   }
   return response.blob();
 }
@@ -193,7 +203,7 @@ export async function downloadCoreBundle(): Promise<Blob> {
     cache: "no-store"
   });
   if (!response.ok) {
-    throw new Error(`${response.status} ${response.statusText}`);
+    throw await responseError(response);
   }
   return response.blob();
 }

@@ -1,6 +1,8 @@
 from collections.abc import Generator
 from dataclasses import replace
+from datetime import timedelta
 
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
@@ -9,8 +11,8 @@ from sqlalchemy.pool import StaticPool
 from secopsai_api.database import get_db
 import secopsai_api.main as main_module
 from secopsai_api.main import app, bootstrap_dashboard_admin
-from secopsai_api.models import Base, User
-from secopsai_api.security import hash_password, verify_password
+from secopsai_api.models import AuditLog, Base, User, utcnow
+from secopsai_api.security import create_dashboard_session, hash_password, verify_password
 
 
 def make_session() -> Session:
@@ -116,3 +118,84 @@ def test_bootstrap_dashboard_admin_creates_user(monkeypatch) -> None:
     user = db.query(User).filter(User.email == "pilot@example.com").one()
     assert user.role == "admin"
     assert verify_password("pilot-password", user.password_hash)
+
+
+def test_dashboard_login_locks_after_repeated_failures_and_recovers(monkeypatch) -> None:
+    db = make_session()
+    user = User(email="admin@example.com", password_hash=hash_password("secret-password"), role="admin")
+    db.add(user)
+    db.commit()
+    monkeypatch.setattr(
+        main_module,
+        "settings",
+        replace(main_module.settings, login_max_attempts=3, login_lockout_seconds=120),
+    )
+    client = make_client(db)
+
+    try:
+        statuses = [
+            client.post(
+                "/api/v1/auth/login",
+                json={"email": "admin@example.com", "password": "wrong-password"},
+            ).status_code
+            for _ in range(3)
+        ]
+        assert statuses == [403, 403, 429]
+
+        db.refresh(user)
+        assert user.failed_login_count == 3
+        assert user.locked_until is not None
+        blocked = client.post(
+            "/api/v1/auth/login",
+            json={"email": "admin@example.com", "password": "secret-password"},
+        )
+        assert blocked.status_code == 429
+
+        user.locked_until = utcnow() - timedelta(seconds=1)
+        db.commit()
+        recovered = client.post(
+            "/api/v1/auth/login",
+            json={"email": "admin@example.com", "password": "secret-password"},
+        )
+        assert recovered.status_code == 200
+        db.refresh(user)
+        assert user.failed_login_count == 0
+        assert user.locked_until is None
+
+        actions = {row.action for row in db.query(AuditLog).all()}
+        assert {"auth.login_failed", "auth.login_locked", "auth.login_blocked", "auth.login"}.issubset(actions)
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_admin_endpoints_reject_viewer_session() -> None:
+    db = make_session()
+    client = make_client(db)
+    viewer_token = create_dashboard_session(subject="viewer@example.com", role="viewer")
+
+    try:
+        response = client.get(
+            "/api/v1/sites",
+            headers={"Authorization": f"Bearer {viewer_token}"},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Administrator role required"
+
+
+def test_bootstrap_dashboard_admin_rejects_short_password(monkeypatch) -> None:
+    db = make_session()
+    monkeypatch.setattr(
+        main_module,
+        "settings",
+        replace(
+            main_module.settings,
+            dashboard_admin_email="pilot@example.com",
+            dashboard_admin_password="too-short",
+        ),
+    )
+
+    with pytest.raises(RuntimeError, match="at least 12 characters"):
+        bootstrap_dashboard_admin(db)

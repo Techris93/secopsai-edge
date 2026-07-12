@@ -98,6 +98,7 @@ from secopsai_api.security import (
     generate_sensor_token,
     hash_password,
     hash_secret,
+    DUMMY_PASSWORD_HASH,
     require_admin,
     require_sensor_for_path,
     verify_password,
@@ -119,6 +120,8 @@ def bootstrap_dashboard_admin(db: Session) -> None:
     email = settings.dashboard_admin_email.strip().lower()
     if not email:
         return
+    if len(settings.dashboard_admin_password) < 12:
+        raise RuntimeError("SECOPSAI_DASHBOARD_ADMIN_PASSWORD must be at least 12 characters")
     user = db.scalar(select(User).where(func.lower(User.email) == email))
     password_hash = hash_password(settings.dashboard_admin_password)
     if user is None:
@@ -587,8 +590,30 @@ def create_session(payload: DashboardLoginRequest) -> DashboardSessionResponse:
 def login_dashboard_user(payload: DashboardUserLoginRequest, db: Session = Depends(get_db)) -> DashboardSessionResponse:
     email = payload.email.strip().lower()
     user = db.scalar(select(User).where(func.lower(User.email) == email))
-    if user is None or not verify_password(payload.password, user.password_hash):
+    if user is None:
+        verify_password(payload.password, DUMMY_PASSWORD_HASH)
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid email or password")
+    if account_is_locked(user):
+        write_audit(db, "auth.login_blocked", user_id=user.id, resource_type="user", resource_id=user.id)
+        db.commit()
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="Login temporarily unavailable")
+    if not verify_password(payload.password, user.password_hash):
+        user.failed_login_count += 1
+        action = "auth.login_failed"
+        if user.failed_login_count >= settings.login_max_attempts:
+            user.locked_until = utcnow() + timedelta(seconds=settings.login_lockout_seconds)
+            action = "auth.login_locked"
+        write_audit(db, action, user_id=user.id, resource_type="user", resource_id=user.id)
+        db.commit()
+        status_code = (
+            status.HTTP_429_TOO_MANY_REQUESTS
+            if action == "auth.login_locked"
+            else status.HTTP_403_FORBIDDEN
+        )
+        detail = "Login temporarily unavailable" if status_code == 429 else "Invalid email or password"
+        raise HTTPException(status_code=status_code, detail=detail)
+    user.failed_login_count = 0
+    user.locked_until = None
     user.last_login_at = utcnow()
     write_audit(db, "auth.login", user_id=user.id, resource_type="user", resource_id=user.id)
     db.commit()
@@ -598,6 +623,15 @@ def login_dashboard_user(payload: DashboardUserLoginRequest, db: Session = Depen
         expires_in=settings.dashboard_session_ttl_seconds,
         user=user,
     )
+
+
+def account_is_locked(user: User) -> bool:
+    if user.locked_until is None:
+        return False
+    now = utcnow()
+    if user.locked_until.tzinfo is None:
+        now = now.replace(tzinfo=None)
+    return user.locked_until > now
 
 
 @app.get("/api/v1/auth/me", response_model=AuthMeOut)

@@ -513,6 +513,50 @@ Known risks:
   administration into dedicated routes is a later information-architecture
   improvement, not a pilot blocker.
 
+## Checkpoint 010 - Dashboard Authentication Resilience
+
+Status: complete
+
+Branch:
+
+- Edge repo: `codex/pilot-hardening-foundation`
+
+Scope:
+
+- Prevent unlimited password attempts against the public dashboard login.
+- Enforce administrator roles at protected API boundaries.
+- Improve dashboard API error messages without exposing credentials.
+
+Completed changes:
+
+- Added persistent `failed_login_count` and `locked_until` user fields with
+  Alembic revision `0005_auth_lockout`.
+- Added configurable attempt and lockout thresholds, defaulting to five attempts
+  and fifteen minutes.
+- Added generic invalid-login behavior, a dummy password verification path for
+  unknown users, and audit events for failure, lockout, blocked login, and
+  successful recovery.
+- Added a 12-character minimum for the environment-bootstrapped admin password.
+- Enforced `owner` or `admin` role in `require_admin`.
+- Dashboard API errors now prefer safe FastAPI `detail` messages, including the
+  temporary-lockout explanation.
+
+Validation:
+
+- Focused authentication and security tests: 10 passed.
+- Tests cover lockout, correct-password blocking during lockout, expiry recovery,
+  audit events, viewer rejection, and weak bootstrap-password rejection.
+- `./scripts/edge test`: 47 backend/agent tests passed, 6 frontend test files
+  with 10 tests passed, the static production build passed, and npm audit
+  reported 0 vulnerabilities.
+
+Known risks:
+
+- Sessions are signed and expire, but session revocation, password reset, MFA,
+  invitations, and organization membership remain SaaS-auth milestones.
+- Unknown-email attempts use timing-resistant password verification but are not
+  stored per address to avoid creating attacker-controlled account records.
+
 ## Completion Rules
 
 A checkpoint is complete only when:
