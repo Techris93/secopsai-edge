@@ -48,6 +48,8 @@ Usage:
   ./scripts/edge cloud configure <url> Save hosted Render API URL
   ./scripts/edge cloud register        Register this sensor against the hosted API
   ./scripts/edge test                  Run backend, frontend, build, and audit checks
+  ./scripts/edge support-bundle [--cloud]
+                                      Create a redacted diagnostics bundle for support
   ./scripts/edge status [--cloud]      Check local or hosted API status
   ./scripts/edge stop-db               Stop Postgres
 
@@ -915,6 +917,98 @@ core() {
   esac
 }
 
+redact_support_stream() {
+  sed -E \
+    -e 's/(Bearer )[A-Za-z0-9._~-]+/\1[redacted]/g' \
+    -e 's/((TOKEN|KEY|PASSWORD|SECRET)[=:][[:space:]]*)[^[:space:]]+/\1[redacted]/g' \
+    -e 's/((token|key|password|secret)[=:][[:space:]]*)[^[:space:]]+/\1[redacted]/g' \
+    -e 's/([[:xdigit:]]{2}:){5}[[:xdigit:]]{2}/[redacted-hardware-id]/g'
+}
+
+support_bundle() {
+  profile="local"
+  output=""
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --cloud)
+        profile="cloud"
+        ;;
+      --output|-o)
+        shift || true
+        output="${1:-}"
+        [ -n "$output" ] || fail "--output requires a path"
+        ;;
+      *)
+        fail "Unknown support-bundle option: $1"
+        ;;
+    esac
+    shift || true
+  done
+
+  if [ -z "$output" ]; then
+    output="$ROOT_DIR/secopsai-edge-support-$(date -u +%Y%m%dT%H%M%SZ).txt"
+  fi
+  output="$(resolve_path "$output")"
+  mkdir -p "$(dirname "$output")"
+  umask 077
+
+  {
+    printf "SecOpsAI Edge Support Bundle\n"
+    printf "Generated (UTC): %s\n" "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    printf "Profile: %s\n" "$profile"
+    printf "Root: %s\n" "${ROOT_DIR/#$HOME/~}"
+    printf "\n== Release ==\n"
+    git -C "$ROOT_DIR" rev-parse --short HEAD 2>/dev/null || true
+    git -C "$ROOT_DIR" branch --show-current 2>/dev/null || true
+    git -C "$ROOT_DIR" status --short 2>/dev/null || true
+
+    printf "\n== Platform ==\n"
+    uname -a 2>/dev/null || true
+    sw_vers 2>/dev/null || true
+
+    printf "\n== Dependencies ==\n"
+    printf "nmap: %s\n" "$(command -v nmap 2>/dev/null || printf 'missing')"
+    nmap --version 2>/dev/null | head -n 1 || true
+    printf "python: %s\n" "$(command -v python3 2>/dev/null || printf 'missing')"
+    python3 --version 2>/dev/null || true
+    printf "node: %s\n" "$(command -v node 2>/dev/null || printf 'missing')"
+    node --version 2>/dev/null || true
+    printf "docker: %s\n" "$(command -v docker 2>/dev/null || printf 'missing')"
+    docker --version 2>/dev/null || true
+
+    printf "\n== Configuration Presence ==\n"
+    [ -f "$ENV_FILE" ] && printf ".env: present\n" || printf ".env: missing\n"
+    [ -f "$SENSOR_ENV_FILE" ] && printf ".sensor.env: present\n" || printf ".sensor.env: missing\n"
+    [ -f "$CLOUD_ENV_FILE" ] && printf ".cloud.env: present\n" || printf ".cloud.env: missing\n"
+    [ -f "$CLOUD_SENSOR_ENV_FILE" ] && printf ".cloud-sensor.env: present\n" || printf ".cloud-sensor.env: missing\n"
+
+    printf "\n== Service Status ==\n"
+    if [ "$profile" = "cloud" ]; then
+      load_cloud_env
+      if [ -n "${SECOPSAI_CLOUD_API_URL:-}" ]; then
+        if curl -fsS "${SECOPSAI_CLOUD_API_URL%/}/healthz" >/dev/null 2>&1; then
+          printf "API:       running at %s\n" "${SECOPSAI_CLOUD_API_URL%/}"
+        else
+          printf "API:       not responding at %s\n" "${SECOPSAI_CLOUD_API_URL%/}"
+        fi
+      else
+        printf "API:       cloud URL is not configured\n"
+      fi
+    else
+      status || true
+    fi
+    worker_service_status || true
+
+    printf "\n== Recent Worker Logs ==\n"
+    worker_service_logs || true
+  } 2>&1 | redact_support_stream > "$output"
+
+  chmod 600 "$output"
+  info "Created redacted support bundle"
+  printf "%s\n" "$output"
+  warn "Review the bundle before sharing; local paths and network ranges may still be present."
+}
+
 status() {
   profile="local"
   for arg in "$@"; do
@@ -1007,6 +1101,7 @@ main() {
     schedules) schedules "$@" ;;
     core) core "$@" ;;
     test) run_tests ;;
+    support-bundle) support_bundle "$@" ;;
     status) status "$@" ;;
     *) usage; fail "Unknown command: $command" ;;
   esac

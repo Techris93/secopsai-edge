@@ -66,6 +66,18 @@ This runs backend and agent tests, frontend tests, a production dashboard build,
 
 Baseline changes are audit logged. Disabling a rule reopens findings that were acknowledged by that rule. A trusted BSSID does not suppress weak/open-encryption findings.
 
+## Audit And Support
+
+Open Audit Log in the dashboard to review recent operator and sensor changes. Search by action, resource, identifier, or event details.
+
+Create a redacted diagnostics bundle when a sensor needs support:
+
+```bash
+./scripts/edge support-bundle --cloud
+```
+
+The command records release, platform, dependency, API, worker-service, and recent worker-log status without copying credential files or printing tokens. The output is created with owner-only permissions. Review local paths and network ranges before sharing it.
+
 ## Hosted API Workflow
 
 After deploying the API to Render and the dashboard to Cloudflare Pages:

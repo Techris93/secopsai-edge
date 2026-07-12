@@ -8,6 +8,7 @@ import {
   LayoutDashboard,
   MapPinned,
   Radar,
+  ScrollText,
   Server,
   Settings,
   ShieldAlert,
@@ -26,6 +27,7 @@ const navItems = [
   { href: "/findings", label: "Findings", icon: ShieldAlert },
   { href: "/schedules", label: "Schedules", icon: CalendarClock },
   { href: "/reports", label: "Reports", icon: FileText },
+  { href: "/audit", label: "Audit Log", icon: ScrollText },
   { href: "/settings", label: "Settings", icon: Settings }
 ];
 

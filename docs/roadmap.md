@@ -14,6 +14,8 @@ Completed scope:
 - Splunk HEC export.
 - Hosted remote scan queue with local MacBook worker execution.
 - Sensor online/offline visibility, worker heartbeat, job cancel/retry, and stale job recovery.
+- Site-scoped asset, service, and trusted-BSSID baselines.
+- Dashboard audit-log review and redacted support bundles.
 
 Pilot-readiness checks:
 
@@ -28,7 +30,7 @@ Pilot-readiness checks:
 
 - Validate TL-WN722N support on macOS and Raspberry Pi.
 - Improve Wi-Fi scanner adapters.
-- Add authorized SSID/BSSID baseline management.
+- Expand authorized SSID/BSSID baselines into a full rogue-AP review workflow.
 - Add rogue AP review workflow.
 
 ## Phase 3: Behavior Analytics

@@ -5,7 +5,7 @@ from html import escape
 from ipaddress import ip_address, ip_network
 from datetime import datetime, timedelta
 
-from fastapi import Depends, FastAPI, Header, HTTPException, status
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from sqlalchemy import func, select
@@ -26,6 +26,7 @@ from secopsai_api.detection import ingest_scan
 from secopsai_api.models import (
     Asset,
     AssetObservation,
+    AuditLog,
     Base,
     BaselineRule,
     Finding,
@@ -48,6 +49,7 @@ from secopsai_api.schemas import (
     AssetDetailOut,
     AssetTimelineEventOut,
     AssetOut,
+    AuditLogOut,
     BaselineFromEntityRequest,
     BaselineRuleCreateRequest,
     BaselineRuleOut,
@@ -1429,6 +1431,24 @@ def list_findings(
     if type_filter:
         query = query.where(Finding.type == type_filter)
     return list(db.scalars(query).all())
+
+
+@app.get("/api/v1/audit-logs", response_model=list[AuditLogOut], dependencies=[Depends(require_admin)])
+def list_audit_logs(
+    action: str | None = None,
+    resource_type: str | None = None,
+    sensor_id: str | None = None,
+    limit: int = Query(default=100, ge=1, le=500),
+    db: Session = Depends(get_db),
+) -> list[AuditLog]:
+    query = select(AuditLog).order_by(AuditLog.created_at.desc())
+    if action:
+        query = query.where(AuditLog.action.ilike(f"%{action}%"))
+    if resource_type:
+        query = query.where(AuditLog.resource_type == resource_type)
+    if sensor_id:
+        query = query.where(AuditLog.sensor_id == sensor_id)
+    return list(db.scalars(query.limit(limit)).all())
 
 
 @app.get("/api/v1/findings/{finding_id}", response_model=FindingDetailOut, dependencies=[Depends(require_admin)])

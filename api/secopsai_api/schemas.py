@@ -447,3 +447,16 @@ class NotificationEndpointOut(BaseModel):
 class NotificationTestResponse(BaseModel):
     ok: bool
     detail: str
+
+
+class AuditLogOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    user_id: str | None = None
+    sensor_id: str | None = None
+    action: str
+    resource_type: str | None = None
+    resource_id: str | None = None
+    details: dict[str, Any]
+    created_at: datetime

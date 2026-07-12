@@ -27,6 +27,8 @@ Raw scanner output is intentionally not submitted to the backend by the default 
 
 FastAPI owns ingestion, inventory merge logic, finding generation, reporting, and exports. PostgreSQL is the durable store. Alembic migrations define the initial schema.
 
+The dashboard exposes the append-only audit stream for pilot operations. The local helper can create an owner-readable diagnostics bundle containing release, dependency, API, worker, and redacted log state for support recovery.
+
 Core tables:
 
 - `sites`

@@ -25,6 +25,7 @@ SecOpsAI Edge discovers internal network assets, records service exposure, monit
 10. Open the report detail page, copy the executive summary or client brief, print, or download the report.
 11. Configure webhook/email/Telegram notifications.
 12. Sync Edge findings into SecOpsAI Core when needed.
+13. Confirm important operator actions appear in Audit Log.
 
 ## Establish The Baseline
 
@@ -70,3 +71,5 @@ Sensitive evidence fields such as MAC address, BSSID, and hostnames are redacted
 Rotate a sensor token from the Sites page when credentials are lost or leaked. After rotating, update `.cloud-sensor.env` on the sensor and restart the worker.
 
 Disable retired sensors from the Sites page. Queued jobs for disabled sensors are canceled.
+
+For a support-safe operational snapshot, run `./scripts/edge support-bundle --cloud` or copy the command from Settings. Review the generated file before sharing because local paths and authorized network ranges can remain visible.

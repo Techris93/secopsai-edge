@@ -423,6 +423,53 @@ Known risks:
 - The UI creates safe default rule types. Advanced custom rule selection is API
   only until policy administration is designed.
 
+## Checkpoint 008 - Change Correlation, Audit, and Support Recovery
+
+Status: complete
+
+Branch:
+
+- Edge repo: `codex/pilot-hardening-foundation`
+
+Scope:
+
+- Fix service-change correlation so multiple ports on one asset remain distinct.
+- Add an authenticated operator audit-log API and dashboard screen.
+- Add a redacted local support-bundle command and a clickable copy-command
+  action in Settings.
+
+Completed changes:
+
+- Port-change correlation now includes IP, port, and protocol rather than
+  collapsing all generic port-change titles for one asset.
+- Added `GET /api/v1/audit-logs` with action, resource, sensor, and bounded
+  result filtering.
+- Added the Audit Log operator screen with search and resource filtering.
+- Added `./scripts/edge support-bundle [--cloud] [--output ...]` with release,
+  platform, dependency, API, worker, and recent-log diagnostics.
+- Support bundles redact bearer tokens, common credential fields, and hardware
+  identifiers, use owner-only file permissions, and never copy env-file
+  contents.
+- Added a `Copy Support Bundle` dashboard action and updated pilot/runbook/
+  architecture/roadmap documentation.
+
+Validation:
+
+- Focused detection and audit API tests: 5 passed.
+- `./scripts/edge test`: 44 backend/agent tests passed, 5 frontend test files
+  with 8 tests passed, the Next.js static production build passed and includes
+  `/audit`, and npm audit reported 0 vulnerabilities.
+- `bash -n scripts/edge` passed.
+- A real local support bundle was generated, checked for non-empty output,
+  owner-only `0600` permissions, and absence of injected token values.
+
+Known risks:
+
+- Audit logs are deployment-scoped because organization/tenant ownership is not
+  implemented yet.
+- Support bundles intentionally preserve some local paths and authorized network
+  ranges for troubleshooting; operators are warned to review before sharing.
+
 ## Completion Rules
 
 A checkpoint is complete only when:

@@ -2,6 +2,7 @@ import { sampleData } from "./sample-data";
 import type {
   Asset,
   AssetDetail,
+  AuditLog,
   BaselineRule,
   DashboardData,
   Finding,
@@ -303,6 +304,20 @@ export async function createWifiBaseline(wifiId: string, reason: string): Promis
 
 export async function disableBaseline(baselineId: string): Promise<BaselineRule> {
   return requestJson<BaselineRule>(`/api/v1/baselines/${baselineId}`, { method: "DELETE" });
+}
+
+export async function fetchAuditLogs(filters?: {
+  action?: string;
+  resourceType?: string;
+  sensorId?: string;
+  limit?: number;
+}): Promise<AuditLog[]> {
+  const params = new URLSearchParams();
+  if (filters?.action) params.set("action", filters.action);
+  if (filters?.resourceType) params.set("resource_type", filters.resourceType);
+  if (filters?.sensorId) params.set("sensor_id", filters.sensorId);
+  params.set("limit", String(filters?.limit ?? 100));
+  return requestJson<AuditLog[]>(`/api/v1/audit-logs?${params.toString()}`);
 }
 
 export async function updateFindingStatus(findingId: string, status: string): Promise<Finding> {

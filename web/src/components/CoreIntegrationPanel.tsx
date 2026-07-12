@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckCircle2, Clipboard, Download, GitBranch, ListTree, ShieldCheck, Terminal } from "lucide-react";
+import { CheckCircle2, Clipboard, Download, GitBranch, LifeBuoy, ListTree, ShieldCheck, Terminal } from "lucide-react";
 import type { ComponentType } from "react";
 import { useMemo, useState } from "react";
 import { apiBaseUrl, downloadCoreBundle } from "@/lib/api";
@@ -59,6 +59,11 @@ export function CoreIntegrationPanel() {
         label: "Copy Core Test",
         icon: Terminal,
         command: `cd ${CORE_ROOT}\n.venv/bin/python -m pytest tests`
+      },
+      {
+        label: "Copy Support Bundle",
+        icon: LifeBuoy,
+        command: `cd ${EDGE_ROOT}\n./scripts/edge support-bundle --cloud`
       }
     ],
     []

@@ -397,7 +397,7 @@ def upsert_finding(
     wifi_network_id: str | None = None,
     mitre: list[dict[str, Any]] | None = None,
 ) -> Finding:
-    existing = db.scalar(
+    candidates = db.scalars(
         select(Finding).where(
             Finding.site_id == site_id,
             Finding.type == finding_type,
@@ -406,6 +406,15 @@ def upsert_finding(
             Finding.wifi_network_id == wifi_network_id,
             Finding.status.in_(["open", "acknowledged"]),
         )
+    ).all()
+    identity = _finding_identity(finding_type, evidence)
+    existing = next(
+        (
+            candidate
+            for candidate in candidates
+            if identity is None or _finding_identity(candidate.type, candidate.evidence or {}) == identity
+        ),
+        None,
     )
     if existing:
         existing.evidence = evidence
@@ -428,6 +437,16 @@ def upsert_finding(
     db.add(finding)
     db.flush()
     return finding
+
+
+def _finding_identity(finding_type: str, evidence: dict[str, Any]) -> tuple[Any, ...] | None:
+    if finding_type == "port_change":
+        return (
+            str(evidence.get("ip") or ""),
+            int(evidence.get("port") or 0),
+            str(evidence.get("protocol") or "tcp").lower(),
+        )
+    return None
 
 
 def infer_device_type(observed: AssetObservationIn) -> str | None:

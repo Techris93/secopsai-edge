@@ -84,6 +84,17 @@ export type BaselineRule = {
   updated_at: string;
 };
 
+export type AuditLog = {
+  id: string;
+  user_id?: string | null;
+  sensor_id?: string | null;
+  action: string;
+  resource_type?: string | null;
+  resource_id?: string | null;
+  details: Record<string, unknown>;
+  created_at: string;
+};
+
 export type Finding = {
   id: string;
   site_id: string;
