@@ -200,6 +200,22 @@ export type User = {
   password_changed_at?: string | null;
 };
 
+export type AccountAccessDelivery = {
+  id: string;
+  user_id: string;
+  email: string;
+  purpose: string;
+  status: "queued" | "retrying" | "delivered" | "failed" | string;
+  attempts: number;
+  max_attempts: number;
+  expires_at: string;
+  next_attempt_at: string;
+  last_attempt_at?: string | null;
+  delivered_at?: string | null;
+  detail?: string | null;
+  created_at: string;
+};
+
 export type ScanJob = {
   id: string;
   site_id: string;

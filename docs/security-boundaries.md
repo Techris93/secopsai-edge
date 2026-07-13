@@ -24,6 +24,13 @@ The hosted API cannot see a private office LAN. The local worker must run on the
 
 Notifications export normalized event summaries. Webhook targets receive event type, title, summary, severity/type when applicable, and minimized evidence. Every webhook is HMAC-SHA256 signed over its timestamp and exact request body. Delivery records retain retry metadata and minimized payload server-side; the dashboard/API delivery history deliberately excludes payload bodies.
 
+Password-reset requests are deliberately non-enumerating and always return the
+same accepted response. One-time links are reconstructed from signed metadata;
+the database retains only a keyed token hash, expiry, use state, and delivery
+diagnostics. The token is placed in the URL fragment so it is not sent in the
+initial HTTP request, then removed from the address bar by the dashboard. A
+successful reset clears lockout state and revokes all existing user sessions.
+
 Email requires `SMTP_HOST`. Telegram requires `TELEGRAM_BOT_TOKEN`.
 
 ## Credential Boundary

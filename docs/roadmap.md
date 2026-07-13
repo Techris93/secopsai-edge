@@ -4,7 +4,7 @@ This roadmap records product gaps, not historical aspirations. A capability is
 listed as complete only when it has implementation and test evidence in
 `docs/implementation-checkpoints.md`.
 
-## Current Product Baseline - v0.2.8
+## Current Product Baseline - v0.2.9
 
 The controlled-pilot baseline includes:
 
@@ -43,14 +43,16 @@ without founder supervision:
    restore drill now protect the current demo data. Move Render API/PostgreSQL
    from free demo plans, enable managed backups or point-in-time recovery, and
    define an uptime target before accepting paid-pilot data.
-3. **Browser end-to-end coverage.** Automate login, onboarding, enrollment,
-   scan queue, schedule, finding triage, report generation/PDF download, and
-   responsive accessibility checks against a disposable environment.
-4. **Account recovery hardening.** Add password-reset delivery, optional MFA,
-   invite acceptance, and explicit recovery-code/operator procedures.
-5. **Notification delivery operations.** Persist delivery attempts, retries,
-   terminal failure state, and operator-visible diagnostics for email,
-   Telegram, and webhooks.
+3. **Browser end-to-end coverage.** Desktop/mobile Chromium now protects login,
+   password recovery, scan queueing, finding triage, schedule creation, and
+   report generation against a disposable API contract. Onboarding enrollment,
+   PDF download, and automated accessibility checks remain.
+4. **Account recovery hardening.** Password-reset delivery is now durable,
+   non-enumerating, one-time, and operator-visible. Optional MFA, invite
+   acceptance, and recovery-code procedures remain.
+5. **Notification delivery operations.** Delivery attempts, retries, terminal
+   failure state, and operator-visible diagnostics are implemented for email,
+   Telegram, webhooks, and password-reset email.
 
 ## Paid Pilot Readiness
 

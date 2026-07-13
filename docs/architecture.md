@@ -58,6 +58,7 @@ Core tables:
 - `scan_schedules`
 - `notification_endpoints`
 - `notification_deliveries`
+- `account_access_tokens`
 
 ## Detection Rules
 

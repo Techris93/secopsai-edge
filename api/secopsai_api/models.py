@@ -324,6 +324,32 @@ class User(Base):
     memberships: Mapped[list["OrganizationMembership"]] = relationship(back_populates="user")
 
 
+class AccountAccessToken(Base):
+    __tablename__ = "account_access_tokens"
+    __table_args__ = (
+        Index("ix_account_access_tokens_due", "delivery_status", "next_attempt_at"),
+        Index("ix_account_access_tokens_user_created", "user_id", "created_at"),
+        Index("ix_account_access_tokens_hash", "token_hash", unique=True),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    purpose: Mapped[str] = mapped_column(String(32), nullable=False)
+    token_hash: Mapped[str] = mapped_column(String(128), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    delivery_status: Mapped[str] = mapped_column(String(32), default="queued", nullable=False)
+    delivery_attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    max_delivery_attempts: Mapped[int] = mapped_column(Integer, default=4, nullable=False)
+    next_attempt_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    last_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    delivery_detail: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    user: Mapped[User] = relationship()
+
+
 class OrganizationMembership(Base):
     __tablename__ = "organization_memberships"
     __table_args__ = (

@@ -122,6 +122,11 @@ Replace `192.168.1.0/24` with your own authorized local network.
 ./scripts/edge stop-db
 ```
 
+`./scripts/edge test` runs backend and agent tests, frontend component tests,
+the production dashboard build, desktop/mobile Chromium workflow tests, and the
+frontend dependency audit. A normal `./scripts/edge setup` installs the browser
+runtime; sensor-only appliance installs omit all dashboard test dependencies.
+
 Cloud commands:
 
 ```bash

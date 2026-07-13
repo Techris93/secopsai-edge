@@ -1,6 +1,7 @@
 import { sampleData } from "./sample-data";
 import type {
   Asset,
+  AccountAccessDelivery,
   AssetDetail,
   AuthIdentity,
   AuditLog,
@@ -101,6 +102,16 @@ export async function listUsers(): Promise<User[]> {
   return requestJson<User[]>("/api/v1/users");
 }
 
+export async function listAccountAccessDeliveries(limit = 25): Promise<AccountAccessDelivery[]> {
+  return requestJson<AccountAccessDelivery[]>(`/api/v1/account-access/deliveries?limit=${limit}`);
+}
+
+export async function retryAccountAccessDelivery(deliveryId: string): Promise<AccountAccessDelivery> {
+  return requestJson<AccountAccessDelivery>(`/api/v1/account-access/deliveries/${deliveryId}/retry`, {
+    method: "POST"
+  });
+}
+
 export async function createUser(payload: { email: string; password: string; role: string }): Promise<User> {
   return requestJson<User>("/api/v1/users", { method: "POST", body: JSON.stringify(payload) });
 }
@@ -143,6 +154,27 @@ export async function loginDashboardUser(email: string, password: string): Promi
   const payload = (await response.json()) as { access_token: string; user?: User | null };
   window.sessionStorage.setItem(SESSION_TOKEN_KEY, payload.access_token);
   return payload.user ?? null;
+}
+
+export async function requestDashboardPasswordReset(email: string): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/api/v1/auth/password-reset/request`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email }),
+    cache: "no-store"
+  });
+  if (!response.ok) throw await responseError(response);
+}
+
+export async function confirmDashboardPasswordReset(token: string, newPassword: string): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/api/v1/auth/password-reset/confirm`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token, new_password: newPassword }),
+    cache: "no-store"
+  });
+  if (!response.ok) throw await responseError(response);
+  clearDashboardSession();
 }
 
 export async function fetchAuthIdentity(): Promise<AuthIdentity> {

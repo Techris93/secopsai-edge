@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
+from urllib.parse import urlparse
 
 from secopsai_api import __version__
 
@@ -41,7 +42,7 @@ class Settings:
         or os.getenv("RENDER_GIT_COMMIT")
         or "local"
     )
-    expected_schema_revision: str = "0012_integration_tokens"
+    expected_schema_revision: str = "0013_account_recovery"
     admin_token: str = os.getenv("SECOPSAI_ADMIN_TOKEN", "dev-admin-token")
     token_secret: str = os.getenv("SECOPSAI_TOKEN_SECRET", "dev-token-secret")
     dashboard_admin_email: str | None = os.getenv("SECOPSAI_DASHBOARD_ADMIN_EMAIL") or None
@@ -51,6 +52,11 @@ class Settings:
     )
     login_max_attempts: int = int(os.getenv("SECOPSAI_LOGIN_MAX_ATTEMPTS", "5"))
     login_lockout_seconds: int = int(os.getenv("SECOPSAI_LOGIN_LOCKOUT_SECONDS", "900"))
+    dashboard_reset_url: str | None = os.getenv("SECOPSAI_DASHBOARD_RESET_URL") or None
+    password_reset_ttl_seconds: int = int(os.getenv("SECOPSAI_PASSWORD_RESET_TTL_SECONDS", "1800"))
+    password_reset_cooldown_seconds: int = int(os.getenv("SECOPSAI_PASSWORD_RESET_COOLDOWN_SECONDS", "60"))
+    password_reset_max_delivery_attempts: int = int(os.getenv("SECOPSAI_PASSWORD_RESET_MAX_DELIVERY_ATTEMPTS", "4"))
+    password_reset_batch_size: int = int(os.getenv("SECOPSAI_PASSWORD_RESET_BATCH_SIZE", "25"))
     auto_create_tables: bool = _bool_env("SECOPSAI_AUTO_CREATE_TABLES", True)
     cors_origins: list[str] = None  # type: ignore[assignment]
     ai_provider: str = os.getenv("AI_PROVIDER", "mock")
@@ -101,6 +107,21 @@ class Settings:
             problems.append("SECOPSAI_CORS_ORIGINS must contain only deployed origins")
         if self.dashboard_admin_password and len(self.dashboard_admin_password) < 16:
             problems.append("SECOPSAI_DASHBOARD_ADMIN_PASSWORD must contain at least 16 characters")
+        if self.dashboard_reset_url:
+            parsed_reset_url = urlparse(self.dashboard_reset_url)
+            if (
+                parsed_reset_url.scheme != "https"
+                or not parsed_reset_url.netloc
+                or parsed_reset_url.username
+                or parsed_reset_url.password
+                or parsed_reset_url.query
+                or parsed_reset_url.fragment
+            ):
+                problems.append(
+                    "SECOPSAI_DASHBOARD_RESET_URL must be an HTTPS URL without credentials, query, or fragment"
+                )
+        if self.smtp_host and not self.dashboard_reset_url:
+            problems.append("SECOPSAI_DASHBOARD_RESET_URL is required when SMTP_HOST is configured")
         if problems:
             raise RuntimeError("Unsafe production configuration: " + "; ".join(problems))
 

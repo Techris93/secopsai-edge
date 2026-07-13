@@ -1,18 +1,21 @@
 "use client";
 
-import { KeyRound, UserCog, UserPlus } from "lucide-react";
+import { KeyRound, MailWarning, RotateCcw, UserCog, UserPlus } from "lucide-react";
 import { FormEvent, useEffect, useState } from "react";
 import {
   changeDashboardPassword,
   createUser,
   fetchAuthIdentity,
+  listAccountAccessDeliveries,
   listUsers,
+  retryAccountAccessDelivery,
   updateUser
 } from "@/lib/api";
-import type { User } from "@/lib/types";
+import type { AccountAccessDelivery, User } from "@/lib/types";
 
 export function AccountManagementPanel() {
   const [users, setUsers] = useState<User[]>([]);
+  const [accessDeliveries, setAccessDeliveries] = useState<AccountAccessDelivery[]>([]);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [currentRole, setCurrentRole] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -26,9 +29,15 @@ export function AccountManagementPanel() {
       setCurrentUser(identity.user ?? null);
       setCurrentRole(identity.role);
       if (["owner", "admin"].includes(identity.role)) {
-        setUsers(await listUsers());
+        const [loadedUsers, loadedDeliveries] = await Promise.all([
+          listUsers(),
+          listAccountAccessDeliveries()
+        ]);
+        setUsers(loadedUsers);
+        setAccessDeliveries(loadedDeliveries);
       } else {
         setUsers([]);
+        setAccessDeliveries([]);
       }
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Unable to load users");
@@ -80,6 +89,19 @@ export function AccountManagementPanel() {
     }
   }
 
+  async function retryAccessDelivery(deliveryId: string) {
+    setBusy(true);
+    try {
+      const delivery = await retryAccountAccessDelivery(deliveryId);
+      setMessage(`Recovery email ${delivery.status}.`);
+      await load();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to retry recovery email");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <section className="min-w-0 rounded-lg border border-line bg-white p-4 shadow-panel xl:col-span-2">
       <div className="flex items-center gap-2">
@@ -106,6 +128,37 @@ export function AccountManagementPanel() {
           </tbody>
         </table>
       </div> : null}
+
+      {canManage ? (
+        <div className="mt-5">
+          <div className="flex items-center gap-2">
+            <MailWarning size={17} className="text-amber" aria-hidden="true" />
+            <h3 className="text-sm font-semibold text-ink">Account email delivery</h3>
+          </div>
+          <div className="mt-3 overflow-x-auto rounded-md border border-line">
+            <table className="w-full min-w-[680px] text-left text-sm">
+              <thead className="bg-paper text-xs uppercase text-zinc-600"><tr><th className="px-3 py-2">Account</th><th className="px-3 py-2">Purpose</th><th className="px-3 py-2">State</th><th className="px-3 py-2">Attempts</th><th className="px-3 py-2">Detail</th><th className="px-3 py-2">Action</th></tr></thead>
+              <tbody className="divide-y divide-line">
+                {accessDeliveries.slice(0, 10).map((delivery) => (
+                  <tr key={delivery.id}>
+                    <td className="px-3 py-3 font-medium text-ink">{delivery.email}</td>
+                    <td className="px-3 py-3 text-zinc-600">{delivery.purpose.replaceAll("_", " ")}</td>
+                    <td className="px-3 py-3">{delivery.status}</td>
+                    <td className="px-3 py-3 text-zinc-600">{delivery.attempts}/{delivery.max_attempts}</td>
+                    <td className="max-w-xs px-3 py-3 text-zinc-600">{delivery.detail ?? "Waiting for delivery"}</td>
+                    <td className="px-3 py-3">
+                      <button className="ButtonSecondary" type="button" disabled={busy || delivery.status === "delivered"} onClick={() => void retryAccessDelivery(delivery.id)}>
+                        <RotateCcw size={15} aria-hidden="true" />Retry
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+                {!accessDeliveries.length ? <tr><td colSpan={6} className="px-3 py-4 text-zinc-600">No account emails have been queued.</td></tr> : null}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : null}
 
       {currentUser ? (
         <form className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]" onSubmit={changePassword}>
