@@ -256,6 +256,7 @@ class WifiNetwork(Base):
     channel: Mapped[int | None] = mapped_column(Integer)
     signal: Mapped[float | None] = mapped_column(Float)
     encryption: Mapped[str | None] = mapped_column(String(160))
+    source: Mapped[str] = mapped_column(String(120), default="unknown", nullable=False)
     status: Mapped[str] = mapped_column(String(32), default="active")
     first_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

@@ -40,7 +40,7 @@ class WifiNetworkObservation:
     signal: int | None = None
     encryption: str | None = None
     observed_at: datetime = field(default_factory=utcnow)
-    source: str = "macos"
+    source: str = "unknown"
 
 
 @dataclass(slots=True)

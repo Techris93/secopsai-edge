@@ -15,13 +15,18 @@ flowchart LR
 
 ## Local Sensor
 
-The agent runs natively on macOS and uses Nmap for safe active discovery. It validates CIDR targets before executing scans, rejects public ranges by default, and limits scan size. The agent can also collect macOS Wi-Fi observations when the local wireless tooling exposes scan data.
+The agent runs natively on macOS or Linux and uses Nmap for safe active
+discovery. It validates CIDR targets before executing scans, rejects public
+ranges by default, and limits scan size. Optional Wi-Fi inventory uses the
+legacy macOS `airport` utility or Linux `iw` in managed mode. Capability checks
+are explicit; unavailable tooling or permission fails visibly instead of
+creating a false empty inventory.
 
 The API receives normalized observations only:
 
 - Asset identifiers: IP, optional MAC, vendor, hostname, OS guess, device type.
 - Service observations: protocol, port, state, service name, product, version.
-- Wi-Fi observations: SSID, BSSID, channel, signal, encryption.
+- Wi-Fi observations: SSID, BSSID, channel, signal in dBm, encryption, source.
 
 Raw scanner output is intentionally not submitted to the backend by the default client.
 

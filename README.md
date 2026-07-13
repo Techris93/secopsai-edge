@@ -7,6 +7,8 @@ Standalone MacBook-first MVP for an AI-assisted asset discovery and wireless int
 - Native Python collection agent using safe, allowlisted Nmap scans.
 - FastAPI backend with PostgreSQL, workspace isolation, role-based auth, audit logs, approved baselines, findings, reports, and Splunk HEC export hooks.
 - Next.js/Tailwind dashboard for onboarding, sites, assets, Wi-Fi networks, findings, schedules, reports, notifications, and sensor settings.
+- Explicit macOS/Linux Wi-Fi capability diagnostics and managed-mode inventory
+  provenance; see `docs/wireless-support.md` before enabling adapter scans.
 - Guided onboarding, launchd/systemd worker service installation, scheduled scans, sensor token rotation, and client-ready PDF/HTML report export.
 - One-time operator invitations, self-service account recovery, optional TOTP MFA,
   one-use recovery codes, session revocation, and account-delivery diagnostics.

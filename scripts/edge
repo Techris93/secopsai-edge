@@ -44,6 +44,8 @@ Usage:
   ./scripts/edge migrate               Run database migrations
   ./scripts/edge register              Register this MacBook sensor and save .sensor.env
   ./scripts/edge preview <cidr>        Show the safe Nmap commands for a target
+  ./scripts/edge wifi status [--interface wlan1]
+                                      Check Wi-Fi collection support without scanning
   ./scripts/edge scan <cidr> [--wifi]  Submit a scan using saved local sensor credentials
   ./scripts/edge scan <cidr> --cloud   Submit a scan to the configured hosted API
   ./scripts/edge worker [--cloud]      Poll for remote scan jobs and execute them locally
@@ -542,6 +544,15 @@ preview_scan() {
   ensure_python_tools
   cd "$ROOT_DIR"
   PYTHONPATH="$ROOT_DIR/agent" "$PYTHON_BIN" -m secopsai_agent.cli preview "$target"
+}
+
+wifi_command() {
+  subcommand="${1:-status}"
+  shift || true
+  [ "$subcommand" = "status" ] || fail "Usage: ./scripts/edge wifi status [--interface wlan1]"
+  ensure_python_tools
+  cd "$ROOT_DIR"
+  PYTHONPATH="$ROOT_DIR/agent" "$PYTHON_BIN" -m secopsai_agent.cli wifi-status "$@"
 }
 
 submit_scan() {
@@ -1538,12 +1549,20 @@ support_bundle() {
     printf "\n== Dependencies ==\n"
     printf "nmap: %s\n" "$(command -v nmap 2>/dev/null || printf 'missing')"
     nmap --version 2>/dev/null | head -n 1 || true
+    printf "iw: %s\n" "$(command -v iw 2>/dev/null || printf 'missing')"
     printf "python: %s\n" "$(command -v python3 2>/dev/null || printf 'missing')"
     python3 --version 2>/dev/null || true
     printf "node: %s\n" "$(command -v node 2>/dev/null || printf 'missing')"
     node --version 2>/dev/null || true
     printf "docker: %s\n" "$(command -v docker 2>/dev/null || printf 'missing')"
     docker --version 2>/dev/null || true
+
+    printf "\n== Wi-Fi Capability (no scan) ==\n"
+    if [ -x "$PYTHON_BIN" ]; then
+      PYTHONPATH="$ROOT_DIR/agent" "$PYTHON_BIN" -m secopsai_agent.cli wifi-status 2>&1 || true
+    else
+      printf "Python environment is not installed.\n"
+    fi
 
     printf "\n== Configuration Presence ==\n"
     [ -f "$ENV_FILE" ] && printf ".env: present\n" || printf ".env: missing\n"
@@ -1695,6 +1714,7 @@ main() {
     register) register_sensor ;;
     cloud) cloud "$@" ;;
     preview) preview_scan "$@" ;;
+    wifi) wifi_command "$@" ;;
     scan) submit_scan "$@" ;;
     worker) worker "$@" ;;
     report) generate_report "$@" ;;

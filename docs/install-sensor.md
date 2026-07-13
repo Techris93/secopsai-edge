@@ -57,7 +57,7 @@ Install Nmap first:
 
 ```bash
 sudo apt-get update
-sudo apt-get install -y nmap python3 python3-venv nodejs npm
+sudo apt-get install -y nmap iw python3 python3-venv nodejs npm
 ```
 
 Create the enrollment from the target customer workspace and run the same
@@ -73,7 +73,17 @@ copied installer:
 
 On Linux, the worker installs as a user `systemd` service.
 
-Use `--version 0.3.2` to pin a release. Use `--upgrade` for an existing
+Check wireless support without scanning:
+
+```bash
+./scripts/edge wifi status --interface wlan1
+```
+
+Wi-Fi collection is optional and often needs a reviewed `CAP_NET_ADMIN`
+configuration. The installer does not grant it or run the worker as root. See
+[Wireless Inventory Support](wireless-support.md) before enabling Wi-Fi jobs.
+
+Use `--version 0.3.3` to pin a release. Use `--upgrade` for an existing
 installation; the bootstrap preserves credential files, keeps the previous
 installation as `.previous`, and restores it automatically if the new
 installer fails.
