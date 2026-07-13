@@ -18,7 +18,10 @@ The JSON record uses `secopsai.edge.pilot-acceptance.v1`. Required checks cover
 Nmap, Python, hosted `/healthz`, hosted `/readyz`, the dashboard, and the local
 worker service. Wi-Fi capability is recorded as an advisory unless
 `--require-wifi` is supplied. The output contains release/schema identity and
-error types, never response bodies, tokens, or notification payloads.
+error types, never response bodies, tokens, or notification payloads. Hosted
+failures include a non-secret `error_code` such as `dns_resolution_failed`,
+`network_timeout`, `http_error`, or `invalid_json` so an operator can choose
+the right recovery path.
 
 Useful variants:
 

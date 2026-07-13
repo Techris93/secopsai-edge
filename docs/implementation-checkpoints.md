@@ -2763,3 +2763,46 @@ Next checkpoint:
 - Merge this recovery improvement, then close the remaining external pilot
   evidence gates and audit commercial SaaS/MSP, research-publication, and
   hardware lifecycle gaps separately.
+
+## Checkpoint 050 - Hosted Health Failure Diagnostics
+
+Status: complete; external pilot acceptance remains pending
+
+Scope:
+
+- Make the non-destructive pilot and uptime checks actionable when a hosted API
+  or dashboard cannot be reached.
+- Preserve the strict rule that health evidence never stores response bodies,
+  credentials, or provider error text.
+
+Completed changes:
+
+- Added stable non-secret error codes for DNS resolution failures, network
+  timeouts, HTTP failures, invalid JSON, and generic check failures.
+- HTTP errors retain only the status code; URL error reasons and response bodies
+  are intentionally excluded.
+- Added tests for DNS and HTTP classification plus the existing success and
+  degraded-readiness cases.
+- Updated pilot acceptance and operator runbook guidance with recovery paths.
+
+Validation required before merge:
+
+- Focused hosted-health and pilot-acceptance tests.
+- Full Edge release gate.
+- Hosted evidence confirms `/healthz` and `/readyz` remain healthy and records
+the current Pages DNS failure as a diagnosable non-secret result.
+
+Validation:
+
+- Focused hosted-health and pilot-acceptance tests passed: `6` tests.
+- Python compilation and diff checks passed.
+- The current hosted evidence classified the Pages failure as DNS reachability
+  without recording a response body or resolver detail.
+- Full Edge release validation and `v0.3.7` publication remain required before
+  the checkpoint is considered released.
+
+Next checkpoint:
+
+- Merge the diagnostic improvement, then continue the external acceptance
+  matrix and commercial product tracks without treating local green tests as
+  proof of hosted dashboard availability.

@@ -318,6 +318,14 @@ Flow:
 
 Remote jobs are limited to RFC1918 IPv4 CIDRs with `/24` or narrower ranges. Worker heartbeats update last-seen, version, OS, hostname, state, and active job while both waiting and scanning; stale claimed/running jobs are recovered so they do not remain stuck forever. Sites shows this runtime context. A disabled sensor can be re-enabled there without rotating its token; rotate the token separately if credential exposure is suspected. On the sensor host, `./scripts/edge cloud rotate-sensor-token` performs the same rotation through the hosted API and atomically replaces the owner-only `.cloud-sensor.env`; restart the worker afterward.
 
+When `./scripts/edge pilot check --cloud` or `./scripts/edge cloud uptime-check`
+fails, inspect the non-secret `error_code` in the JSON evidence. Use
+`dns_resolution_failed` to check the monitoring network's resolver or the
+configured hostname, `network_timeout` to check connectivity/provider health,
+`http_error` to inspect the reported status code and deployment logs, and
+`invalid_json` to verify that the configured URL is the intended SecOpsAI API
+or dashboard. These diagnostics never store response bodies.
+
 ## Automatic Core Sync
 
 Keep Core assets/findings current without manually exporting bundles:

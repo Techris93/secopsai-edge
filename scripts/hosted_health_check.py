@@ -3,11 +3,29 @@ from __future__ import annotations
 
 import argparse
 import json
+import socket
 import time
 import urllib.error
 import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
+
+
+def _error_code(error: BaseException) -> str:
+    if isinstance(error, urllib.error.HTTPError):
+        return "http_error"
+    if isinstance(error, urllib.error.URLError):
+        reason = error.reason
+        if isinstance(reason, socket.gaierror):
+            return "dns_resolution_failed"
+        if isinstance(reason, (TimeoutError, socket.timeout)):
+            return "network_timeout"
+        return "network_error"
+    if isinstance(error, (TimeoutError, socket.timeout)):
+        return "network_timeout"
+    if isinstance(error, json.JSONDecodeError):
+        return "invalid_json"
+    return "check_failed"
 
 
 def check(url: str, *, expect_json_status: str | None = None, expect_text: str | None = None) -> dict[str, object]:
@@ -34,12 +52,22 @@ def check(url: str, *, expect_json_status: str | None = None, expect_text: str |
             result["expected_content"] = expect_text
             result["ok"] = bool(result["ok"] and expect_text in body)
         return result
-    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
+    except urllib.error.HTTPError as exc:
         return {
             "url": url,
             "ok": False,
             "latency_ms": round((time.monotonic() - started) * 1000),
             "error": type(exc).__name__,
+            "error_code": _error_code(exc),
+            "status_code": int(exc.code),
+        }
+    except (urllib.error.URLError, TimeoutError, socket.timeout, json.JSONDecodeError) as exc:
+        return {
+            "url": url,
+            "ok": False,
+            "latency_ms": round((time.monotonic() - started) * 1000),
+            "error": type(exc).__name__,
+            "error_code": _error_code(exc),
         }
 
 
