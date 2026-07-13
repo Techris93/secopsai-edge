@@ -105,6 +105,17 @@ The canonical SecOpsAI dashboard reads network assets, graph changes, and
 Edge-origin findings from Core. Its local/helper service can optionally enrich
 that view with live sites, sensors, schedules, and scan jobs from the Edge API.
 
+After a sync, Core operators and OpenClaw can inspect freshness without
+running another import:
+
+```bash
+secopsai edge status
+```
+
+The equivalent OpenClaw read-only action is `secopsai_edge_sync_status`. Both
+surfaces report the source identity, contract version, bundle timestamp, local
+sync timestamp, and cursor; neither exposes raw scan telemetry.
+
 Use two separate helper-host credentials:
 
 - `SECOPSAI_EDGE_ACCESS_TOKEN` has `core:export` and can read only the
