@@ -64,6 +64,8 @@ Usage:
   ./scripts/edge cloud configure <url> Save hosted Render API URL
   ./scripts/edge cloud register        Register this sensor against the hosted API
   ./scripts/edge cloud enroll <token>  Use a one-time workspace enrollment token
+  ./scripts/edge cloud drift-check     Check Render API, scheduler, and database drift/expiry
+  ./scripts/edge cloud backup          Create and verify a hosted Render PostgreSQL backup
   ./scripts/edge test                  Run backend, frontend, build, and audit checks
   ./scripts/edge support-bundle [--cloud]
                                       Create a redacted diagnostics bundle for support
@@ -841,8 +843,8 @@ schedules() {
 run_tests() {
   ensure_python_tools
   info "Checking Render scheduler script"
-  python3 -m py_compile "$ROOT_DIR/scripts/render-run-due-schedules"
-  bash -n "$ROOT_DIR/scripts/database-backup"
+  python3 -m py_compile "$ROOT_DIR/scripts/render-run-due-schedules" "$ROOT_DIR/scripts/render_drift_check.py" "$ROOT_DIR/scripts/render_psql_backup_proxy.py"
+  bash -n "$ROOT_DIR/scripts/database-backup" "$ROOT_DIR/scripts/render-postgres-backup"
 
   info "Running backend and agent tests"
   (cd "$ROOT_DIR" && PYTHONPATH="$ROOT_DIR/api:$ROOT_DIR/agent" "$PYTHON_BIN" -m pytest tests)
@@ -1453,6 +1455,12 @@ cloud() {
       ;;
     status)
       status --cloud
+      ;;
+    drift-check)
+      python3 "$ROOT_DIR/scripts/render_drift_check.py" "$@"
+      ;;
+    backup)
+      "$ROOT_DIR/scripts/render-postgres-backup" "$@"
       ;;
     help|-h|--help)
       usage

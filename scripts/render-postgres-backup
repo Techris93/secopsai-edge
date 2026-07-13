@@ -1,0 +1,180 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+POSTGRES_NAME="secopsai-edge-postgres"
+OUTPUT=""
+WORK_OUTPUT=""
+FORCE="no"
+STATE_FILE=""
+ALLOWLIST_FILE=""
+PROXY_DIR=""
+ALLOWLIST_CHANGED="no"
+umask 077
+
+fail() {
+  printf "error: %s\n" "$*" >&2
+  exit 1
+}
+
+require_tool() {
+  command -v "$1" >/dev/null 2>&1 || fail "$1 is required"
+}
+
+usage() {
+  cat <<'EOF'
+SecOpsAI Edge hosted Render PostgreSQL backup
+
+Usage:
+  ./scripts/render-postgres-backup [--postgres NAME_OR_ID] [--output FILE] [--force]
+
+The command uses the authenticated Render CLI, temporarily allowlists only the
+current public IP, creates a custom archive with the database's matching
+PostgreSQL major version, restores the original allowlist, verifies the archive,
+and writes FILE.sha256. Connection credentials are never printed.
+EOF
+}
+
+restore_allowlist() {
+  [ "$ALLOWLIST_CHANGED" = "yes" ] || return 0
+  args=()
+  while IFS=$'\t' read -r cidr description; do
+    [ -n "$cidr" ] || continue
+    args+=(--ip-allow-list "cidr=$cidr,description=$description")
+  done <"$ALLOWLIST_FILE"
+  if [ "${#args[@]}" -eq 0 ]; then
+    if ! render postgres update "$POSTGRES_NAME" --clear-ip-allow-list --confirm >/dev/null 2>&1; then
+      printf "warning: could not restore the empty Render IP allowlist; review it immediately\n" >&2
+      return 1
+    fi
+  elif ! render postgres update "$POSTGRES_NAME" "${args[@]}" --confirm >/dev/null 2>&1; then
+    printf "warning: could not restore the original Render IP allowlist; review it immediately\n" >&2
+    return 1
+  fi
+  ALLOWLIST_CHANGED="no"
+}
+
+cleanup() {
+  status=$?
+  restore_allowlist || status=1
+  [ -z "$STATE_FILE" ] || rm -f "$STATE_FILE"
+  [ -z "$ALLOWLIST_FILE" ] || rm -f "$ALLOWLIST_FILE"
+  [ -z "$PROXY_DIR" ] || rm -rf "$PROXY_DIR"
+  [ -z "$WORK_OUTPUT" ] || rm -f "$WORK_OUTPUT"
+  exit "$status"
+}
+trap cleanup EXIT
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --postgres)
+      shift || true
+      POSTGRES_NAME="${1:-}"
+      [ -n "$POSTGRES_NAME" ] || fail "--postgres requires a database name or ID"
+      ;;
+    --output)
+      shift || true
+      OUTPUT="${1:-}"
+      [ -n "$OUTPUT" ] || fail "--output requires a file"
+      ;;
+    --force)
+      FORCE="yes"
+      ;;
+    help|-h|--help)
+      usage
+      exit 0
+      ;;
+    *) fail "Unknown option: $1" ;;
+  esac
+  shift || true
+done
+
+require_tool render
+require_tool docker
+require_tool curl
+require_tool python3
+require_tool shasum
+docker info >/dev/null 2>&1 || fail "Docker is not running"
+
+if [ -z "$OUTPUT" ]; then
+  OUTPUT="$ROOT_DIR/backups/secopsai-edge-render-$(date -u +%Y%m%dT%H%M%SZ).dump"
+fi
+case "$OUTPUT" in
+  /*) ;;
+  *) OUTPUT="$PWD/$OUTPUT" ;;
+esac
+mkdir -p "$(dirname "$OUTPUT")"
+chmod 700 "$(dirname "$OUTPUT")"
+[ "$FORCE" = "yes" ] || [ ! -e "$OUTPUT" ] || fail "Backup already exists; choose another --output or add --force"
+WORK_OUTPUT="$OUTPUT.partial.$$"
+STATE_FILE="$(mktemp "${TMPDIR:-/tmp}/secopsai-render-postgres.XXXXXX")"
+ALLOWLIST_FILE="$(mktemp "${TMPDIR:-/tmp}/secopsai-render-allowlist.XXXXXX")"
+PROXY_DIR="$(mktemp -d "${TMPDIR:-/tmp}/secopsai-render-proxy.XXXXXX")"
+
+render postgres get "$POSTGRES_NAME" --output json >"$STATE_FILE"
+metadata="$(python3 - "$STATE_FILE" "$ALLOWLIST_FILE" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+payload = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+database = payload.get("data", payload)
+if database.get("status") != "available":
+    raise SystemExit("database is not available")
+version = str(database.get("version", ""))
+if not version.isdigit():
+    raise SystemExit("database major version is unavailable")
+lines = []
+for entry in database.get("ipAllowList") or []:
+    cidr = str(entry.get("cidrBlock") or entry.get("cidr") or "")
+    description = str(entry.get("description") or "SecOpsAI existing rule")
+    if not cidr or any(character in description for character in "\t\r\n,"):
+        raise SystemExit("existing IP allowlist contains an unsupported value")
+    lines.append(f"{cidr}\t{description}")
+Path(sys.argv[2]).write_text("\n".join(lines) + ("\n" if lines else ""), encoding="utf-8")
+print(version)
+PY
+)" || fail "Could not read Render PostgreSQL metadata"
+
+docker pull "postgres:$metadata-alpine" >/dev/null
+public_ip="$(curl -fsS --max-time 15 https://api.ipify.org)" || fail "Could not determine the current public IP"
+temporary_cidr="$(python3 - "$public_ip" <<'PY'
+import ipaddress
+import sys
+
+address = ipaddress.ip_address(sys.argv[1].strip())
+print(f"{address}/{32 if address.version == 4 else 128}")
+PY
+)" || fail "The public IP service returned an invalid address"
+
+allow_args=()
+while IFS=$'\t' read -r cidr description; do
+  [ -n "$cidr" ] || continue
+  allow_args+=(--ip-allow-list "cidr=$cidr,description=$description")
+done <"$ALLOWLIST_FILE"
+allow_args+=(--ip-allow-list "cidr=$temporary_cidr,description=SecOpsAI temporary backup")
+render postgres update "$POSTGRES_NAME" "${allow_args[@]}" --confirm >/dev/null
+ALLOWLIST_CHANGED="yes"
+
+ln -s "$ROOT_DIR/scripts/render_psql_backup_proxy.py" "$PROXY_DIR/psql"
+export SECOPSAI_RENDER_BACKUP_OUTPUT="$WORK_OUTPUT"
+export SECOPSAI_RENDER_POSTGRES_MAJOR="$metadata"
+backup_created="no"
+for attempt in 1 2 3 4 5; do
+  rm -f "$WORK_OUTPUT"
+  if PATH="$PROXY_DIR:$PATH" render psql "$POSTGRES_NAME" --command "SELECT 1" --output text >/dev/null 2>&1; then
+    backup_created="yes"
+    break
+  fi
+  sleep "$((attempt * 2))"
+done
+[ "$backup_created" = "yes" ] || fail "Render PostgreSQL backup failed after the temporary allowlist was applied"
+
+restore_allowlist
+"$ROOT_DIR/scripts/database-backup" verify --input "$WORK_OUTPUT" >/dev/null
+mv -f "$WORK_OUTPUT" "$OUTPUT"
+WORK_OUTPUT=""
+shasum -a 256 "$OUTPUT" >"$OUTPUT.sha256"
+chmod 600 "$OUTPUT" "$OUTPUT.sha256"
+printf "Backup:   %s\n" "$OUTPUT"
+printf "Checksum: %s\n" "$OUTPUT.sha256"

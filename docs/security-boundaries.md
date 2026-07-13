@@ -64,8 +64,12 @@ webhook secrets are short/default, automatic schema creation is enabled, or
 localhost CORS origins remain. Database schema is managed only by Alembic.
 Backups are PostgreSQL custom archives created with owner-only permissions;
 restore requires an exact database-name confirmation and refuses remote targets
-unless the operator explicitly opts in. Credential files and backup archives
-are excluded from Git.
+unless the operator explicitly opts in. A matching PostgreSQL Docker client is
+selected when the host client major differs from the database. Hosted Render
+backup temporarily allowlists only the operator's current IP and restores the
+original allowlist before verification; connection URLs are passed directly to
+the private backup process and are never printed. Credential files and backup
+archives are excluded from Git.
 
 Sensor releases are built from committed Git content, version-matched across
 API/agent/dashboard, and published with SHA-256 checksums. Public repositories

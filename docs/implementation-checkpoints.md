@@ -1527,6 +1527,62 @@ Known risks:
   operations checkpoint should automate drift detection for build command,
   health path, branch, and auto-deploy state.
 
+## Checkpoint 030 - Hosted Data Recovery And Render Drift Guard
+
+Status: in progress
+
+Branch and release target:
+
+- Edge implementation branch: `codex/render-operations-checkpoint-030`
+- Target release: `v0.2.6`
+
+Completed changes:
+
+- Added `./scripts/edge cloud drift-check`, which validates `render.yaml` with
+  Render and compares the live API, five-minute scheduler, and PostgreSQL
+  resource against the expected repository, branch, build/start commands,
+  health path, schedule, availability, and PostgreSQL major version.
+- Added safe human and JSON output, deterministic timestamps for tests,
+  free-database expiry warnings, and an optional `--fail-on-warning` operations
+  gate. The checker does not read or print service environment variables.
+- Added `./scripts/edge cloud backup`, which uses the authenticated Render CLI,
+  temporarily allowlists the current public IP, preserves/restores the original
+  allowlist, selects Render's exact PostgreSQL client major through Docker,
+  verifies required archive tables, and creates an owner-only SHA-256 manifest.
+- Hardened local backup/restore so a host PostgreSQL client-major mismatch uses
+  the matching official PostgreSQL Docker image. Localhost targets are safely
+  translated to the Docker host gateway.
+- Added copyable Render drift-check and hosted-backup commands to Settings and
+  documented the recovery boundary in the README, runbook, deployment guide,
+  security boundaries, and roadmap.
+- Advanced API, agent, dashboard, installer examples, and release tests to
+  `0.2.6` because the operational tools ship in the sensor archive.
+
+Validation to date:
+
+- Unit tests cover a matching Render inventory, build/health drift, free-plan
+  expiry, warning gates, connection-secret non-disclosure, archive writes, and
+  Render CLI version probing.
+- The live Render Blueprint passed validation. The API, scheduler, and
+  PostgreSQL resources match the deployment contract; the checker reports the
+  expected warning that the free database expires on 2026-07-20.
+- The first recovery drill deliberately caught an invalid combination: a
+  PostgreSQL 18 host archive could not restore into PostgreSQL 16 because of
+  the newer `transaction_timeout` setting. The new matching-client fallback
+  then created and restored a local PostgreSQL 16 archive successfully.
+- The hosted backup workflow replaced the incompatible emergency archive with
+  a PostgreSQL 16 archive, restored Render's original empty IP allowlist, and
+  passed its checksum. An isolated PostgreSQL 16 restore recovered schema
+  `0012_integration_tokens`, 4 assets, 10 findings, 3 reports, and 4 scan jobs.
+
+Known risks and next actions:
+
+- Render PostgreSQL remains on the free plan and expires on 2026-07-20. The
+  archive now protects the demo data, but provider-managed backups and
+  point-in-time recovery still require an explicitly authorized paid plan.
+- Full release-gate, PR, merge, post-merge CI, Render deploy, and `v0.2.6`
+  release evidence remain before this checkpoint can be marked complete.
+
 ## Completion Rules
 
 A checkpoint is complete only when:

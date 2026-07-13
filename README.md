@@ -114,6 +114,8 @@ Replace `192.168.1.0/24` with your own authorized local network.
 ./scripts/edge test
 ./scripts/edge release-check
 ./scripts/edge database backup
+./scripts/edge cloud drift-check
+./scripts/edge cloud backup
 ./scripts/edge worker status
 ./scripts/edge worker logs
 ./scripts/edge schedules run-due --cloud
@@ -125,6 +127,8 @@ Cloud commands:
 ```bash
 ./scripts/edge cloud configure https://<your-render-api>.onrender.com
 ./scripts/edge cloud register
+./scripts/edge cloud drift-check
+./scripts/edge cloud backup
 ./scripts/edge worker install-service --cloud
 ./scripts/edge worker start
 ./scripts/edge worker --cloud

@@ -57,6 +57,8 @@ export default function SettingsPage() {
           <div className="mt-4 space-y-3">
             <CopyCommand command="./scripts/edge dev" icon={Database} />
             <CopyCommand command="./scripts/edge status --cloud" icon={Radar} />
+            <CopyCommand command="./scripts/edge cloud drift-check" icon={Radar} />
+            <CopyCommand command="./scripts/edge cloud backup" icon={Database} />
             <CopyCommand command="./scripts/edge preview 192.168.1.0/24" icon={ShieldCheck} />
             <CopyCommand command="./scripts/edge scan 192.168.1.0/24 --cloud" icon={Terminal} />
           </div>
