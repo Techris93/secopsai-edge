@@ -2747,6 +2747,9 @@ Validation:
   increasing only that test's timeout for the ten-route Axe analysis.
 - Full browser matrix passed: `28` workflows.
 - Frontend dependency audit passed with zero vulnerabilities.
+- Edge PR `#40` merged to `main` at `ffdb304`, and the verified `v0.3.6`
+  archive, checksum, and bootstrap installer were published at the GitHub
+  release page.
 
 Safety boundary:
 
