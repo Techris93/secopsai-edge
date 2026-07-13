@@ -1158,6 +1158,40 @@ Known risks:
 - The legacy platform admin token remains available for the scheduler and
   emergency recovery. New Core sync installations no longer need it.
 
+## Checkpoint 024 - Node 24 CI and Release Actions
+
+Status: complete
+
+Branch:
+
+- Edge repo: `codex/ci-node24-actions`
+
+Completed changes:
+
+- Replaced GitHub Actions that still targeted the deprecated Node 20 runtime
+  with the official Node 24 releases of checkout, setup-python, and setup-node.
+- Upgraded build-provenance attestation from v2 to v4 before publishing the
+  first sensor release.
+- Pinned every changed action to its resolved full commit SHA with the major
+  release retained as an audit comment, avoiding mutable-tag execution in the
+  privileged release workflow.
+
+Validation:
+
+- Both push and pull-request instances of the full Edge CI workflow passed.
+- Each workflow repeated PostgreSQL migration/drift/rollback, backend/agent
+  tests, dependency audit, sensor archive inspection, backup/restore, frontend
+  tests/build/audit, and clean-state verification.
+- GitHub reported zero annotations for both jobs; the prior Node 20 deprecation
+  warning is removed.
+
+Known risks:
+
+- Action SHA updates are intentionally manual until a dependency-update bot is
+  configured with review and CI gates.
+- Node 24 actions require current GitHub-hosted or self-hosted runner versions;
+  this project currently uses GitHub-hosted Ubuntu runners.
+
 ## Completion Rules
 
 A checkpoint is complete only when:
