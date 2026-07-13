@@ -2369,6 +2369,8 @@ Completed evidence:
 - Hosted Render `/healthz` reports version `0.3.4` and commit `3d04757edd54`.
   Hosted `/readyz` reports version `0.3.4` and schema revision
   `0016_wifi_provenance`.
+- Cloudflare Pages production deployment `9b3b0920-352d-467f-bbd8-3e7d1606b907`
+  is attached to Edge main `8f8d52d` and contains the current dashboard build.
 - README, install, pilot acceptance, roadmap, architecture, runbook, and
   dashboard Settings guidance now point at the current pilot workflow and
   release version.
@@ -2377,8 +2379,9 @@ Acceptance boundary:
 
 - The current host's direct acceptance record passed Nmap, Python, hosted
   liveness, and hosted readiness. Its dashboard check was inconclusive because
-  this host timed out resolving the Pages hostname; no dashboard availability
-  claim is made from that result.
+  this host timed out resolving both the canonical and deployment Pages
+  hostnames; Cloudflare accepted the deployment, but no browser availability
+  claim is made from this network.
 - Checkpoint 040 remains implementation-complete but operator-pending. Before
   external customer data is accepted, the owner must still complete paid
   Render API/PostgreSQL activation with an isolated PITR drill, exercise a real
