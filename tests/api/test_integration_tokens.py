@@ -14,11 +14,13 @@ from secopsai_api.models import (
     IntegrationToken,
     Organization,
     OrganizationMembership,
+    ScanJob,
+    Sensor,
     Site,
     User,
     utcnow,
 )
-from secopsai_api.security import create_dashboard_session, hash_password
+from secopsai_api.security import create_dashboard_session, hash_password, hash_secret
 
 
 def make_session() -> Session:
@@ -102,7 +104,7 @@ def test_core_export_token_is_one_time_visible_scoped_and_revocable() -> None:
         app.dependency_overrides.clear()
 
     assert created.status_code == 200
-    assert secret.startswith("secopsai_core_")
+    assert secret.startswith("secopsai_integration_")
     assert "access_token" not in listed.json()[0]
     stored = db.get(IntegrationToken, created.json()["id"])
     assert stored is not None
@@ -116,6 +118,33 @@ def test_core_export_token_is_one_time_visible_scoped_and_revocable() -> None:
     assert denied_elsewhere.status_code == 403
     assert revoked.json()["state"] == "revoked"
     assert denied_after_revoke.status_code == 403
+
+
+def test_legacy_core_token_prefix_remains_accepted() -> None:
+    db = make_session()
+    organization, _, _, _ = seed(db, "Alpha")
+    legacy_secret = "secopsai_core_existing-deployed-token"
+    db.add(
+        IntegrationToken(
+            organization_id=organization.id,
+            name="Existing Core sync",
+            token_hash=hash_secret(legacy_secret),
+            scopes=["core:export"],
+            expires_at=utcnow() + timedelta(days=30),
+        )
+    )
+    db.commit()
+    client = make_client(db)
+
+    try:
+        response = client.get(
+            "/api/v1/core/export",
+            headers={"Authorization": f"Bearer {legacy_secret}"},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
 
 
 def test_integration_token_rejects_bad_scope_expiry_and_foreign_revocation() -> None:
@@ -155,6 +184,65 @@ def test_integration_token_rejects_bad_scope_expiry_and_foreign_revocation() -> 
     assert bad_scope.status_code == 400
     assert expired.status_code == 403
     assert foreign_revoke.status_code == 404
+
+
+def test_operations_read_token_is_workspace_scoped_and_read_only() -> None:
+    db = make_session()
+    org_a, user_a, site_a, _ = seed(db, "Alpha")
+    _, _, site_b, _ = seed(db, "Bravo")
+    client = make_client(db)
+    owner_headers = headers(org_a, user_a)
+    sensor = Sensor(
+        site_id=site_a.id,
+        name="Alpha Sensor",
+        hostname="alpha-sensor",
+        token_hash="unused-test-hash",
+    )
+    db.add(sensor)
+    db.flush()
+    stale_job = ScanJob(
+        site_id=site_a.id,
+        sensor_id=sensor.id,
+        target_cidr="192.168.1.0/24",
+        status="running",
+        updated_at=utcnow() - timedelta(minutes=30),
+    )
+    db.add(stale_job)
+    db.commit()
+
+    try:
+        created = client.post(
+            "/api/v1/integration-tokens",
+            headers=owner_headers,
+            json={"name": "Operator dashboard", "scopes": ["operations:read"], "expires_in_days": 30},
+        )
+        secret = created.json()["access_token"]
+        token_headers = {"Authorization": f"Bearer {secret}"}
+        sites = client.get("/api/v1/sites", headers=token_headers)
+        sensors = client.get("/api/v1/sensors", headers=token_headers)
+        schedules = client.get("/api/v1/scan-schedules", headers=token_headers)
+        jobs = client.get("/api/v1/scan-jobs", headers=token_headers)
+        core_export = client.get("/api/v1/core/export", headers=token_headers)
+        assets = client.get("/api/v1/assets", headers=token_headers)
+        mutation = client.post(
+            "/api/v1/sites",
+            headers=token_headers,
+            json={"name": "Must not be created"},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert created.status_code == 200
+    assert {item["id"] for item in sites.json()} == {site_a.id}
+    assert site_b.id not in {item["id"] for item in sites.json()}
+    assert sensors.status_code == 200
+    assert schedules.status_code == 200
+    assert jobs.status_code == 200
+    assert core_export.status_code == 403
+    assert assets.status_code == 403
+    assert mutation.status_code == 403
+    db.refresh(stale_job)
+    assert stale_job.status == "running"
 
 
 def test_viewer_cannot_manage_integration_tokens() -> None:
