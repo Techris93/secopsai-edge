@@ -1645,6 +1645,63 @@ Known limitations:
   success or failure explicitly and keeps the command visible for manual
   selection when both browser copy mechanisms are unavailable.
 
+## Checkpoint 032 - Mission Control Authentication And RLS Staging
+
+Status: complete (activation staged)
+
+Dashboard branch, PR, and deployment:
+
+- Dashboard implementation PR: `#7` (`codex/dashboard-auth-rls-hardening`)
+- Dashboard merge commit: `77e4eefd54e7af90f9c361b5436b731a65dcac23`
+- Cloudflare production deployment:
+  `a6df9b7c-b963-42c1-96f4-5f2247bdd5de`
+
+Completed changes:
+
+- Added invitation-only Supabase Auth gating to the canonical SecOpsAI Mission
+  Control dashboard, including session restoration, sign-in, sign-out,
+  reset-link request, and recovered-password update flows.
+- Added an authenticated single-tenant pilot migration covering every
+  browser-backed table. It removes anonymous table/view access, rejects
+  anonymous-auth users, protects findings views, and removes public execution
+  from dashboard RPC functions.
+- Added `scripts/dashboard-security apply|verify` so RLS rollout is repeatable
+  and fails unless every present dashboard table has RLS, all four authenticated
+  CRUD policies, and zero anonymous policies, grants, or function access.
+- Replaced the unversioned Supabase browser dependency with exact
+  `@supabase/supabase-js@2.110.2` plus SHA-384 Subresource Integrity.
+- Added Worker-enforced CSP, anti-framing, content-type, referrer, permissions,
+  opener, and transport-security headers to static and API responses.
+- Removed inline JavaScript and inline script event handlers so the script CSP
+  does not require `unsafe-inline`.
+
+Validation:
+
+- Dashboard Node checks and Worker tests passed; 41 Python tests passed.
+- A PostgreSQL 16 migration drill applied both historical schemas and the new
+  policy through the shipped command. Verification reported 6/6 tables with
+  RLS, 24 authenticated policies, and zero anonymous policies, grants, or
+  function privileges.
+- Local and Cloudflare preview browser QA passed on desktop and `390x844`:
+  the auth gate rendered meaningful content, reset validation responded, the
+  protected app shell remained hidden, the console was clean, and mobile had no
+  horizontal overflow.
+- The production deployment serves exact merge `77e4eef`; the encrypted
+  `DASHBOARD_AUTH_REQUIRED=false` rollout guard kept the existing dashboard
+  available instead of locking out the operator before database activation.
+
+Activation required:
+
+- A live anonymous REST read still returned HTTP 200 with one finding before
+  this migration was applied. No Supabase access token or direct database
+  credential is configured on this machine, so changing the live database was
+  not possible without inventing or exposing credentials.
+- Before enabling authentication, provide an authorized direct database URL,
+  run `scripts/dashboard-security apply`, create or confirm an invited operator,
+  set the Cloudflare `DASHBOARD_AUTH_REQUIRED` secret to `true`, and prove the
+  anonymous REST request is denied. Until then, production remains a demo-only
+  surface and must not hold real customer data.
+
 ## Completion Rules
 
 A checkpoint is complete only when:
