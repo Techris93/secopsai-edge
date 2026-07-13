@@ -16,8 +16,15 @@ CORE_SYNC_SERVICE_LABEL="ai.secopsai.edge-core-sync"
 LOG_DIR="$HOME/Library/Logs/secopsai-edge"
 LAUNCH_AGENT_FILE="$HOME/Library/LaunchAgents/$SERVICE_LABEL.plist"
 CORE_SYNC_LAUNCH_AGENT_FILE="$HOME/Library/LaunchAgents/$CORE_SYNC_SERVICE_LABEL.plist"
-CORE_SYNC_CONFIG_FILE="${SECOPSAI_CORE_SYNC_CONFIG_FILE:-$ROOT_DIR/.core-sync-service.json}"
-CORE_SYNC_LOCK_DIR="${SECOPSAI_CORE_SYNC_LOCK_DIR:-$ROOT_DIR/.core-sync.lock}"
+if [ "$(uname -s)" = "Darwin" ]; then
+  CORE_SYNC_STATE_DIR="${SECOPSAI_EDGE_SERVICE_STATE_DIR:-$HOME/Library/Application Support/SecOpsAI Edge}"
+else
+  CORE_SYNC_STATE_DIR="${SECOPSAI_EDGE_SERVICE_STATE_DIR:-$HOME/.local/share/secopsai-edge}"
+fi
+CORE_SYNC_CONFIG_FILE="${SECOPSAI_CORE_SYNC_CONFIG_FILE:-$CORE_SYNC_STATE_DIR/core-sync-service.json}"
+CORE_SYNC_CREDENTIALS_FILE="${SECOPSAI_CORE_SYNC_CREDENTIALS_FILE:-$CORE_SYNC_STATE_DIR/core-sync-credentials.json}"
+CORE_SYNC_LOCK_FILE="${SECOPSAI_CORE_SYNC_LOCK_FILE:-$CORE_SYNC_STATE_DIR/core-sync.lock}"
+CORE_SYNC_RUNTIME_RUNNER="$CORE_SYNC_STATE_DIR/core-sync-runner.py"
 SYSTEMD_USER_DIR="$HOME/.config/systemd/user"
 SYSTEMD_SERVICE_FILE="$SYSTEMD_USER_DIR/$SERVICE_LABEL.service"
 CORE_SYNC_SYSTEMD_SERVICE_FILE="$SYSTEMD_USER_DIR/$CORE_SYNC_SERVICE_LABEL.service"
@@ -944,6 +951,26 @@ PY
   chmod 600 "$CORE_SYNC_CONFIG_FILE"
 }
 
+save_core_sync_credentials() {
+  api_url="$1"
+  admin_token_value="$2"
+  umask 077
+  CORE_SYNC_API_URL="$api_url" CORE_SYNC_ADMIN_TOKEN="$admin_token_value" CORE_SYNC_CREDENTIALS_FILE="$CORE_SYNC_CREDENTIALS_FILE" python3 - <<'PY'
+import json
+import os
+
+with open(os.environ["CORE_SYNC_CREDENTIALS_FILE"], "w", encoding="utf-8") as handle:
+    json.dump(
+        {"api_url": os.environ["CORE_SYNC_API_URL"], "admin_token": os.environ["CORE_SYNC_ADMIN_TOKEN"]},
+        handle,
+        indent=2,
+        sort_keys=True,
+    )
+    handle.write("\n")
+PY
+  chmod 600 "$CORE_SYNC_CREDENTIALS_FILE"
+}
+
 load_core_sync_config() {
   [ -f "$CORE_SYNC_CONFIG_FILE" ] || fail "Core sync service is not configured. Run ./scripts/edge core sync-service install --cloud first."
   config_values="$(CORE_SYNC_CONFIG_FILE="$CORE_SYNC_CONFIG_FILE" python3 - <<'PY'
@@ -969,28 +996,12 @@ PY
 
 run_configured_core_sync() {
   load_core_sync_config
-  if ! mkdir "$CORE_SYNC_LOCK_DIR" 2>/dev/null; then
-    lock_pid="$(cat "$CORE_SYNC_LOCK_DIR/pid" 2>/dev/null || true)"
-    if [[ "$lock_pid" =~ ^[0-9]+$ ]] && kill -0 "$lock_pid" 2>/dev/null; then
-      warn "Core synchronization is already running with PID $lock_pid; skipping overlapping run"
-      return 0
-    fi
-    rm -f "$CORE_SYNC_LOCK_DIR/pid" 2>/dev/null || true
-    rmdir "$CORE_SYNC_LOCK_DIR" 2>/dev/null || fail "Unable to clear stale Core sync lock at $CORE_SYNC_LOCK_DIR"
-    mkdir "$CORE_SYNC_LOCK_DIR"
+  [ -f "$CORE_SYNC_CREDENTIALS_FILE" ] || fail "Core sync credentials are missing; reinstall the service"
+  runner="$CORE_SYNC_RUNTIME_RUNNER"
+  if [ ! -x "$runner" ]; then
+    runner="$ROOT_DIR/scripts/core-sync-runner.py"
   fi
-  printf "%s\n" "$$" > "$CORE_SYNC_LOCK_DIR/pid"
-  (
-    trap 'rm -f "$CORE_SYNC_LOCK_DIR/pid"; rmdir "$CORE_SYNC_LOCK_DIR" 2>/dev/null || true' EXIT INT TERM
-    args=(--core-root "$CORE_SYNC_CORE_ROOT" --output "$CORE_SYNC_OUTPUT")
-    if [ "$CORE_SYNC_PROFILE" = "cloud" ]; then
-      args=(--cloud "${args[@]}")
-    fi
-    if [ -n "${CORE_SYNC_DB_PATH:-}" ]; then
-      args+=(--db-path "$CORE_SYNC_DB_PATH")
-    fi
-    core_sync "${args[@]}"
-  )
+  "$runner" --config "$CORE_SYNC_CONFIG_FILE" --credentials "$CORE_SYNC_CREDENTIALS_FILE" --lock "$CORE_SYNC_LOCK_FILE"
 }
 
 install_core_sync_service() {
@@ -1023,19 +1034,29 @@ install_core_sync_service() {
     cloud_api_url >/dev/null
     cloud_admin_token >/dev/null
   fi
+  mkdir -p "$CORE_SYNC_STATE_DIR" "$LOG_DIR" "$SYSTEMD_USER_DIR"
+  if [ "$profile" = "cloud" ]; then
+    sync_api_url="$(cloud_api_url)"
+    sync_admin_token="$(cloud_admin_token)"
+  else
+    load_env
+    sync_api_url="$(api_url)"
+    sync_admin_token="$(admin_token)"
+  fi
   save_core_sync_config "$profile" "$core_root" "$output" "$db_path" "$interval"
-  mkdir -p "$LOG_DIR" "$SYSTEMD_USER_DIR"
+  save_core_sync_credentials "$sync_api_url" "$sync_admin_token"
+  install -m 700 "$ROOT_DIR/scripts/core-sync-runner.py" "$CORE_SYNC_RUNTIME_RUNNER"
 
   if [ "$(uname -s)" = "Darwin" ]; then
     mkdir -p "$(dirname "$CORE_SYNC_LAUNCH_AGENT_FILE")"
-    ROOT_DIR="$ROOT_DIR" LABEL="$CORE_SYNC_SERVICE_LABEL" INTERVAL="$interval" LOG_DIR="$LOG_DIR" OUTPUT="$CORE_SYNC_LAUNCH_AGENT_FILE" python3 - <<'PY'
+    CORE_ROOT="$core_root" RUNNER="$CORE_SYNC_RUNTIME_RUNNER" CONFIG="$CORE_SYNC_CONFIG_FILE" CREDENTIALS="$CORE_SYNC_CREDENTIALS_FILE" LOCK="$CORE_SYNC_LOCK_FILE" LABEL="$CORE_SYNC_SERVICE_LABEL" INTERVAL="$interval" LOG_DIR="$LOG_DIR" OUTPUT="$CORE_SYNC_LAUNCH_AGENT_FILE" python3 - <<'PY'
 import os
 import plistlib
 
 payload = {
     "Label": os.environ["LABEL"],
-    "ProgramArguments": [os.path.join(os.environ["ROOT_DIR"], "scripts", "edge"), "core", "sync-service", "run-configured"],
-    "WorkingDirectory": os.environ["ROOT_DIR"],
+    "ProgramArguments": [os.environ["RUNNER"], "--config", os.environ["CONFIG"], "--credentials", os.environ["CREDENTIALS"], "--lock", os.environ["LOCK"]],
+    "WorkingDirectory": os.environ["CORE_ROOT"],
     "RunAtLoad": True,
     "StartInterval": int(os.environ["INTERVAL"]),
     "ProcessType": "Background",
@@ -1048,9 +1069,18 @@ with open(os.environ["OUTPUT"], "wb") as handle:
 PY
     info "Installed launchd Core sync service at $CORE_SYNC_LAUNCH_AGENT_FILE"
   else
-    systemd_root="${ROOT_DIR//\\/\\\\}"
-    systemd_root="${systemd_root//\"/\\\"}"
-    systemd_root="${systemd_root//%/%%}"
+    systemd_core_root="${core_root//\\/\\\\}"
+    systemd_core_root="${systemd_core_root//\"/\\\"}"
+    systemd_core_root="${systemd_core_root//%/%%}"
+    systemd_runner="${CORE_SYNC_RUNTIME_RUNNER//\\/\\\\}"
+    systemd_runner="${systemd_runner//\"/\\\"}"
+    systemd_runner="${systemd_runner//%/%%}"
+    systemd_config="${CORE_SYNC_CONFIG_FILE//\\/\\\\}"
+    systemd_config="${systemd_config//\"/\\\"}"
+    systemd_credentials="${CORE_SYNC_CREDENTIALS_FILE//\\/\\\\}"
+    systemd_credentials="${systemd_credentials//\"/\\\"}"
+    systemd_lock="${CORE_SYNC_LOCK_FILE//\\/\\\\}"
+    systemd_lock="${systemd_lock//\"/\\\"}"
     cat > "$CORE_SYNC_SYSTEMD_SERVICE_FILE" <<EOF
 [Unit]
 Description=SecOpsAI Edge to Core synchronization
@@ -1058,8 +1088,8 @@ After=network-online.target
 
 [Service]
 Type=oneshot
-WorkingDirectory="$systemd_root"
-ExecStart="$systemd_root/scripts/edge" core sync-service run-configured
+WorkingDirectory="$systemd_core_root"
+ExecStart="$systemd_runner" --config "$systemd_config" --credentials "$systemd_credentials" --lock "$systemd_lock"
 Environment=PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
 EOF
     cat > "$CORE_SYNC_SYSTEMD_TIMER_FILE" <<EOF
@@ -1129,7 +1159,7 @@ core_sync_service_logs() {
 
 uninstall_core_sync_service() {
   stop_core_sync_service
-  rm -f "$CORE_SYNC_LAUNCH_AGENT_FILE" "$CORE_SYNC_SYSTEMD_SERVICE_FILE" "$CORE_SYNC_SYSTEMD_TIMER_FILE" "$CORE_SYNC_CONFIG_FILE"
+  rm -f "$CORE_SYNC_LAUNCH_AGENT_FILE" "$CORE_SYNC_SYSTEMD_SERVICE_FILE" "$CORE_SYNC_SYSTEMD_TIMER_FILE" "$CORE_SYNC_CONFIG_FILE" "$CORE_SYNC_CREDENTIALS_FILE" "$CORE_SYNC_LOCK_FILE" "$CORE_SYNC_RUNTIME_RUNNER"
   if [ "$(uname -s)" != "Darwin" ]; then
     systemctl --user daemon-reload || true
   fi

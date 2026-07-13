@@ -31,7 +31,7 @@ Operate and recover it with:
 ./scripts/edge core sync-service uninstall
 ```
 
-macOS uses a launchd interval job. Linux uses a systemd user timer and one-shot service. The scanner worker and Core sync have separate lifecycle, logs, and failure boundaries. Configuration is owner-only JSON and contains paths/profile only; API credentials remain in the existing protected cloud configuration. An execution lock skips overlapping timer/manual runs.
+macOS uses a launchd interval job. Linux uses a systemd user timer and one-shot service. The scanner worker and Core sync have separate lifecycle, logs, and failure boundaries. The installer stages a small runner under Application Support (macOS) or the user data directory (Linux), so launchd does not need access to a repository under a privacy-protected Documents folder. Configuration and credentials are separate owner-only JSON files; the token is passed to Core through the child environment, never process arguments or the plist/unit. An advisory file lock skips overlapping timer/manual runs.
 
 Local API:
 

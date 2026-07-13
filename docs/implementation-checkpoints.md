@@ -760,8 +760,11 @@ Completed changes:
 - macOS uses a launchd interval job; Linux uses a systemd user timer and
   one-shot service. Core sync and scanner worker lifecycles remain isolated.
 - Added owner-only structured JSON configuration without credentials, safe
-  environment-over-file precedence, and a stale-aware lock that skips
+  environment-over-file precedence, and an advisory lock that skips
   overlapping timer/manual runs.
+- Staged a standalone owner-executable sync runner outside macOS protected user
+  folders, with credentials isolated in a separate `0600` JSON file and passed
+  to Core only through the process environment.
 - Added dashboard copy actions for installation, immediate sync, status, and
   logs, plus Core/Edge architecture, pilot, runbook, and support-bundle updates.
 - Removed the final founder-specific Core path from Edge integration docs.
@@ -776,6 +779,11 @@ Validation:
   with 12 tests passed, the static production build passed, and npm audit
   reported 0 vulnerabilities.
 - Core full suite: 221 tests passed; strict MkDocs build passed.
+- Real macOS launchd verification completed: 300-second timer running, no token
+  in launch arguments, config/credentials `0600`, runner `0700`, and Core synced
+  4 Edge assets plus 10 Edge findings.
+- A real cloud-profile support bundle included sync health/log output and was
+  verified not to contain the configured cloud administrator token.
 
 Known risks:
 
@@ -783,6 +791,9 @@ Known risks:
   unified Core-backed web console remain the next architecture milestone.
 - Local service installation is per-user; appliance-wide Linux deployment will
   later use a system service/package instead of the pilot user timer.
+- launchd cannot execute repositories stored in macOS privacy-protected
+  Documents folders without Full Disk Access; the staged runner is the required
+  service path and is covered by an installer regression test.
 
 ## Completion Rules
 
