@@ -1702,6 +1702,62 @@ Activation required:
   anonymous REST request is denied. Until then, production remains a demo-only
   surface and must not hold real customer data.
 
+## Checkpoint 033 - Protected Hosted Core Ingestion
+
+Status: implementation complete; Edge PR and release verification pending
+
+Branches and merged dependencies:
+
+- Core PR: `#38` (`codex/core-ingestion-api`)
+- Core merge: `6ceb4310c16f8cef068abac4b13351c8ba191174`
+- Edge branch: `codex/hosted-core-push`
+
+Completed changes:
+
+- Added the organization-scoped Core FastAPI ingestion/read boundary with
+  separate ingest/read credentials, minimized workspace responses, import
+  audit history, strict CORS/trusted hosts, bounded bundle contracts, and raw
+  scanner telemetry rejection.
+- Changed Edge source identity from version-scoped to organization-scoped so a
+  routine Edge upgrade does not create a second Core sync cursor.
+- Added `./scripts/core-api configure-local|run|check|status` and a Render
+  Blueprint validated by Render CLI for one Starter instance plus a 1 GB
+  persistent disk. No paid service was created automatically.
+- Added `./scripts/edge core push --cloud --core-api-url ...` and hosted mode
+  for the supervised `core sync-service`. Hosted transfer needs no Core repo on
+  the sensor host and keeps both scoped credentials out of process arguments.
+- Hardened the staged bridge with owner-only credentials/output, no redirects,
+  HTTPS for non-loopback endpoints, bounded responses, overlap locking, and
+  explicit Core import confirmation.
+- Added configurable Core API URL plus **Copy Hosted Push** and **Install
+  Hosted Sync** actions to the Edge Settings console.
+- Advanced API, agent, dashboard, installer examples, and release tests to
+  `0.2.8`.
+
+Validation:
+
+- Core: 237 tests and 4 subtests passed; focused API/Edge tests passed; docs
+  verifier, Bandit, fatal flake8 rules, dependency audit, and the Render
+  Blueprint validator passed. A live Uvicorn smoke returned health/ready 200
+  and protected workspace 401 without a credential.
+- Core PR checks passed on Python 3.10/3.11 plus Trivy, Semgrep, Gitleaks,
+  dependency, license, security, and Cloudflare preview checks.
+- Edge bridge tests exercised a real loopback Edge export and Core import,
+  owner-only bundle persistence, secret non-disclosure, hosted service install,
+  overlap behavior, and non-loopback HTTP rejection.
+- `./scripts/edge test`: 95 backend/agent tests and 25 frontend tests passed;
+  the static production build completed and npm audit found zero
+  vulnerabilities.
+
+Known deployment boundary:
+
+- Hosted Core is deploy-ready but not created. Render persistent disks require
+  a paid web service, so activation remains an explicit cost decision. Local
+  Core sync continues to work without that service.
+- Canonical Mission Control authentication remains staged until an authorized
+  Supabase database credential is available for the RLS migration and an
+  invited operator is confirmed.
+
 ## Completion Rules
 
 A checkpoint is complete only when:

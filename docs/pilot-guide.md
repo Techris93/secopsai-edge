@@ -25,7 +25,8 @@ SecOpsAI Edge discovers internal network assets, records service exposure, monit
 9. Generate a report.
 10. Open the report detail page, verify the frozen reporting period and metrics, then copy the executive summary/client brief or download the client-ready PDF.
 11. Configure webhook/email/Telegram notifications.
-12. Install automatic Edge-to-Core sync and confirm its status/logs.
+12. Install automatic Edge-to-Core sync, choosing local import or hosted Core
+    push, and confirm its status/logs.
 13. Confirm important operator actions appear in Audit Log.
 
 ## Establish The Baseline

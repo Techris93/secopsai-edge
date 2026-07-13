@@ -166,7 +166,11 @@ Create a redacted diagnostics bundle when a sensor needs support:
 
 The command records release, platform, dependency, API, worker-service, and recent worker-log status without copying credential files or printing tokens. The output is created with owner-only permissions. Review local paths and network ranges before sharing it.
 
-The Core Integration panel defaults to `$HOME/secopsai-edge` and `$HOME/secopsai`. Update the two install-path fields once if the repositories live elsewhere; the dashboard stores those path preferences in that browser and regenerates every copyable command without exposing founder-specific paths publicly.
+The Core Integration panel defaults to `$HOME/secopsai-edge`, `$HOME/secopsai`,
+and the hosted Core API URL. Update those fields once if the repositories or
+API live elsewhere; the dashboard stores the preferences in that browser and
+regenerates every copyable command without exposing credentials or
+founder-specific paths publicly.
 
 ## Hosted API Workflow
 
@@ -249,6 +253,20 @@ unset SECOPSAI_EDGE_CORE_TOKEN
 ```
 
 Use `run-now` after an important scan, and `logs` when the dashboard/Core inventory appears stale. The support bundle includes sync service status and recent redacted logs. Stopping or uninstalling this service does not stop the Edge scanner worker.
+
+For a hosted Core API, choose **Install Hosted Sync** in Settings or run:
+
+```bash
+export SECOPSAI_EDGE_CORE_TOKEN="$(python3 -c 'import getpass; print(getpass.getpass("Edge Core export token: "))')"
+export SECOPSAI_CORE_INGEST_TOKEN="$(python3 -c 'import getpass; print(getpass.getpass("Core ingest token: "))')"
+./scripts/edge core sync-service install --cloud \
+  --core-api-url https://<core-api>.onrender.com --interval 300
+unset SECOPSAI_EDGE_CORE_TOKEN SECOPSAI_CORE_INGEST_TOKEN
+./scripts/edge core sync-service start
+```
+
+This mode fetches only the normalized Edge export and sends it to the
+organization-bound Core ingest endpoint. It does not need a local Core repo.
 
 ## Splunk HEC Export
 

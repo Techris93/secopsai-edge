@@ -58,7 +58,10 @@ Usage:
                                       Export normalized graph/findings for SecOpsAI Core
   ./scripts/edge core sync [--cloud] [--access-token TOKEN] [--core-root ~/secopsai]
                                       Export Edge data and import it into SecOpsAI Core
+  ./scripts/edge core push [--cloud] --core-api-url https://<core-api>
+                                      Push a normalized bundle to hosted SecOpsAI Core
   ./scripts/edge core sync-service install --cloud [--core-root ~/secopsai]
+  ./scripts/edge core sync-service install --cloud --core-api-url https://<core-api>
   ./scripts/edge core sync-service start|stop|status|logs|run-now|uninstall
                                       Manage automatic Edge-to-Core synchronization
   ./scripts/edge cloud configure <url> Save hosted Render API URL
@@ -1001,6 +1004,112 @@ core_sync() {
   (cd "$core_root" && "$core_python" "${import_args[@]}")
 }
 
+core_push() {
+  profile="local"
+  output="$ROOT_DIR/edge-bundle.json"
+  core_api_url_value="${SECOPSAI_CORE_API_URL:-}"
+  core_ingest_token_value="${SECOPSAI_CORE_INGEST_TOKEN:-}"
+  edge_access_token_value="${SECOPSAI_EDGE_CORE_TOKEN:-}"
+
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --cloud) profile="cloud" ;;
+      --output|-o)
+        shift || true
+        output="${1:-}"
+        [ -n "$output" ] || fail "--output requires a path"
+        ;;
+      --core-api-url)
+        shift || true
+        core_api_url_value="${1:-}"
+        [ -n "$core_api_url_value" ] || fail "--core-api-url requires a value"
+        ;;
+      --access-token)
+        shift || true
+        edge_access_token_value="${1:-}"
+        [ -n "$edge_access_token_value" ] || fail "--access-token requires a value"
+        ;;
+      *) fail "Unknown core push option: $1" ;;
+    esac
+    shift || true
+  done
+
+  [ -n "$core_api_url_value" ] || fail "Set SECOPSAI_CORE_API_URL or use --core-api-url"
+  if [ -z "$core_ingest_token_value" ]; then
+    core_ingest_token_value="$(python3 -c 'import getpass; print(getpass.getpass("Core ingest token: "))')"
+  fi
+  [ -n "$core_ingest_token_value" ] || fail "Core ingest token is required"
+
+  if [ "$profile" = "cloud" ]; then
+    edge_api_url_value="$(cloud_api_url)"
+    if [ -z "$edge_access_token_value" ]; then
+      fail "Set SECOPSAI_EDGE_CORE_TOKEN to a workspace-scoped core:export token"
+    fi
+  else
+    load_env
+    edge_api_url_value="$(api_url)"
+    if [ -z "$edge_access_token_value" ]; then
+      edge_access_token_value="$(admin_token)"
+    fi
+  fi
+
+  output="$(resolve_path "$output")"
+  temporary_dir="$(mktemp -d "${TMPDIR:-/tmp}/secopsai-core-push.XXXXXX")"
+  chmod 700 "$temporary_dir"
+  temporary_config="$temporary_dir/config.json"
+  temporary_credentials="$temporary_dir/credentials.json"
+  temporary_lock="$temporary_dir/push.lock"
+  trap 'rm -rf "$temporary_dir"' RETURN
+  CORE_PUSH_PROFILE="$profile" CORE_PUSH_OUTPUT="$output" CORE_PUSH_CONFIG="$temporary_config" \
+    CORE_PUSH_CREDENTIALS="$temporary_credentials" \
+    CORE_PUSH_EDGE_API_URL="$edge_api_url_value" \
+    CORE_PUSH_EDGE_ACCESS_TOKEN="$edge_access_token_value" \
+    CORE_PUSH_API_URL="$core_api_url_value" \
+    CORE_PUSH_INGEST_TOKEN="$core_ingest_token_value" python3 - <<'PY'
+import json
+import os
+from pathlib import Path
+
+config = Path(os.environ["CORE_PUSH_CONFIG"])
+credentials = Path(os.environ["CORE_PUSH_CREDENTIALS"])
+config.write_text(
+    json.dumps(
+        {
+            "destination": "hosted",
+            "profile": os.environ["CORE_PUSH_PROFILE"],
+            "core_root": "",
+            "output": os.environ["CORE_PUSH_OUTPUT"],
+            "db_path": "",
+            "interval": 0,
+        },
+        sort_keys=True,
+    ),
+    encoding="utf-8",
+)
+credentials.write_text(
+    json.dumps(
+        {
+            "edge_api_url": os.environ["CORE_PUSH_EDGE_API_URL"],
+            "edge_access_token": os.environ["CORE_PUSH_EDGE_ACCESS_TOKEN"],
+            "core_api_url": os.environ["CORE_PUSH_API_URL"],
+            "core_ingest_token": os.environ["CORE_PUSH_INGEST_TOKEN"],
+        },
+        sort_keys=True,
+    ),
+    encoding="utf-8",
+)
+config.chmod(0o600)
+credentials.chmod(0o600)
+PY
+  info "Pushing normalized Edge context into SecOpsAI Core"
+  "$ROOT_DIR/scripts/core-sync-runner.py" \
+    --config "$temporary_config" \
+    --credentials "$temporary_credentials" \
+    --lock "$temporary_lock"
+  rm -rf "$temporary_dir"
+  trap - RETURN
+}
+
 save_core_sync_config() {
   profile="$1"
   core_root="$2"
@@ -1046,6 +1155,58 @@ PY
   chmod 600 "$CORE_SYNC_CREDENTIALS_FILE"
 }
 
+save_hosted_core_sync_config() {
+  profile="$1"
+  output="$2"
+  interval="$3"
+  umask 077
+  CORE_SYNC_PROFILE="$profile" CORE_SYNC_OUTPUT="$output" \
+    CORE_SYNC_INTERVAL="$interval" CORE_SYNC_CONFIG_FILE="$CORE_SYNC_CONFIG_FILE" python3 - <<'PY'
+import json
+import os
+
+payload = {
+    "destination": "hosted",
+    "profile": os.environ["CORE_SYNC_PROFILE"],
+    "core_root": "",
+    "output": os.environ["CORE_SYNC_OUTPUT"],
+    "db_path": "",
+    "interval": int(os.environ["CORE_SYNC_INTERVAL"]),
+}
+with open(os.environ["CORE_SYNC_CONFIG_FILE"], "w", encoding="utf-8") as handle:
+    json.dump(payload, handle, indent=2, sort_keys=True)
+    handle.write("\n")
+PY
+  chmod 600 "$CORE_SYNC_CONFIG_FILE"
+}
+
+save_hosted_core_sync_credentials() {
+  edge_api_url="$1"
+  edge_access_token="$2"
+  core_api_url="$3"
+  core_ingest_token="$4"
+  umask 077
+  CORE_SYNC_EDGE_API_URL="$edge_api_url" \
+    CORE_SYNC_EDGE_ACCESS_TOKEN="$edge_access_token" \
+    CORE_SYNC_CORE_API_URL="$core_api_url" \
+    CORE_SYNC_CORE_INGEST_TOKEN="$core_ingest_token" \
+    CORE_SYNC_CREDENTIALS_FILE="$CORE_SYNC_CREDENTIALS_FILE" python3 - <<'PY'
+import json
+import os
+
+payload = {
+    "edge_api_url": os.environ["CORE_SYNC_EDGE_API_URL"],
+    "edge_access_token": os.environ["CORE_SYNC_EDGE_ACCESS_TOKEN"],
+    "core_api_url": os.environ["CORE_SYNC_CORE_API_URL"],
+    "core_ingest_token": os.environ["CORE_SYNC_CORE_INGEST_TOKEN"],
+}
+with open(os.environ["CORE_SYNC_CREDENTIALS_FILE"], "w", encoding="utf-8") as handle:
+    json.dump(payload, handle, indent=2, sort_keys=True)
+    handle.write("\n")
+PY
+  chmod 600 "$CORE_SYNC_CREDENTIALS_FILE"
+}
+
 load_core_sync_config() {
   [ -f "$CORE_SYNC_CONFIG_FILE" ] || fail "Core sync service is not configured. Run ./scripts/edge core sync-service install --cloud first."
   config_values="$(CORE_SYNC_CONFIG_FILE="$CORE_SYNC_CONFIG_FILE" python3 - <<'PY'
@@ -1054,7 +1215,7 @@ import os
 
 with open(os.environ["CORE_SYNC_CONFIG_FILE"], encoding="utf-8") as handle:
     payload = json.load(handle)
-for key in ("profile", "core_root", "output", "db_path", "interval"):
+for key in ("profile", "core_root", "output", "db_path", "interval", "destination"):
     value = str(payload.get(key, ""))
     if "\n" in value or "\r" in value:
         raise SystemExit(f"invalid newline in {key}")
@@ -1066,7 +1227,10 @@ PY
   CORE_SYNC_OUTPUT="$(printf "%s\n" "$config_values" | sed -n '3p')"
   CORE_SYNC_DB_PATH="$(printf "%s\n" "$config_values" | sed -n '4p')"
   CORE_SYNC_INTERVAL="$(printf "%s\n" "$config_values" | sed -n '5p')"
+  CORE_SYNC_DESTINATION="$(printf "%s\n" "$config_values" | sed -n '6p')"
+  CORE_SYNC_DESTINATION="${CORE_SYNC_DESTINATION:-local}"
   [ "$CORE_SYNC_PROFILE" = "local" ] || [ "$CORE_SYNC_PROFILE" = "cloud" ] || fail "Invalid Core sync service profile"
+  [ "$CORE_SYNC_DESTINATION" = "local" ] || [ "$CORE_SYNC_DESTINATION" = "hosted" ] || fail "Invalid Core sync destination"
 }
 
 run_configured_core_sync() {
@@ -1086,6 +1250,8 @@ install_core_sync_service() {
   db_path=""
   interval="300"
   access_token_value="${SECOPSAI_EDGE_CORE_TOKEN:-}"
+  core_api_url_value="${SECOPSAI_CORE_API_URL:-}"
+  core_ingest_token_value="${SECOPSAI_CORE_INGEST_TOKEN:-}"
   while [ "$#" -gt 0 ]; do
     case "$1" in
       --cloud) profile="cloud" ;;
@@ -1094,6 +1260,7 @@ install_core_sync_service() {
       --db-path) shift; db_path="${1:-}" ;;
       --interval) shift; interval="${1:-}" ;;
       --access-token) shift; access_token_value="${1:-}"; [ -n "$access_token_value" ] || fail "--access-token requires a value" ;;
+      --core-api-url) shift; core_api_url_value="${1:-}"; [ -n "$core_api_url_value" ] || fail "--core-api-url requires a value" ;;
       *) fail "Unknown core sync service option: $1" ;;
     esac
     shift || true
@@ -1101,12 +1268,22 @@ install_core_sync_service() {
   [[ "$interval" =~ ^[0-9]+$ ]] || fail "--interval must be an integer number of seconds"
   [ "$interval" -ge 60 ] && [ "$interval" -le 86400 ] || fail "--interval must be between 60 and 86400 seconds"
   case "$core_root$output$db_path" in *$'\n'*|*$'\r'*) fail "Core sync service paths cannot contain newlines" ;; esac
-  core_root="$(resolve_path "$core_root")"
+  destination="local"
+  if [ -n "$core_api_url_value" ]; then
+    destination="hosted"
+  fi
+  if [ "$destination" = "local" ]; then
+    core_root="$(resolve_path "$core_root")"
+  else
+    core_root=""
+  fi
   output="$(resolve_path "$output")"
   if [ -n "$db_path" ]; then
     db_path="$(resolve_path "$db_path")"
   fi
-  [ -d "$core_root" ] || fail "SecOpsAI Core root not found: $core_root"
+  if [ "$destination" = "local" ]; then
+    [ -d "$core_root" ] || fail "SecOpsAI Core root not found: $core_root"
+  fi
   if [ "$profile" = "cloud" ]; then
     cloud_api_url >/dev/null
   fi
@@ -1114,6 +1291,9 @@ install_core_sync_service() {
   if [ "$profile" = "cloud" ]; then
     sync_api_url="$(cloud_api_url)"
     if [ -z "$access_token_value" ]; then
+      if [ "$destination" = "hosted" ]; then
+        fail "Set SECOPSAI_EDGE_CORE_TOKEN to a workspace-scoped core:export token"
+      fi
       warn "No workspace Core export token supplied; falling back to the legacy cloud admin token"
       access_token_value="$(cloud_admin_token)"
     fi
@@ -1124,13 +1304,25 @@ install_core_sync_service() {
       access_token_value="$(admin_token)"
     fi
   fi
-  save_core_sync_config "$profile" "$core_root" "$output" "$db_path" "$interval"
-  save_core_sync_credentials "$sync_api_url" "$access_token_value"
+  if [ "$destination" = "hosted" ]; then
+    [ -n "$access_token_value" ] || fail "Set SECOPSAI_EDGE_CORE_TOKEN to a workspace-scoped core:export token"
+    if [ -z "$core_ingest_token_value" ]; then
+      core_ingest_token_value="$(python3 -c 'import getpass; print(getpass.getpass("Core ingest token: "))')"
+    fi
+    [ -n "$core_ingest_token_value" ] || fail "Core ingest token is required"
+    save_hosted_core_sync_config "$profile" "$output" "$interval"
+    save_hosted_core_sync_credentials "$sync_api_url" "$access_token_value" "$core_api_url_value" "$core_ingest_token_value"
+    service_working_dir="$CORE_SYNC_STATE_DIR"
+  else
+    save_core_sync_config "$profile" "$core_root" "$output" "$db_path" "$interval"
+    save_core_sync_credentials "$sync_api_url" "$access_token_value"
+    service_working_dir="$core_root"
+  fi
   install -m 700 "$ROOT_DIR/scripts/core-sync-runner.py" "$CORE_SYNC_RUNTIME_RUNNER"
 
   if [ "$(uname -s)" = "Darwin" ]; then
     mkdir -p "$(dirname "$CORE_SYNC_LAUNCH_AGENT_FILE")"
-    CORE_ROOT="$core_root" RUNNER="$CORE_SYNC_RUNTIME_RUNNER" CONFIG="$CORE_SYNC_CONFIG_FILE" CREDENTIALS="$CORE_SYNC_CREDENTIALS_FILE" LOCK="$CORE_SYNC_LOCK_FILE" LABEL="$CORE_SYNC_SERVICE_LABEL" INTERVAL="$interval" LOG_DIR="$LOG_DIR" OUTPUT="$CORE_SYNC_LAUNCH_AGENT_FILE" python3 - <<'PY'
+    CORE_ROOT="$service_working_dir" RUNNER="$CORE_SYNC_RUNTIME_RUNNER" CONFIG="$CORE_SYNC_CONFIG_FILE" CREDENTIALS="$CORE_SYNC_CREDENTIALS_FILE" LOCK="$CORE_SYNC_LOCK_FILE" LABEL="$CORE_SYNC_SERVICE_LABEL" INTERVAL="$interval" LOG_DIR="$LOG_DIR" OUTPUT="$CORE_SYNC_LAUNCH_AGENT_FILE" python3 - <<'PY'
 import os
 import plistlib
 
@@ -1150,7 +1342,7 @@ with open(os.environ["OUTPUT"], "wb") as handle:
 PY
     info "Installed launchd Core sync service at $CORE_SYNC_LAUNCH_AGENT_FILE"
   else
-    systemd_core_root="${core_root//\\/\\\\}"
+    systemd_core_root="${service_working_dir//\\/\\\\}"
     systemd_core_root="${systemd_core_root//\"/\\\"}"
     systemd_core_root="${systemd_core_root//%/%%}"
     systemd_runner="${CORE_SYNC_RUNTIME_RUNNER//\\/\\\\}"
@@ -1272,6 +1464,9 @@ core() {
       ;;
     sync)
       core_sync "$@"
+      ;;
+    push)
+      core_push "$@"
       ;;
     sync-service)
       core_sync_service "$@"
