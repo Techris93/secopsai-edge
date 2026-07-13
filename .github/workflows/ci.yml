@@ -28,7 +28,7 @@ jobs:
           --health-retries 10
     env:
       DATABASE_URL: postgresql+psycopg://secopsai:secopsai@127.0.0.1:5432/secopsai_edge
-      SECOPSAI_ADMIN_TOKEN: ci-admin-token-that-is-not-used-in-production
+      SECOPSAI_ADMIN_TOKEN: dev-admin-token
       SECOPSAI_TOKEN_SECRET: ci-token-secret-that-is-not-used-in-production
       SECOPSAI_AUTO_CREATE_TABLES: "false"
 
