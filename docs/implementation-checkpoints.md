@@ -2040,7 +2040,7 @@ Activation boundaries:
 
 ## Checkpoint 037 - Accessibility And Browser Completion
 
-Status: implementation complete; release pending
+Status: complete
 
 Completed changes:
 
@@ -2064,6 +2064,10 @@ Completed changes:
 Branch:
 
 - Edge: `codex/accessibility-browser-completion`
+- Pull request: `#23`
+- Feature commit: `e409d13419f2836c8e2f101079b34b37782822f3`
+- Merge commit: `8fb3c17256cf92dfcbbf083c9637d036f063f618`
+- Release: `v0.3.1`
 
 Validation before PR:
 
@@ -2077,8 +2081,24 @@ Validation before PR:
   passed after the version advance.
 - `pip-audit -r requirements.lock` found zero known Python dependency
   vulnerabilities.
-- `git diff --check` passed. Exact-commit release, CI, deployment, and deployed
-  browser evidence remain pending until the pull request is merged.
+- `git diff --check` passed.
+- Pull-request checks `29264374317` and `29264376371` passed. Main-branch CI
+  run `29264635334` passed after the merge.
+- Release workflow `29264883933` published the private `v0.3.1` GitHub release
+  with versioned and stable archives, bootstrap installer, and SHA-256
+  manifests. The release archive digest begins `e8d7ae` and was checked against
+  the exact merge commit.
+- Render API deploy `dep-d9agnb6q1p3s73dkfo8g` and scheduler deploy
+  `dep-d9agnbeq1p3s73dkfomg` became live at the exact merge commit. `/healthz`
+  reported version `0.3.1` and commit `8fb3c17256cf`; `/readyz` reported schema
+  revision `0014_operator_access`.
+- Cloudflare production deployment `70a8e224-d8d1-46d0-9065-99c19b161640`
+  published source `8fb3c17` with demo mode disabled and the Render API base URL.
+- A deployed-browser Settings check confirmed the canonical Cloudflare URL,
+  hosted API URL, explicit disconnected state, no demo banner, no framework
+  error or console error, and a working Refresh interaction. The exact static
+  build had already passed all `24` desktop/mobile browser workflows, including
+  responsive-overflow and accessibility coverage.
 
 Remaining boundary:
 

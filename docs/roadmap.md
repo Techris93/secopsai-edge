@@ -39,11 +39,11 @@ without founder supervision:
    restore drill now protect the current demo data. Move Render API/PostgreSQL
    from free demo plans, enable managed backups or point-in-time recovery, and
    define an uptime target before accepting paid-pilot data.
-2. **Browser end-to-end coverage.** Desktop/mobile Chromium now protects login,
-   password recovery, scan queueing, finding triage, schedule creation, and
-   report generation against a disposable API contract. Invitation acceptance
-   and MFA login are also covered; onboarding enrollment, PDF download,
-   keyboard paths, and automated accessibility checks remain.
+2. **Browser and accessibility operations.** Desktop/mobile Chromium now
+   protects login, password recovery, invitation acceptance, MFA, scan queueing,
+   finding triage, schedule creation, report generation, sensor enrollment, PDF
+   download, keyboard paths, responsive layouts, and automated WCAG checks.
+   Complete a manual VoiceOver/NVDA review before broad commercial use.
 3. **Account access activation.** Invitation acceptance, password recovery,
    TOTP MFA, one-use recovery codes, and owner-assisted reset are implemented.
    Configure an approved SMTP provider, enroll a second owner, and exercise the
@@ -58,23 +58,20 @@ without founder supervision:
 
 ## Controlled Pilot Completion Sequence
 
-The checkpoint ledger is complete through `036`. The remaining controlled-pilot
+The checkpoint ledger is complete through `037`. The remaining controlled-pilot
 sequence is deliberately bounded and should be completed in this order:
 
-1. **Checkpoint 037 - Accessibility and browser completion.** Automated WCAG
-   checks plus enrollment, PDF download, keyboard, responsive, empty, error,
-   and degraded-state workflows against the production build.
-2. **Checkpoint 038 - Durable pilot infrastructure and recovery proof.** Paid
+1. **Checkpoint 038 - Durable pilot infrastructure and recovery proof.** Paid
    database/API decision, managed backups or equivalent, restore drill,
    retention/deletion controls, uptime target, and operator recovery exercise.
-3. **Checkpoint 039 - Research and wireless operational boundary.** First
+2. **Checkpoint 039 - Research and wireless operational boundary.** First
    narrowly scoped package-research workflow, reproducible evidence export,
    Linux/Raspberry Pi wireless validation, and explicit unsupported-platform
    messaging.
-4. **Checkpoint 040 - External pilot acceptance.** Fresh-machine installation,
+3. **Checkpoint 040 - External pilot acceptance.** Fresh-machine installation,
    seven-day soak, schedule/notification/offline-sensor exercises, support SLO,
    uninstall, and pilot exit checklist.
-5. **Checkpoint 041 - Controlled-pilot release closeout.** Exact-build deploy,
+4. **Checkpoint 041 - Controlled-pilot release closeout.** Exact-build deploy,
    release artifacts, public docs alignment, final security review, known-risk
    register, and a signed pilot go/no-go record.
 
