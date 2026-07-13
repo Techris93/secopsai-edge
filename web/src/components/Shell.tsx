@@ -17,6 +17,7 @@ import {
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
+import { WorkspaceSwitcher } from "@/components/WorkspaceSwitcher";
 
 const navItems = [
   { href: "/", label: "Overview", icon: LayoutDashboard },
@@ -36,7 +37,7 @@ export function Shell({ children }: { children: ReactNode }) {
 
   return (
     <div className="min-h-screen bg-paper">
-      <aside className="fixed inset-y-0 left-0 hidden w-64 border-r border-line bg-white px-4 py-5 lg:block">
+      <aside className="fixed inset-y-0 left-0 hidden w-64 flex-col border-r border-line bg-white px-4 py-5 lg:flex">
         <Link href="/" className="flex items-center gap-3">
           <span className="grid h-10 w-10 place-items-center rounded-lg bg-sea text-white">
             <Radar size={22} aria-hidden="true" />
@@ -48,7 +49,8 @@ export function Shell({ children }: { children: ReactNode }) {
             <span className="block text-lg font-semibold text-ink">Edge Sensor</span>
           </span>
         </Link>
-        <nav className="mt-8 space-y-1">
+        <WorkspaceSwitcher />
+        <nav className="mt-4 min-h-0 flex-1 space-y-1 overflow-y-auto py-1">
           {navItems.map((item) => {
             const active = pathname === item.href;
             const Icon = item.icon;
@@ -68,7 +70,7 @@ export function Shell({ children }: { children: ReactNode }) {
             );
           })}
         </nav>
-        <div className="absolute bottom-5 left-4 right-4 rounded-lg border border-line bg-paper p-3">
+        <div className="mt-4 rounded-lg border border-line bg-paper p-3">
           <div className="flex items-center gap-2 text-sm font-medium text-ink">
             <Activity size={16} className="text-sea" aria-hidden="true" />
             Local pilot mode
@@ -86,6 +88,9 @@ export function Shell({ children }: { children: ReactNode }) {
               <Radar size={20} className="text-sea" aria-hidden="true" />
               SecOpsAI Edge
             </Link>
+            <div className="w-48 max-w-[52vw]">
+              <WorkspaceSwitcher compact />
+            </div>
           </div>
           <nav className="mt-3 flex gap-1 overflow-x-auto pb-1">
             {navItems.map((item) => {

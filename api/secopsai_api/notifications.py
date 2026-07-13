@@ -14,7 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from secopsai_api.config import Settings, get_settings
-from secopsai_api.models import NotificationDelivery, NotificationEndpoint, utcnow
+from secopsai_api.models import NotificationDelivery, NotificationEndpoint, Site, utcnow
 
 
 RETRYABLE_STATUSES = {"queued", "retrying"}
@@ -30,7 +30,13 @@ def notify_event(
 ) -> list[NotificationDelivery]:
     """Persist matching deliveries and make one immediate, recorded attempt."""
     settings = settings or get_settings()
+    organization_id = None
+    if site_id:
+        site = db.get(Site, site_id)
+        organization_id = site.organization_id if site else None
     query = select(NotificationEndpoint).where(NotificationEndpoint.enabled.is_(True))
+    if organization_id:
+        query = query.where(NotificationEndpoint.organization_id == organization_id)
     deliveries: list[NotificationDelivery] = []
     for endpoint in db.scalars(query).all():
         if endpoint.site_id and endpoint.site_id != site_id:
@@ -38,6 +44,7 @@ def notify_event(
         if endpoint.events and event_type not in endpoint.events:
             continue
         delivery = NotificationDelivery(
+            organization_id=endpoint.organization_id,
             endpoint_id=endpoint.id,
             site_id=site_id,
             event_type=event_type,
@@ -59,6 +66,7 @@ def test_notification(
 ) -> NotificationDelivery:
     settings = settings or get_settings()
     delivery = NotificationDelivery(
+        organization_id=endpoint.organization_id,
         endpoint_id=endpoint.id,
         site_id=endpoint.site_id,
         event_type="test",
@@ -80,6 +88,7 @@ def process_due_deliveries(
     *,
     settings: Settings | None = None,
     limit: int | None = None,
+    organization_id: str | None = None,
 ) -> dict[str, int]:
     settings = settings or get_settings()
     batch_size = max(1, min(limit or settings.notification_batch_size, 250))
@@ -92,6 +101,8 @@ def process_due_deliveries(
         .order_by(NotificationDelivery.next_attempt_at, NotificationDelivery.created_at)
         .limit(batch_size)
     )
+    if organization_id:
+        query = query.where(NotificationDelivery.organization_id == organization_id)
     totals = {"processed": 0, "delivered": 0, "retrying": 0, "failed": 0}
     for delivery in db.scalars(query).all():
         endpoint = db.get(NotificationEndpoint, delivery.endpoint_id)

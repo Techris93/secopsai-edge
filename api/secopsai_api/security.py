@@ -14,7 +14,8 @@ from sqlalchemy.orm import Session
 
 from secopsai_api.config import get_settings
 from secopsai_api.database import get_db
-from secopsai_api.models import Sensor, User
+from secopsai_api.models import DEFAULT_ORGANIZATION_ID, Sensor, User
+from secopsai_api.tenancy import ensure_default_membership, ensure_default_tenant_state, membership_for_user
 
 
 bearer = HTTPBearer(auto_error=False)
@@ -74,6 +75,7 @@ def create_dashboard_session(
     role: str = "admin",
     user_id: str | None = None,
     session_version: int | None = None,
+    organization_id: str = DEFAULT_ORGANIZATION_ID,
 ) -> str:
     settings = get_settings()
     payload = {
@@ -81,6 +83,7 @@ def create_dashboard_session(
         "role": role,
         "exp": int(time.time()) + settings.dashboard_session_ttl_seconds,
         "nonce": secrets.token_urlsafe(12),
+        "org": organization_id,
     }
     if user_id:
         payload["uid"] = user_id
@@ -122,10 +125,19 @@ def verify_dashboard_session(token: str) -> bool:
 
 def require_admin(
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer),
-) -> None:
-    context = get_dashboard_auth_context(credentials)
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    context = get_dashboard_auth_context(credentials, db)
     if str(context.get("role") or "").lower() not in {"owner", "admin"}:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Administrator role required")
+    return context
+
+
+def require_operator(
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    return get_dashboard_auth_context(credentials, db)
 
 
 def get_dashboard_auth_context(
@@ -137,7 +149,13 @@ def get_dashboard_auth_context(
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing admin token")
     credential = credentials.credentials
     if constant_time_equals(credential, settings.admin_token):
-        return {"sub": "admin-token", "role": "admin", "legacy": True}
+        ensure_default_tenant_state(db)
+        return {
+            "sub": "admin-token",
+            "role": "admin",
+            "org": DEFAULT_ORGANIZATION_ID,
+            "legacy": True,
+        }
     session = decode_dashboard_session(credential)
     if session is not None:
         user_id = session.get("uid")
@@ -145,8 +163,16 @@ def get_dashboard_auth_context(
             user = db.get(User, user_id)
             if user is None or not user.active or int(session.get("ver", 0)) != user.session_version:
                 raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Dashboard session revoked")
+            organization_id = str(session.get("org") or DEFAULT_ORGANIZATION_ID)
+            membership = membership_for_user(db, user.id, organization_id)
+            if membership is None and "org" not in session:
+                membership = ensure_default_membership(db, user)
+                db.commit()
+            if membership is None:
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Workspace access revoked")
             session["sub"] = user.email
-            session["role"] = user.role
+            session["role"] = membership.role
+            session["org"] = membership.organization_id
         return session
     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid admin token")
 

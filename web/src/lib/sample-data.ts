@@ -6,6 +6,7 @@ export const sampleData: DashboardData = {
   sites: [
     {
       id: "site-demo",
+      organization_id: "organization-demo",
       name: "Demo Site",
       created_at: now
     }

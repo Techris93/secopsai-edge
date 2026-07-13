@@ -168,7 +168,7 @@ def test_dashboard_login_locks_after_repeated_failures_and_recovers(monkeypatch)
         app.dependency_overrides.clear()
 
 
-def test_admin_endpoints_reject_viewer_session() -> None:
+def test_viewer_session_can_read_but_cannot_administer() -> None:
     db = make_session()
     client = make_client(db)
     viewer_token = create_dashboard_session(subject="viewer@example.com", role="viewer")
@@ -178,11 +178,17 @@ def test_admin_endpoints_reject_viewer_session() -> None:
             "/api/v1/sites",
             headers={"Authorization": f"Bearer {viewer_token}"},
         )
+        write_response = client.post(
+            "/api/v1/sites",
+            headers={"Authorization": f"Bearer {viewer_token}"},
+            json={"name": "Forbidden"},
+        )
     finally:
         app.dependency_overrides.clear()
 
-    assert response.status_code == 403
-    assert response.json()["detail"] == "Administrator role required"
+    assert response.status_code == 200
+    assert write_response.status_code == 403
+    assert write_response.json()["detail"] == "Administrator role required"
 
 
 def test_bootstrap_dashboard_admin_rejects_short_password(monkeypatch) -> None:

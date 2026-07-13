@@ -139,8 +139,26 @@ export type Report = {
 
 export type Site = {
   id: string;
+  organization_id: string;
   name: string;
   created_at: string;
+};
+
+export type Organization = {
+  id: string;
+  name: string;
+  slug: string;
+  active: boolean;
+  role: "owner" | "admin" | "viewer" | string;
+  created_at: string;
+};
+
+export type AuthIdentity = {
+  subject: string;
+  role: string;
+  organization_id: string;
+  organizations: Organization[];
+  user?: User | null;
 };
 
 export type User = {

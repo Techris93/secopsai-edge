@@ -2,6 +2,7 @@ import { sampleData } from "./sample-data";
 import type {
   Asset,
   AssetDetail,
+  AuthIdentity,
   AuditLog,
   BaselineRule,
   DashboardData,
@@ -9,6 +10,7 @@ import type {
   FindingDetail,
   FindingNote,
   NotificationEndpoint,
+  Organization,
   OnboardingStatus,
   Report,
   ScanJob,
@@ -138,8 +140,23 @@ export async function loginDashboardUser(email: string, password: string): Promi
   return payload.user ?? null;
 }
 
-export async function fetchAuthIdentity(): Promise<{ subject: string; role: string; user?: User | null }> {
-  return requestJson<{ subject: string; role: string; user?: User | null }>("/api/v1/auth/me");
+export async function fetchAuthIdentity(): Promise<AuthIdentity> {
+  return requestJson<AuthIdentity>("/api/v1/auth/me");
+}
+
+export async function switchWorkspace(organizationId: string): Promise<void> {
+  const payload = await requestJson<{ access_token: string }>("/api/v1/auth/workspace", {
+    method: "POST",
+    body: JSON.stringify({ organization_id: organizationId })
+  });
+  window.sessionStorage.setItem(SESSION_TOKEN_KEY, payload.access_token);
+}
+
+export async function createOrganization(name: string): Promise<Organization> {
+  return requestJson<Organization>("/api/v1/organizations", {
+    method: "POST",
+    body: JSON.stringify({ name })
+  });
 }
 
 export function apiBaseUrl(): string {

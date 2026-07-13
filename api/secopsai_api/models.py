@@ -16,17 +16,38 @@ def new_id() -> str:
     return str(uuid.uuid4())
 
 
+DEFAULT_ORGANIZATION_ID = "00000000-0000-4000-8000-000000000001"
+
+
 class Base(DeclarativeBase):
     pass
 
 
-class Site(Base):
-    __tablename__ = "sites"
+class Organization(Base):
+    __tablename__ = "organizations"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
-    name: Mapped[str] = mapped_column(String(160), unique=True, nullable=False)
+    name: Mapped[str] = mapped_column(String(160), nullable=False)
+    slug: Mapped[str] = mapped_column(String(120), unique=True, nullable=False)
+    active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    sites: Mapped[list["Site"]] = relationship(back_populates="organization")
+
+
+class Site(Base):
+    __tablename__ = "sites"
+    __table_args__ = (UniqueConstraint("organization_id", "name", name="uq_site_org_name"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    organization_id: Mapped[str] = mapped_column(
+        ForeignKey("organizations.id"), default=DEFAULT_ORGANIZATION_ID, nullable=False, index=True
+    )
+    name: Mapped[str] = mapped_column(String(160), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
+    organization: Mapped[Organization] = relationship(back_populates="sites")
     sensors: Mapped[list["Sensor"]] = relationship(back_populates="site")
 
 
@@ -256,11 +277,35 @@ class User(Base):
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     password_changed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
+    memberships: Mapped[list["OrganizationMembership"]] = relationship(back_populates="user")
+
+
+class OrganizationMembership(Base):
+    __tablename__ = "organization_memberships"
+    __table_args__ = (
+        UniqueConstraint("organization_id", "user_id", name="uq_organization_membership"),
+        Index("ix_organization_memberships_user_active", "user_id", "active"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), nullable=False)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), nullable=False)
+    role: Mapped[str] = mapped_column(String(32), default="viewer", nullable=False)
+    active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    organization: Mapped[Organization] = relationship()
+    user: Mapped[User] = relationship(back_populates="memberships")
+
 
 class AuditLog(Base):
     __tablename__ = "audit_logs"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    organization_id: Mapped[str] = mapped_column(
+        ForeignKey("organizations.id"), default=DEFAULT_ORGANIZATION_ID, nullable=False, index=True
+    )
     user_id: Mapped[str | None] = mapped_column(ForeignKey("users.id"))
     sensor_id: Mapped[str | None] = mapped_column(ForeignKey("sensors.id"))
     action: Mapped[str] = mapped_column(String(120), nullable=False)
@@ -274,6 +319,9 @@ class NotificationEndpoint(Base):
     __tablename__ = "notification_endpoints"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    organization_id: Mapped[str] = mapped_column(
+        ForeignKey("organizations.id"), default=DEFAULT_ORGANIZATION_ID, nullable=False, index=True
+    )
     site_id: Mapped[str | None] = mapped_column(ForeignKey("sites.id"))
     name: Mapped[str] = mapped_column(String(160), nullable=False)
     type: Mapped[str] = mapped_column(String(32), nullable=False)
@@ -294,6 +342,9 @@ class NotificationDelivery(Base):
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    organization_id: Mapped[str] = mapped_column(
+        ForeignKey("organizations.id"), default=DEFAULT_ORGANIZATION_ID, nullable=False, index=True
+    )
     endpoint_id: Mapped[str] = mapped_column(
         ForeignKey("notification_endpoints.id", ondelete="CASCADE"), nullable=False
     )

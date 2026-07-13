@@ -892,6 +892,59 @@ Known risks:
 - Blog drafts still require human editorial approval and deployment through
   Blog Ops; cases never auto-publish.
 
+## Checkpoint 019 - Workspace Isolation and MSP Context
+
+Status: complete
+
+Branch:
+
+- Edge repo: `codex/pilot-hardening-foundation`
+
+Completed changes:
+
+- Added organizations and user memberships with independent owner, admin, and
+  viewer roles. Existing users and sites migrate into a stable Default
+  Workspace without changing sensor, site, or telemetry identifiers.
+- Added a signed active-workspace claim to dashboard sessions and server-side
+  membership revalidation on every request. Role or membership changes revoke
+  all prior sessions through the existing session generation.
+- Scoped sites, sensors, jobs, schedules, assets, Wi-Fi, baselines, findings,
+  reports, notifications, audit history, and Core bundles to the authenticated
+  workspace. Sensor-token paths derive ownership from the sensor's site.
+- Added owner-only workspace creation and switching APIs plus a responsive
+  global workspace selector in the Edge console. Viewers now have useful
+  read-only access; all mutations remain admin/owner protected.
+- Changed user administration from global roles to workspace memberships,
+  with per-workspace final-administrator protection and owner-only owner-role
+  changes.
+- Added Alembic revision `0009_organizations`, direct organization indexes for
+  audit/notification records, and organization identity in Core bundle source
+  metadata.
+
+Validation:
+
+- Full existing backend/agent suite passed after the tenancy change.
+- Added adversarial two-workspace tests for list filters, guessed asset/finding
+  IDs, cross-workspace writes, Core export isolation, workspace switching, and
+  viewer write denial.
+- Frontend: 9 test files with 13 tests passed; Next.js static production build
+  and TypeScript validation passed.
+- The complete Alembic chain upgraded to `0009_organizations`, downgraded to
+  `0008_sensor_runtime_state`, and upgraded again against an isolated temporary
+  PostgreSQL 14 cluster. The server, data directory, and temporary Homebrew
+  compatibility links were removed after the drill.
+
+Known risks:
+
+- New non-default workspaces still need a one-time, workspace-scoped sensor
+  enrollment flow; the legacy CLI registration token intentionally reaches
+  only Default Workspace.
+- Core's local graph records the workspace source identifier, but Core itself
+  does not yet enforce hosted multi-tenant identity or provide a hosted ingest
+  API.
+- Billing, plan enforcement, and fleet release rings remain separate commercial
+  milestones; they are not implied by workspace isolation.
+
 ## Completion Rules
 
 A checkpoint is complete only when:

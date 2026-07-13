@@ -75,7 +75,12 @@ def compute_next_run_at(
     return candidate.astimezone(timezone.utc)
 
 
-def pick_site_and_sensor(db: Session, site_id: str | None, sensor_id: str | None) -> tuple[Site, Sensor]:
+def pick_site_and_sensor(
+    db: Session,
+    site_id: str | None,
+    sensor_id: str | None,
+    organization_id: str | None = None,
+) -> tuple[Site, Sensor]:
     if sensor_id:
         sensor = db.get(Sensor, sensor_id)
         if sensor is None:
@@ -87,11 +92,17 @@ def pick_site_and_sensor(db: Session, site_id: str | None, sensor_id: str | None
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sensor site not found")
         if site_id and site_id != site.id:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Sensor does not belong to site")
+        if organization_id and site.organization_id != organization_id:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sensor not found")
         return site, sensor
 
     query = select(Sensor).order_by(Sensor.created_at.asc())
     if site_id:
         query = query.where(Sensor.site_id == site_id)
+    if organization_id:
+        query = query.join(Site, Site.id == Sensor.site_id).where(
+            Site.organization_id == organization_id
+        )
     query = query.where(Sensor.disabled_at.is_(None))
     sensor = db.scalar(query)
     if sensor is None:
@@ -102,9 +113,13 @@ def pick_site_and_sensor(db: Session, site_id: str | None, sensor_id: str | None
     return site, sensor
 
 
-def enqueue_due_schedules(db: Session, now: datetime | None = None) -> list[ScanJob]:
+def enqueue_due_schedules(
+    db: Session,
+    now: datetime | None = None,
+    organization_id: str | None = None,
+) -> list[ScanJob]:
     now = now or utcnow()
-    schedules = db.scalars(
+    query = (
         select(ScanSchedule)
         .where(
             ScanSchedule.enabled.is_(True),
@@ -112,7 +127,12 @@ def enqueue_due_schedules(db: Session, now: datetime | None = None) -> list[Scan
             ScanSchedule.next_run_at <= now,
         )
         .order_by(ScanSchedule.next_run_at.asc())
-    ).all()
+    )
+    if organization_id:
+        query = query.join(Site, Site.id == ScanSchedule.site_id).where(
+            Site.organization_id == organization_id
+        )
+    schedules = db.scalars(query).all()
     jobs: list[ScanJob] = []
     for schedule in schedules:
         sensor = db.get(Sensor, schedule.sensor_id)

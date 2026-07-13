@@ -5,7 +5,7 @@ Standalone MacBook-first MVP for an AI-assisted asset discovery and wireless int
 ## What Is Included
 
 - Native Python collection agent using safe, allowlisted Nmap scans.
-- FastAPI backend with PostgreSQL, migrations, auth, audit logs, approved baselines, findings, reports, and Splunk HEC export hooks.
+- FastAPI backend with PostgreSQL, workspace isolation, role-based auth, audit logs, approved baselines, findings, reports, and Splunk HEC export hooks.
 - Next.js/Tailwind dashboard for onboarding, sites, assets, Wi-Fi networks, findings, schedules, reports, notifications, and sensor settings.
 - Guided onboarding, launchd/systemd worker service installation, scheduled scans, sensor token rotation, and report export.
 - Docker Compose for local PostgreSQL.
@@ -51,6 +51,11 @@ The dashboard shows one of three data states:
 - `Live API data`: connected to the configured API with a browser session.
 - `API not connected`: no usable API/session, so pilot telemetry is not being displayed.
 - `Demo data only`: sample telemetry is shown only when `NEXT_PUBLIC_SECOPSAI_DEMO_MODE=true` is explicitly configured.
+
+Authenticated users can switch among their assigned workspaces from the global selector. Sites,
+sensors, assets, findings, schedules, reports, notifications, audit records, and Core exports are
+restricted to the active workspace. Owners can create another customer workspace; administrators
+manage sites and members, while viewers have read-only access.
 
 In another terminal, register this MacBook as a sensor:
 

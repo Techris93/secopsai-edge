@@ -21,19 +21,24 @@ from secopsai_api.models import (
 SCHEMA_VERSION = "secopsai.edge.bundle.v1"
 
 
-def build_core_export(db: Session) -> dict[str, Any]:
+def build_core_export(db: Session, organization_id: str | None = None) -> dict[str, Any]:
     """Build the normalized Edge bundle consumed by SecOpsAI Core."""
     nodes: list[dict[str, Any]] = []
     edges: list[dict[str, Any]] = []
 
-    sites = list(db.scalars(select(Site).order_by(Site.created_at.asc())).all())
-    sensors = list(db.scalars(select(Sensor).order_by(Sensor.created_at.asc())).all())
-    scans = list(db.scalars(select(ScanRun).order_by(ScanRun.completed_at.asc())).all())
-    assets = list(db.scalars(select(Asset).order_by(Asset.last_seen_at.asc())).all())
-    services = list(db.scalars(select(Service).order_by(Service.last_seen_at.asc())).all())
-    wifi_networks = list(db.scalars(select(WifiNetwork).order_by(WifiNetwork.last_seen_at.asc())).all())
-    observations = list(db.scalars(select(AssetObservation)).all())
-    findings = list(db.scalars(select(Finding).order_by(Finding.updated_at.asc())).all())
+    site_query = select(Site).order_by(Site.created_at.asc())
+    if organization_id:
+        site_query = site_query.where(Site.organization_id == organization_id)
+    sites = list(db.scalars(site_query).all())
+    site_ids = [site.id for site in sites]
+    sensors = list(db.scalars(select(Sensor).where(Sensor.site_id.in_(site_ids)).order_by(Sensor.created_at.asc())).all())
+    scans = list(db.scalars(select(ScanRun).where(ScanRun.site_id.in_(site_ids)).order_by(ScanRun.completed_at.asc())).all())
+    assets = list(db.scalars(select(Asset).where(Asset.site_id.in_(site_ids)).order_by(Asset.last_seen_at.asc())).all())
+    asset_ids = [asset.id for asset in assets]
+    services = list(db.scalars(select(Service).where(Service.asset_id.in_(asset_ids)).order_by(Service.last_seen_at.asc())).all())
+    wifi_networks = list(db.scalars(select(WifiNetwork).where(WifiNetwork.site_id.in_(site_ids)).order_by(WifiNetwork.last_seen_at.asc())).all())
+    observations = list(db.scalars(select(AssetObservation).where(AssetObservation.site_id.in_(site_ids))).all())
+    findings = list(db.scalars(select(Finding).where(Finding.site_id.in_(site_ids)).order_by(Finding.updated_at.asc())).all())
 
     for site in sites:
         nodes.append(
@@ -177,6 +182,7 @@ def build_core_export(db: Session) -> dict[str, Any]:
             "product": "secopsai_edge",
             "api": "secopsai-edge-api",
             "version": "0.1.0",
+            "organization_id": organization_id,
         },
         "cursor": _cursor(scans, findings),
         "graph": {

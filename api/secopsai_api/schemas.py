@@ -86,6 +86,7 @@ class SiteOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: str
+    organization_id: str
     name: str
     created_at: datetime
 
@@ -109,6 +110,29 @@ class UserOut(BaseModel):
     created_at: datetime
     last_login_at: datetime | None = None
     password_changed_at: datetime | None = None
+
+
+class OrganizationOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    name: str
+    slug: str
+    active: bool
+    role: str
+    created_at: datetime
+
+
+class OrganizationCreateRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=160)
+
+
+class OrganizationUpdateRequest(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=160)
+
+
+class WorkspaceSwitchRequest(BaseModel):
+    organization_id: str = Field(min_length=36, max_length=36)
 
 
 class UserCreateRequest(BaseModel):
@@ -138,6 +162,8 @@ class DashboardSessionResponse(BaseModel):
 class AuthMeOut(BaseModel):
     subject: str
     role: str
+    organization_id: str
+    organizations: list[OrganizationOut] = Field(default_factory=list)
     user: UserOut | None = None
 
 

@@ -33,6 +33,8 @@ The dashboard exposes the append-only audit stream for pilot operations. The loc
 
 Core tables:
 
+- `organizations`
+- `organization_memberships`
 - `sites`
 - `sensors`
 - `scan_runs`
@@ -71,4 +73,17 @@ The AI provider receives minimized finding payloads, not raw Nmap output, packet
 
 ## SecOpsAI Core Integration
 
-Edge exports the versioned `secopsai.edge.bundle.v1` contract. A supervised launchd/systemd timer can export the normalized graph and findings from the hosted or local Edge API and import them into Core's SQLite SOC/graph store. The service is one-way, idempotent, separately logged, and does not share databases or move raw scanner output. Hosted Core ingestion, tenant isolation, billing, fleet management, and remote update orchestration remain later SaaS milestones.
+Edge exports the versioned `secopsai.edge.bundle.v1` contract. A supervised launchd/systemd timer can export the normalized graph and findings from the hosted or local Edge API and import them into Core's SQLite SOC/graph store. The service is one-way, idempotent, separately logged, and does not share databases or move raw scanner output. Each export is limited to the authenticated Edge workspace and carries that workspace identifier in `source_instance`; Core can therefore keep imports from different customers distinct. Hosted Core ingestion, billing, fleet management, and remote update orchestration remain later SaaS milestones.
+
+## Workspace Boundary
+
+Users are global identities and receive one or more organization memberships with an independent
+`owner`, `admin`, or `viewer` role. Browser sessions contain a signed organization claim, but the
+API revalidates the active user, session generation, organization, and membership on every request.
+Sites belong to exactly one organization; all sensor and telemetry data is restricted through that
+site. Organization-wide audit and notification records carry a direct organization key.
+
+Existing single-pilot installations are migrated into a stable `Default Workspace`. This preserves
+current sensor credentials and site IDs while allowing MSP operators to create additional isolated
+customer workspaces. The legacy administrator token remains scoped to the default workspace for
+interactive/API use; only the internal due-job runners may process all workspaces in one invocation.

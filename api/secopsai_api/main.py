@@ -33,6 +33,8 @@ from secopsai_api.models import (
     FindingNote,
     NotificationDelivery,
     NotificationEndpoint,
+    Organization,
+    OrganizationMembership,
     Report,
     ScanJob,
     ScanRun,
@@ -69,6 +71,9 @@ from secopsai_api.schemas import (
     NotificationRunResponse,
     NotificationEndpointUpdateRequest,
     NotificationTestResponse,
+    OrganizationCreateRequest,
+    OrganizationOut,
+    OrganizationUpdateRequest,
     OnboardingStatusOut,
     ReportOut,
     ScanIn,
@@ -94,6 +99,7 @@ from secopsai_api.schemas import (
     UserCreateRequest,
     UserOut,
     UserUpdateRequest,
+    WorkspaceSwitchRequest,
     WifiNetworkOut,
 )
 from secopsai_api.security import (
@@ -106,8 +112,21 @@ from secopsai_api.security import (
     hash_secret,
     DUMMY_PASSWORD_HASH,
     require_admin,
+    require_operator,
     require_sensor_for_path,
     verify_password,
+)
+from secopsai_api.tenancy import (
+    count_active_workspace_admins,
+    ensure_default_membership,
+    ensure_default_organization,
+    ensure_default_tenant_state,
+    membership_for_user,
+    organization_id_from_context,
+    require_active_organization,
+    site_for_organization,
+    touch_membership,
+    unique_slug,
 )
 from secopsai_api.splunk import export_finding, export_report
 
@@ -121,6 +140,7 @@ SENSOR_OFFLINE_AFTER = timedelta(minutes=3)
 STALE_SCAN_JOB_AFTER = timedelta(minutes=15)
 
 def bootstrap_dashboard_admin(db: Session) -> None:
+    ensure_default_organization(db)
     if not settings.dashboard_admin_email or not settings.dashboard_admin_password:
         return
     email = settings.dashboard_admin_email.strip().lower()
@@ -131,10 +151,15 @@ def bootstrap_dashboard_admin(db: Session) -> None:
     user = db.scalar(select(User).where(func.lower(User.email) == email))
     password_hash = hash_password(settings.dashboard_admin_password)
     if user is None or not user.active:
-        db.add(User(email=email, password_hash=password_hash, role="admin"))
+        user = User(email=email, password_hash=password_hash, role="admin")
+        db.add(user)
+        db.flush()
     else:
         user.password_hash = password_hash
         user.role = "admin"
+    membership = ensure_default_membership(db, user)
+    membership.role = "admin"
+    membership.active = True
     db.commit()
 
 
@@ -143,6 +168,8 @@ async def lifespan(_: FastAPI):
     if settings.auto_create_tables:
         Base.metadata.create_all(bind=engine)
     with Session(engine) as db:
+        ensure_default_organization(db)
+        db.commit()
         bootstrap_dashboard_admin(db)
     yield
 
@@ -195,6 +222,41 @@ def get_sensor_job(db: Session, sensor: Sensor, job_id: str) -> ScanJob:
     return job
 
 
+def get_sensor_for_organization(db: Session, sensor_id: str, organization_id: str) -> Sensor:
+    sensor = db.scalar(
+        select(Sensor)
+        .join(Site, Site.id == Sensor.site_id)
+        .where(Sensor.id == sensor_id, Site.organization_id == organization_id)
+    )
+    if sensor is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sensor not found")
+    return sensor
+
+
+def get_scan_job_for_organization(db: Session, job_id: str, organization_id: str) -> ScanJob:
+    job = db.scalar(
+        select(ScanJob)
+        .join(Site, Site.id == ScanJob.site_id)
+        .where(ScanJob.id == job_id, Site.organization_id == organization_id)
+    )
+    if job is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Scan job not found")
+    return job
+
+
+def get_scan_schedule_for_organization(
+    db: Session, schedule_id: str, organization_id: str
+) -> ScanSchedule:
+    schedule = db.scalar(
+        select(ScanSchedule)
+        .join(Site, Site.id == ScanSchedule.site_id)
+        .where(ScanSchedule.id == schedule_id, Site.organization_id == organization_id)
+    )
+    if schedule is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Scan schedule not found")
+    return schedule
+
+
 def is_stale(timestamp, max_age: timedelta) -> bool:
     if timestamp is None:
         return True
@@ -236,38 +298,50 @@ def current_sensor_job(db: Session, sensor: Sensor) -> ScanJob | None:
     )
 
 
-def get_site_or_404(db: Session, site_id: str) -> Site:
-    site = db.get(Site, site_id)
+def get_site_or_404(db: Session, site_id: str, organization_id: str | None = None) -> Site:
+    site = (
+        site_for_organization(db, site_id, organization_id)
+        if organization_id
+        else db.get(Site, site_id)
+    )
     if site is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Site not found")
     return site
 
 
-def get_asset_or_404(db: Session, asset_id: str) -> Asset:
+def get_asset_or_404(db: Session, asset_id: str, organization_id: str | None = None) -> Asset:
     asset = db.get(Asset, asset_id)
     if asset is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Asset not found")
+    if organization_id:
+        get_site_or_404(db, asset.site_id, organization_id)
     return asset
 
 
-def get_service_or_404(db: Session, service_id: str) -> Service:
+def get_service_or_404(db: Session, service_id: str, organization_id: str | None = None) -> Service:
     service = db.get(Service, service_id)
     if service is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Service not found")
+    if organization_id:
+        get_asset_or_404(db, service.asset_id, organization_id)
     return service
 
 
-def get_wifi_or_404(db: Session, wifi_id: str) -> WifiNetwork:
+def get_wifi_or_404(db: Session, wifi_id: str, organization_id: str | None = None) -> WifiNetwork:
     wifi = db.get(WifiNetwork, wifi_id)
     if wifi is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Wi-Fi network not found")
+    if organization_id:
+        get_site_or_404(db, wifi.site_id, organization_id)
     return wifi
 
 
-def get_baseline_or_404(db: Session, baseline_id: str) -> BaselineRule:
+def get_baseline_or_404(db: Session, baseline_id: str, organization_id: str | None = None) -> BaselineRule:
     rule = db.get(BaselineRule, baseline_id)
     if rule is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Baseline rule not found")
+    if organization_id:
+        get_site_or_404(db, rule.site_id, organization_id)
     return rule
 
 
@@ -345,17 +419,21 @@ def create_or_update_baseline(
     return rule, changed
 
 
-def get_finding_or_404(db: Session, finding_id: str) -> Finding:
+def get_finding_or_404(db: Session, finding_id: str, organization_id: str | None = None) -> Finding:
     finding = db.get(Finding, finding_id)
     if finding is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Finding not found")
+    if organization_id:
+        get_site_or_404(db, finding.site_id, organization_id)
     return finding
 
 
-def get_report_or_404(db: Session, report_id: str) -> Report:
+def get_report_or_404(db: Session, report_id: str, organization_id: str | None = None) -> Report:
     report = db.get(Report, report_id)
     if report is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Report not found")
+    if organization_id:
+        get_site_or_404(db, report.site_id, organization_id)
     return report
 
 
@@ -623,18 +701,29 @@ def login_dashboard_user(payload: DashboardUserLoginRequest, db: Session = Depen
     user.failed_login_count = 0
     user.locked_until = None
     user.last_login_at = utcnow()
-    write_audit(db, "auth.login", user_id=user.id, resource_type="user", resource_id=user.id)
+    membership = membership_for_user(db, user.id)
+    if membership is None:
+        membership = ensure_default_membership(db, user)
+    write_audit(
+        db,
+        "auth.login",
+        user_id=user.id,
+        organization_id=membership.organization_id,
+        resource_type="user",
+        resource_id=user.id,
+    )
     db.commit()
     db.refresh(user)
     return DashboardSessionResponse(
         access_token=create_dashboard_session(
             subject=user.email,
-            role=user.role,
+            role=membership.role,
             user_id=user.id,
             session_version=user.session_version,
+            organization_id=membership.organization_id,
         ),
         expires_in=settings.dashboard_session_ttl_seconds,
-        user=user,
+        user=user_out(user, membership.role, membership.active),
     )
 
 
@@ -647,16 +736,99 @@ def account_is_locked(user: User) -> bool:
     return user.locked_until > now
 
 
+def organization_out(organization: Organization, role: str) -> OrganizationOut:
+    return OrganizationOut(
+        id=organization.id,
+        name=organization.name,
+        slug=organization.slug,
+        active=organization.active,
+        role=role,
+        created_at=organization.created_at,
+    )
+
+
+def user_out(user: User, role: str, active: bool) -> UserOut:
+    return UserOut(
+        id=user.id,
+        email=user.email,
+        role=role,
+        active=active,
+        created_at=user.created_at,
+        last_login_at=user.last_login_at,
+        password_changed_at=user.password_changed_at,
+    )
+
+
+def organizations_for_context(db: Session, auth_context: dict) -> list[OrganizationOut]:
+    if auth_context.get("legacy"):
+        organization = ensure_default_tenant_state(db)
+        return [organization_out(organization, "admin")]
+    user_id = auth_context.get("uid")
+    if not user_id:
+        organization = ensure_default_tenant_state(db)
+        return [organization_out(organization, str(auth_context.get("role") or "viewer"))]
+    rows = db.execute(
+        select(Organization, OrganizationMembership.role)
+        .join(OrganizationMembership, OrganizationMembership.organization_id == Organization.id)
+        .where(
+            OrganizationMembership.user_id == user_id,
+            OrganizationMembership.active.is_(True),
+            Organization.active.is_(True),
+        )
+        .order_by(Organization.name.asc())
+    ).all()
+    return [organization_out(organization, role) for organization, role in rows]
+
+
 @app.get("/api/v1/auth/me", response_model=AuthMeOut)
 def auth_me(
     auth_context: dict = Depends(get_dashboard_auth_context),
     db: Session = Depends(get_db),
 ) -> AuthMeOut:
     user = db.get(User, auth_context.get("uid")) if auth_context.get("uid") else None
+    serialized_user = (
+        user_out(user, str(auth_context.get("role") or user.role), True) if user else None
+    )
     return AuthMeOut(
         subject=str(auth_context.get("sub") or "dashboard"),
         role=str(auth_context.get("role") or "admin"),
-        user=user,
+        organization_id=organization_id_from_context(auth_context),
+        organizations=organizations_for_context(db, auth_context),
+        user=serialized_user,
+    )
+
+
+@app.post("/api/v1/auth/workspace", response_model=DashboardSessionResponse)
+def switch_workspace(
+    payload: WorkspaceSwitchRequest,
+    auth_context: dict = Depends(get_dashboard_auth_context),
+    db: Session = Depends(get_db),
+) -> DashboardSessionResponse:
+    user = db.get(User, auth_context.get("uid")) if auth_context.get("uid") else None
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User login required")
+    membership = membership_for_user(db, user.id, payload.organization_id)
+    if membership is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workspace not found")
+    write_audit(
+        db,
+        "auth.workspace_switched",
+        user_id=user.id,
+        organization_id=membership.organization_id,
+        resource_type="organization",
+        resource_id=membership.organization_id,
+    )
+    db.commit()
+    return DashboardSessionResponse(
+        access_token=create_dashboard_session(
+            subject=user.email,
+            role=membership.role,
+            user_id=user.id,
+            session_version=user.session_version,
+            organization_id=membership.organization_id,
+        ),
+        expires_in=settings.dashboard_session_ttl_seconds,
+        user=user_out(user, membership.role, membership.active),
     )
 
 
@@ -668,7 +840,14 @@ def logout_dashboard_user(
     user = db.get(User, auth_context.get("uid")) if auth_context.get("uid") else None
     if user is not None:
         user.session_version += 1
-        write_audit(db, "auth.logout", user_id=user.id, resource_type="user", resource_id=user.id)
+        write_audit(
+            db,
+            "auth.logout",
+            user_id=user.id,
+            organization_id=organization_id_from_context(auth_context),
+            resource_type="user",
+            resource_id=user.id,
+        )
         db.commit()
     return {"status": "logged_out"}
 
@@ -689,128 +868,326 @@ def change_dashboard_password(
     user.password_hash = hash_password(payload.new_password)
     user.password_changed_at = utcnow()
     user.session_version += 1
-    write_audit(db, "auth.password_changed", user_id=user.id, resource_type="user", resource_id=user.id)
+    write_audit(
+        db,
+        "auth.password_changed",
+        user_id=user.id,
+        organization_id=organization_id_from_context(auth_context),
+        resource_type="user",
+        resource_id=user.id,
+    )
     db.commit()
     return {"status": "password_changed"}
 
 
-@app.get("/api/v1/users", response_model=list[UserOut], dependencies=[Depends(require_admin)])
-def list_users(db: Session = Depends(get_db)) -> list[User]:
-    return list(db.scalars(select(User).order_by(User.created_at.asc())).all())
+@app.get("/api/v1/organizations", response_model=list[OrganizationOut])
+def list_organizations(
+    auth_context: dict = Depends(require_operator),
+    db: Session = Depends(get_db),
+) -> list[OrganizationOut]:
+    return organizations_for_context(db, auth_context)
 
 
-@app.post("/api/v1/users", response_model=UserOut, dependencies=[Depends(require_admin)])
-def create_user(payload: UserCreateRequest, db: Session = Depends(get_db)) -> User:
+@app.post("/api/v1/organizations", response_model=OrganizationOut)
+def create_organization(
+    payload: OrganizationCreateRequest,
+    auth_context: dict = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> OrganizationOut:
+    if auth_context.get("legacy") or auth_context.get("role") != "owner":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Owner user login required")
+    name = payload.name.strip()
+    organization = Organization(name=name, slug=unique_slug(db, name), active=True)
+    membership = OrganizationMembership(
+        organization=organization,
+        user_id=str(auth_context["uid"]),
+        role="owner",
+        active=True,
+    )
+    db.add_all([organization, membership])
+    db.flush()
+    write_audit(
+        db,
+        "organization.created",
+        user_id=str(auth_context["uid"]),
+        organization_id=organization.id,
+        resource_type="organization",
+        resource_id=organization.id,
+        details={"name": organization.name, "slug": organization.slug},
+    )
+    db.commit()
+    db.refresh(organization)
+    return organization_out(organization, "owner")
+
+
+@app.patch("/api/v1/organizations/{organization_id}", response_model=OrganizationOut)
+def update_organization(
+    organization_id: str,
+    payload: OrganizationUpdateRequest,
+    auth_context: dict = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> OrganizationOut:
+    current_id = organization_id_from_context(auth_context)
+    if organization_id != current_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workspace not found")
+    if auth_context.get("legacy") or auth_context.get("role") != "owner":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Owner role required")
+    organization = require_active_organization(db, current_id)
+    if payload.name is not None:
+        organization.name = payload.name.strip()
+    organization.updated_at = utcnow()
+    write_audit(
+        db,
+        "organization.updated",
+        user_id=str(auth_context["uid"]),
+        organization_id=organization.id,
+        resource_type="organization",
+        resource_id=organization.id,
+        details={"name": organization.name},
+    )
+    db.commit()
+    db.refresh(organization)
+    return organization_out(organization, str(auth_context["role"]))
+
+
+@app.get("/api/v1/users", response_model=list[UserOut])
+def list_users(
+    auth_context: dict = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> list[UserOut]:
+    organization_id = organization_id_from_context(auth_context)
+    rows = db.execute(
+        select(User, OrganizationMembership)
+        .join(OrganizationMembership, OrganizationMembership.user_id == User.id)
+        .where(OrganizationMembership.organization_id == organization_id)
+        .order_by(User.created_at.asc())
+    ).all()
+    return [user_out(user, membership.role, membership.active) for user, membership in rows]
+
+
+@app.post("/api/v1/users", response_model=UserOut)
+def create_user(
+    payload: UserCreateRequest,
+    auth_context: dict = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> UserOut:
+    organization_id = organization_id_from_context(auth_context)
+    if payload.role == "owner" and auth_context.get("role") != "owner":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Owner role required")
     email = payload.email.strip().lower()
-    if db.scalar(select(User).where(func.lower(User.email) == email)):
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="User already exists")
-    user = User(email=email, password_hash=hash_password(payload.password), role=payload.role, active=True)
-    db.add(user)
+    user = db.scalar(select(User).where(func.lower(User.email) == email))
+    if user is None:
+        user = User(email=email, password_hash=hash_password(payload.password), role=payload.role, active=True)
+        db.add(user)
+        db.flush()
+    existing = db.scalar(
+        select(OrganizationMembership).where(
+            OrganizationMembership.organization_id == organization_id,
+            OrganizationMembership.user_id == user.id,
+        )
+    )
+    if existing:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="User already belongs to this workspace")
+    membership = OrganizationMembership(
+        organization_id=organization_id,
+        user_id=user.id,
+        role=payload.role,
+        active=True,
+    )
+    user.active = True
+    db.add(membership)
     db.flush()
     write_audit(
         db,
         "user.created",
+        user_id=str(auth_context.get("uid")) if auth_context.get("uid") else None,
+        organization_id=organization_id,
         resource_type="user",
         resource_id=user.id,
-        details={"email": user.email, "role": user.role},
+        details={"email": user.email, "role": membership.role},
     )
     db.commit()
     db.refresh(user)
-    return user
+    return user_out(user, membership.role, membership.active)
 
 
-@app.patch("/api/v1/users/{user_id}", response_model=UserOut, dependencies=[Depends(require_admin)])
-def update_user(user_id: str, payload: UserUpdateRequest, db: Session = Depends(get_db)) -> User:
+@app.patch("/api/v1/users/{user_id}", response_model=UserOut)
+def update_user(
+    user_id: str,
+    payload: UserUpdateRequest,
+    auth_context: dict = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> UserOut:
+    organization_id = organization_id_from_context(auth_context)
     user = db.get(User, user_id)
-    if user is None:
+    membership = db.scalar(
+        select(OrganizationMembership).where(
+            OrganizationMembership.organization_id == organization_id,
+            OrganizationMembership.user_id == user_id,
+        )
+    )
+    if user is None or membership is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-    removing_privileged_access = user.active and user.role in {"owner", "admin"} and (
+    if (
+        membership.role == "owner" or payload.role == "owner"
+    ) and auth_context.get("role") != "owner":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Owner role required")
+    removing_privileged_access = membership.active and membership.role in {"owner", "admin"} and (
         payload.active is False or payload.role == "viewer"
     )
-    if removing_privileged_access:
-        others = db.scalar(
-            select(func.count(User.id)).where(
-                User.id != user.id,
-                User.active.is_(True),
-                User.role.in_(["owner", "admin"]),
-            )
-        ) or 0
-        if others == 0:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="At least one active administrator is required",
-            )
+    if removing_privileged_access and count_active_workspace_admins(
+        db, organization_id, exclude_user_id=user.id
+    ) == 0:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="At least one active administrator is required",
+        )
     security_changed = False
-    if payload.role is not None and payload.role != user.role:
-        user.role = payload.role
+    if payload.role is not None and payload.role != membership.role:
+        membership.role = payload.role
         security_changed = True
-    if payload.active is not None and payload.active != user.active:
-        user.active = payload.active
+    if payload.active is not None and payload.active != membership.active:
+        membership.active = payload.active
         security_changed = True
     if payload.password is not None:
+        membership_count = db.scalar(
+            select(func.count(OrganizationMembership.id)).where(
+                OrganizationMembership.user_id == user.id,
+                OrganizationMembership.active.is_(True),
+            )
+        ) or 0
+        if membership_count > 1 and user.id != auth_context.get("uid"):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Multi-workspace users must change their own password",
+            )
         user.password_hash = hash_password(payload.password)
         user.password_changed_at = utcnow()
         security_changed = True
+    user.active = bool(
+        db.scalar(
+            select(func.count(OrganizationMembership.id)).where(
+                OrganizationMembership.user_id == user.id,
+                OrganizationMembership.active.is_(True),
+            )
+        )
+    )
+    touch_membership(membership)
     if security_changed:
         user.session_version += 1
     write_audit(
         db,
         "user.updated",
+        user_id=str(auth_context.get("uid")) if auth_context.get("uid") else None,
+        organization_id=organization_id,
         resource_type="user",
         resource_id=user.id,
         details={
-            "role": user.role,
-            "active": user.active,
+            "role": membership.role,
+            "active": membership.active,
             "credentials_rotated": payload.password is not None,
         },
     )
     db.commit()
     db.refresh(user)
-    return user
+    return user_out(user, membership.role, membership.active)
 
 
-@app.get("/api/v1/sites", response_model=list[SiteOut], dependencies=[Depends(require_admin)])
-def list_sites(db: Session = Depends(get_db)) -> list[Site]:
-    return list(db.scalars(select(Site).order_by(Site.created_at.asc())).all())
+@app.get("/api/v1/sites", response_model=list[SiteOut])
+def list_sites(
+    auth_context: dict = Depends(require_operator),
+    db: Session = Depends(get_db),
+) -> list[Site]:
+    organization_id = organization_id_from_context(auth_context)
+    return list(
+        db.scalars(
+            select(Site).where(Site.organization_id == organization_id).order_by(Site.created_at.asc())
+        ).all()
+    )
 
 
-@app.post("/api/v1/sites", response_model=SiteOut, dependencies=[Depends(require_admin)])
-def create_site(payload: SiteCreateRequest, db: Session = Depends(get_db)) -> Site:
+@app.post("/api/v1/sites", response_model=SiteOut)
+def create_site(
+    payload: SiteCreateRequest,
+    auth_context: dict = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> Site:
+    organization_id = organization_id_from_context(auth_context)
     name = payload.name.strip()
-    existing = db.scalar(select(Site).where(Site.name == name))
+    existing = db.scalar(
+        select(Site).where(Site.organization_id == organization_id, Site.name == name)
+    )
     if existing:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Site already exists")
-    site = Site(name=name)
+    site = Site(organization_id=organization_id, name=name)
     db.add(site)
     db.flush()
-    write_audit(db, "site.created", resource_type="site", resource_id=site.id, details={"name": site.name})
+    write_audit(
+        db,
+        "site.created",
+        organization_id=organization_id,
+        resource_type="site",
+        resource_id=site.id,
+        details={"name": site.name},
+    )
     db.commit()
     db.refresh(site)
     return site
 
 
-@app.patch("/api/v1/sites/{site_id}", response_model=SiteOut, dependencies=[Depends(require_admin)])
-def update_site(site_id: str, payload: SiteUpdateRequest, db: Session = Depends(get_db)) -> Site:
-    site = get_site_or_404(db, site_id)
+@app.patch("/api/v1/sites/{site_id}", response_model=SiteOut)
+def update_site(
+    site_id: str,
+    payload: SiteUpdateRequest,
+    auth_context: dict = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> Site:
+    organization_id = organization_id_from_context(auth_context)
+    site = get_site_or_404(db, site_id, organization_id)
     name = payload.name.strip()
-    duplicate = db.scalar(select(Site).where(Site.name == name, Site.id != site.id))
+    duplicate = db.scalar(
+        select(Site).where(
+            Site.organization_id == organization_id,
+            Site.name == name,
+            Site.id != site.id,
+        )
+    )
     if duplicate:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Site already exists")
     site.name = name
-    write_audit(db, "site.updated", resource_type="site", resource_id=site.id, details={"name": site.name})
+    write_audit(
+        db,
+        "site.updated",
+        organization_id=organization_id,
+        resource_type="site",
+        resource_id=site.id,
+        details={"name": site.name},
+    )
     db.commit()
     db.refresh(site)
     return site
 
 
-@app.get("/api/v1/onboarding/status", response_model=OnboardingStatusOut, dependencies=[Depends(require_admin)])
-def onboarding_status(db: Session = Depends(get_db)) -> OnboardingStatusOut:
-    sites = db.scalar(select(func.count(Site.id))) or 0
-    sensors = list(db.scalars(select(Sensor)).all())
-    completed_scans = db.scalar(select(func.count(ScanRun.id)).where(ScanRun.status == "completed")) or 0
-    reports = db.scalar(select(func.count(Report.id))) or 0
-    schedules = db.scalar(select(func.count(ScanSchedule.id))) or 0
-    notifications = db.scalar(select(func.count(NotificationEndpoint.id)).where(NotificationEndpoint.enabled.is_(True))) or 0
+@app.get("/api/v1/onboarding/status", response_model=OnboardingStatusOut)
+def onboarding_status(
+    auth_context: dict = Depends(require_operator),
+    db: Session = Depends(get_db),
+) -> OnboardingStatusOut:
+    organization_id = organization_id_from_context(auth_context)
+    site_ids = select(Site.id).where(Site.organization_id == organization_id)
+    sites = db.scalar(select(func.count(Site.id)).where(Site.organization_id == organization_id)) or 0
+    sensors = list(db.scalars(select(Sensor).where(Sensor.site_id.in_(site_ids))).all())
+    completed_scans = db.scalar(
+        select(func.count(ScanRun.id)).where(ScanRun.site_id.in_(site_ids), ScanRun.status == "completed")
+    ) or 0
+    reports = db.scalar(select(func.count(Report.id)).where(Report.site_id.in_(site_ids))) or 0
+    schedules = db.scalar(select(func.count(ScanSchedule.id)).where(ScanSchedule.site_id.in_(site_ids))) or 0
+    notifications = db.scalar(
+        select(func.count(NotificationEndpoint.id)).where(
+            NotificationEndpoint.organization_id == organization_id,
+            NotificationEndpoint.enabled.is_(True),
+        )
+    ) or 0
     return OnboardingStatusOut(
         api_connected=True,
         sites_created=sites > 0,
@@ -826,12 +1203,21 @@ def onboarding_status(db: Session = Depends(get_db)) -> OnboardingStatusOut:
 @app.post(
     "/api/v1/sensors/register",
     response_model=SensorRegisterResponse,
-    dependencies=[Depends(require_admin)],
 )
-def register_sensor(payload: SensorRegisterRequest, db: Session = Depends(get_db)) -> SensorRegisterResponse:
-    site = db.scalar(select(Site).where(Site.name == payload.site_name))
+def register_sensor(
+    payload: SensorRegisterRequest,
+    auth_context: dict = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> SensorRegisterResponse:
+    organization_id = organization_id_from_context(auth_context)
+    site = db.scalar(
+        select(Site).where(
+            Site.organization_id == organization_id,
+            Site.name == payload.site_name,
+        )
+    )
     if site is None:
-        site = Site(name=payload.site_name)
+        site = Site(organization_id=organization_id, name=payload.site_name)
         db.add(site)
         db.flush()
 
@@ -849,6 +1235,7 @@ def register_sensor(payload: SensorRegisterRequest, db: Session = Depends(get_db
         db,
         "sensor.registered",
         sensor_id=sensor.id,
+        organization_id=organization_id,
         resource_type="sensor",
         resource_id=sensor.id,
         details={"name": sensor.name, "site_name": site.name},
@@ -890,10 +1277,12 @@ def heartbeat(
         sensor.last_error,
     )
     if current != previous:
+        organization_id = get_site_or_404(db, sensor.site_id).organization_id
         write_audit(
             db,
             "sensor.state_changed",
             sensor_id=sensor.id,
+            organization_id=organization_id,
             resource_type="sensor",
             resource_id=sensor.id,
             details=payload.details,
@@ -902,11 +1291,22 @@ def heartbeat(
     return {"status": "ok"}
 
 
-@app.get("/api/v1/sensors", response_model=list[SensorOut], dependencies=[Depends(require_admin)])
-def list_sensors(site_id: str | None = None, db: Session = Depends(get_db)) -> list[SensorOut]:
+@app.get("/api/v1/sensors", response_model=list[SensorOut])
+def list_sensors(
+    site_id: str | None = None,
+    auth_context: dict = Depends(require_operator),
+    db: Session = Depends(get_db),
+) -> list[SensorOut]:
+    organization_id = organization_id_from_context(auth_context)
     recover_stale_scan_jobs(db)
-    query = select(Sensor).order_by(Sensor.created_at.asc())
+    query = (
+        select(Sensor)
+        .join(Site, Site.id == Sensor.site_id)
+        .where(Site.organization_id == organization_id)
+        .order_by(Sensor.created_at.asc())
+    )
     if site_id:
+        get_site_or_404(db, site_id, organization_id)
         query = query.where(Sensor.site_id == site_id)
     sensors = list(db.scalars(query).all())
     result = [sensor_out(db, sensor) for sensor in sensors]
@@ -914,11 +1314,15 @@ def list_sensors(site_id: str | None = None, db: Session = Depends(get_db)) -> l
     return result
 
 
-@app.patch("/api/v1/sensors/{sensor_id}", response_model=SensorOut, dependencies=[Depends(require_admin)])
-def update_sensor(sensor_id: str, payload: SensorUpdateRequest, db: Session = Depends(get_db)) -> SensorOut:
-    sensor = db.get(Sensor, sensor_id)
-    if sensor is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sensor not found")
+@app.patch("/api/v1/sensors/{sensor_id}", response_model=SensorOut)
+def update_sensor(
+    sensor_id: str,
+    payload: SensorUpdateRequest,
+    auth_context: dict = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> SensorOut:
+    organization_id = organization_id_from_context(auth_context)
+    sensor = get_sensor_for_organization(db, sensor_id, organization_id)
     if payload.name is not None:
         sensor.name = payload.name.strip()
     if payload.hostname is not None:
@@ -927,64 +1331,81 @@ def update_sensor(sensor_id: str, payload: SensorUpdateRequest, db: Session = De
         sensor.status = payload.status
     if payload.last_error is not None:
         sensor.last_error = payload.last_error
-    write_audit(db, "sensor.updated", sensor_id=sensor.id, resource_type="sensor", resource_id=sensor.id)
+    write_audit(db, "sensor.updated", sensor_id=sensor.id, organization_id=organization_id, resource_type="sensor", resource_id=sensor.id)
     db.commit()
     db.refresh(sensor)
     return sensor_out(db, sensor)
 
 
-@app.post("/api/v1/sensors/{sensor_id}/rotate-token", response_model=SensorRotateResponse, dependencies=[Depends(require_admin)])
-def rotate_sensor_token(sensor_id: str, db: Session = Depends(get_db)) -> SensorRotateResponse:
-    sensor = db.get(Sensor, sensor_id)
-    if sensor is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sensor not found")
+@app.post("/api/v1/sensors/{sensor_id}/rotate-token", response_model=SensorRotateResponse)
+def rotate_sensor_token(
+    sensor_id: str,
+    auth_context: dict = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> SensorRotateResponse:
+    organization_id = organization_id_from_context(auth_context)
+    sensor = get_sensor_for_organization(db, sensor_id, organization_id)
     token = generate_sensor_token()
     sensor.token_hash = hash_secret(token)
     sensor.status = "registered"
     sensor.last_seen_at = None
-    write_audit(db, "sensor.token_rotated", sensor_id=sensor.id, resource_type="sensor", resource_id=sensor.id)
+    write_audit(db, "sensor.token_rotated", sensor_id=sensor.id, organization_id=organization_id, resource_type="sensor", resource_id=sensor.id)
     db.commit()
     return SensorRotateResponse(sensor_id=sensor.id, sensor_token=token)
 
 
-@app.post("/api/v1/sensors/{sensor_id}/disable", response_model=SensorOut, dependencies=[Depends(require_admin)])
-def disable_sensor(sensor_id: str, db: Session = Depends(get_db)) -> SensorOut:
-    sensor = db.get(Sensor, sensor_id)
-    if sensor is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sensor not found")
+@app.post("/api/v1/sensors/{sensor_id}/disable", response_model=SensorOut)
+def disable_sensor(
+    sensor_id: str,
+    auth_context: dict = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> SensorOut:
+    organization_id = organization_id_from_context(auth_context)
+    sensor = get_sensor_for_organization(db, sensor_id, organization_id)
     sensor.disabled_at = utcnow()
     sensor.status = "disabled"
     db.query(ScanJob).filter(ScanJob.sensor_id == sensor.id, ScanJob.status == "queued").update(
         {"status": "canceled", "updated_at": utcnow(), "error_message": "Sensor disabled"}
     )
-    write_audit(db, "sensor.disabled", sensor_id=sensor.id, resource_type="sensor", resource_id=sensor.id)
+    write_audit(db, "sensor.disabled", sensor_id=sensor.id, organization_id=organization_id, resource_type="sensor", resource_id=sensor.id)
     db.commit()
     db.refresh(sensor)
     return sensor_out(db, sensor)
 
 
-@app.post("/api/v1/sensors/{sensor_id}/enable", response_model=SensorOut, dependencies=[Depends(require_admin)])
-def enable_sensor(sensor_id: str, db: Session = Depends(get_db)) -> SensorOut:
-    sensor = db.get(Sensor, sensor_id)
-    if sensor is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sensor not found")
+@app.post("/api/v1/sensors/{sensor_id}/enable", response_model=SensorOut)
+def enable_sensor(
+    sensor_id: str,
+    auth_context: dict = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> SensorOut:
+    organization_id = organization_id_from_context(auth_context)
+    sensor = get_sensor_for_organization(db, sensor_id, organization_id)
     sensor.disabled_at = None
     sensor.status = "registered"
     sensor.last_error = None
-    write_audit(db, "sensor.enabled", sensor_id=sensor.id, resource_type="sensor", resource_id=sensor.id)
+    write_audit(db, "sensor.enabled", sensor_id=sensor.id, organization_id=organization_id, resource_type="sensor", resource_id=sensor.id)
     db.commit()
     db.refresh(sensor)
     return sensor_out(db, sensor)
 
 
-@app.post("/api/v1/scan-jobs", response_model=ScanJobOut, dependencies=[Depends(require_admin)])
-def create_scan_job(payload: ScanJobCreateRequest, db: Session = Depends(get_db)) -> ScanJob:
+@app.post("/api/v1/scan-jobs", response_model=ScanJobOut)
+def create_scan_job(
+    payload: ScanJobCreateRequest,
+    auth_context: dict = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> ScanJob:
+    organization_id = organization_id_from_context(auth_context)
     target_cidr = normalize_scan_job_target(payload.target_cidr)
     if payload.sensor_id:
-        sensor = db.get(Sensor, payload.sensor_id)
+        sensor = get_sensor_for_organization(db, payload.sensor_id, organization_id)
     else:
         sensor = db.scalar(
-            select(Sensor).where(Sensor.disabled_at.is_(None)).order_by(Sensor.created_at.asc())
+            select(Sensor)
+            .join(Site, Site.id == Sensor.site_id)
+            .where(Site.organization_id == organization_id, Sensor.disabled_at.is_(None))
+            .order_by(Sensor.created_at.asc())
         )
     if sensor is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Register a sensor before queueing scans")
@@ -1006,6 +1427,7 @@ def create_scan_job(payload: ScanJobCreateRequest, db: Session = Depends(get_db)
         db,
         "scan_job.created",
         sensor_id=sensor.id,
+        organization_id=organization_id,
         resource_type="scan_job",
         resource_id=job.id,
         details={"target_cidr": target_cidr, "include_wifi": payload.include_wifi},
@@ -1015,14 +1437,21 @@ def create_scan_job(payload: ScanJobCreateRequest, db: Session = Depends(get_db)
     return job
 
 
-@app.get("/api/v1/scan-jobs", response_model=list[ScanJobOut], dependencies=[Depends(require_admin)])
+@app.get("/api/v1/scan-jobs", response_model=list[ScanJobOut])
 def list_scan_jobs(
     status_filter: str | None = None,
     sensor_id: str | None = None,
     site_id: str | None = None,
+    auth_context: dict = Depends(require_operator),
     db: Session = Depends(get_db),
 ) -> list[ScanJob]:
-    query = select(ScanJob).order_by(ScanJob.created_at.desc())
+    organization_id = organization_id_from_context(auth_context)
+    query = (
+        select(ScanJob)
+        .join(Site, Site.id == ScanJob.site_id)
+        .where(Site.organization_id == organization_id)
+        .order_by(ScanJob.created_at.desc())
+    )
     if status_filter:
         query = query.where(ScanJob.status == status_filter)
     if sensor_id:
@@ -1032,27 +1461,33 @@ def list_scan_jobs(
     return list(db.scalars(query).all())
 
 
-@app.post("/api/v1/scan-jobs/{job_id}/cancel", response_model=ScanJobOut, dependencies=[Depends(require_admin)])
-def cancel_scan_job(job_id: str, db: Session = Depends(get_db)) -> ScanJob:
-    job = db.get(ScanJob, job_id)
-    if job is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Scan job not found")
+@app.post("/api/v1/scan-jobs/{job_id}/cancel", response_model=ScanJobOut)
+def cancel_scan_job(
+    job_id: str,
+    auth_context: dict = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> ScanJob:
+    organization_id = organization_id_from_context(auth_context)
+    job = get_scan_job_for_organization(db, job_id, organization_id)
     if job.status in TERMINAL_SCAN_JOB_STATUSES:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Scan job is already terminal")
     job.status = "canceled"
     job.updated_at = utcnow()
     job.completed_at = job.completed_at or job.updated_at
-    write_audit(db, "scan_job.canceled", sensor_id=job.sensor_id, resource_type="scan_job", resource_id=job.id)
+    write_audit(db, "scan_job.canceled", sensor_id=job.sensor_id, organization_id=organization_id, resource_type="scan_job", resource_id=job.id)
     db.commit()
     db.refresh(job)
     return job
 
 
-@app.post("/api/v1/scan-jobs/{job_id}/retry", response_model=ScanJobOut, dependencies=[Depends(require_admin)])
-def retry_scan_job(job_id: str, db: Session = Depends(get_db)) -> ScanJob:
-    original = db.get(ScanJob, job_id)
-    if original is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Scan job not found")
+@app.post("/api/v1/scan-jobs/{job_id}/retry", response_model=ScanJobOut)
+def retry_scan_job(
+    job_id: str,
+    auth_context: dict = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> ScanJob:
+    organization_id = organization_id_from_context(auth_context)
+    original = get_scan_job_for_organization(db, job_id, organization_id)
     if original.status not in {"failed", "canceled"}:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only failed or canceled scan jobs can be retried")
     retried = ScanJob(
@@ -1070,6 +1505,7 @@ def retry_scan_job(job_id: str, db: Session = Depends(get_db)) -> ScanJob:
         db,
         "scan_job.retried",
         sensor_id=original.sensor_id,
+        organization_id=organization_id,
         resource_type="scan_job",
         resource_id=retried.id,
         details={"original_job_id": original.id},
@@ -1079,18 +1515,35 @@ def retry_scan_job(job_id: str, db: Session = Depends(get_db)) -> ScanJob:
     return retried
 
 
-@app.get("/api/v1/scan-schedules", response_model=list[ScanScheduleOut], dependencies=[Depends(require_admin)])
-def list_scan_schedules(site_id: str | None = None, db: Session = Depends(get_db)) -> list[ScanSchedule]:
-    query = select(ScanSchedule).order_by(ScanSchedule.created_at.desc())
+@app.get("/api/v1/scan-schedules", response_model=list[ScanScheduleOut])
+def list_scan_schedules(
+    site_id: str | None = None,
+    auth_context: dict = Depends(require_operator),
+    db: Session = Depends(get_db),
+) -> list[ScanSchedule]:
+    organization_id = organization_id_from_context(auth_context)
+    query = (
+        select(ScanSchedule)
+        .join(Site, Site.id == ScanSchedule.site_id)
+        .where(Site.organization_id == organization_id)
+        .order_by(ScanSchedule.created_at.desc())
+    )
     if site_id:
         query = query.where(ScanSchedule.site_id == site_id)
     return list(db.scalars(query).all())
 
 
-@app.post("/api/v1/scan-schedules", response_model=ScanScheduleOut, dependencies=[Depends(require_admin)])
-def create_scan_schedule(payload: ScanScheduleCreateRequest, db: Session = Depends(get_db)) -> ScanSchedule:
+@app.post("/api/v1/scan-schedules", response_model=ScanScheduleOut)
+def create_scan_schedule(
+    payload: ScanScheduleCreateRequest,
+    auth_context: dict = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> ScanSchedule:
+    organization_id = organization_id_from_context(auth_context)
     target_cidr = normalize_scan_job_target(payload.target_cidr)
-    site, sensor = pick_site_and_sensor(db, payload.site_id, payload.sensor_id)
+    site, sensor = pick_site_and_sensor(
+        db, payload.site_id, payload.sensor_id, organization_id
+    )
     frequency = normalize_frequency(payload.frequency)
     schedule = ScanSchedule(
         site_id=site.id,
@@ -1118,6 +1571,7 @@ def create_scan_schedule(payload: ScanScheduleCreateRequest, db: Session = Depen
         db,
         "scan_schedule.created",
         sensor_id=sensor.id,
+        organization_id=organization_id,
         resource_type="scan_schedule",
         resource_id=schedule.id,
         details={"target_cidr": target_cidr, "frequency": frequency},
@@ -1127,18 +1581,18 @@ def create_scan_schedule(payload: ScanScheduleCreateRequest, db: Session = Depen
     return schedule
 
 
-@app.patch("/api/v1/scan-schedules/{schedule_id}", response_model=ScanScheduleOut, dependencies=[Depends(require_admin)])
+@app.patch("/api/v1/scan-schedules/{schedule_id}", response_model=ScanScheduleOut)
 def update_scan_schedule(
     schedule_id: str,
     payload: ScanScheduleUpdateRequest,
+    auth_context: dict = Depends(require_admin),
     db: Session = Depends(get_db),
 ) -> ScanSchedule:
-    schedule = db.get(ScanSchedule, schedule_id)
-    if schedule is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Scan schedule not found")
+    organization_id = organization_id_from_context(auth_context)
+    schedule = get_scan_schedule_for_organization(db, schedule_id, organization_id)
     if payload.sensor_id is not None:
-        sensor = db.get(Sensor, payload.sensor_id)
-        if sensor is None or sensor.disabled_at is not None:
+        sensor = get_sensor_for_organization(db, payload.sensor_id, organization_id)
+        if sensor.disabled_at is not None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Enabled sensor not found")
         if sensor.site_id != schedule.site_id:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Sensor belongs to another site")
@@ -1170,31 +1624,40 @@ def update_scan_schedule(
         else None
     )
     schedule.updated_at = utcnow()
-    write_audit(db, "scan_schedule.updated", resource_type="scan_schedule", resource_id=schedule.id)
+    write_audit(db, "scan_schedule.updated", organization_id=organization_id, resource_type="scan_schedule", resource_id=schedule.id)
     db.commit()
     db.refresh(schedule)
     return schedule
 
 
-@app.delete("/api/v1/scan-schedules/{schedule_id}", dependencies=[Depends(require_admin)])
-def delete_scan_schedule(schedule_id: str, db: Session = Depends(get_db)) -> dict[str, str]:
-    schedule = db.get(ScanSchedule, schedule_id)
-    if schedule is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Scan schedule not found")
+@app.delete("/api/v1/scan-schedules/{schedule_id}")
+def delete_scan_schedule(
+    schedule_id: str,
+    auth_context: dict = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> dict[str, str]:
+    organization_id = organization_id_from_context(auth_context)
+    schedule = get_scan_schedule_for_organization(db, schedule_id, organization_id)
     db.delete(schedule)
-    write_audit(db, "scan_schedule.deleted", resource_type="scan_schedule", resource_id=schedule_id)
+    write_audit(db, "scan_schedule.deleted", organization_id=organization_id, resource_type="scan_schedule", resource_id=schedule_id)
     db.commit()
     return {"status": "deleted"}
 
 
-@app.post("/api/v1/scan-schedules/run-due", response_model=RunDueSchedulesResponse, dependencies=[Depends(require_admin)])
-def run_due_scan_schedules(db: Session = Depends(get_db)) -> RunDueSchedulesResponse:
-    jobs = enqueue_due_schedules(db)
+@app.post("/api/v1/scan-schedules/run-due", response_model=RunDueSchedulesResponse)
+def run_due_scan_schedules(
+    auth_context: dict = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> RunDueSchedulesResponse:
+    scoped_organization_id = None if auth_context.get("legacy") else organization_id_from_context(auth_context)
+    jobs = enqueue_due_schedules(db, organization_id=scoped_organization_id)
     for job in jobs:
+        organization_id = get_site_or_404(db, job.site_id).organization_id
         write_audit(
             db,
             "scan_schedule.job_queued",
             sensor_id=job.sensor_id,
+            organization_id=organization_id,
             resource_type="scan_job",
             resource_id=job.id,
             details={"schedule_id": job.schedule_id, "target_cidr": job.target_cidr},
@@ -1225,7 +1688,8 @@ def claim_scan_job(
     job.updated_at = now
     sensor.status = "online"
     sensor.last_seen_at = now
-    write_audit(db, "scan_job.claimed", sensor_id=sensor.id, resource_type="scan_job", resource_id=job.id)
+    organization_id = get_site_or_404(db, sensor.site_id).organization_id
+    write_audit(db, "scan_job.claimed", sensor_id=sensor.id, organization_id=organization_id, resource_type="scan_job", resource_id=job.id)
     db.commit()
     db.refresh(job)
     return job
@@ -1250,7 +1714,8 @@ def start_scan_job(
     job.preview = payload.preview
     sensor.status = "scanning"
     sensor.last_seen_at = now
-    write_audit(db, "scan_job.started", sensor_id=sensor.id, resource_type="scan_job", resource_id=job.id)
+    organization_id = get_site_or_404(db, sensor.site_id).organization_id
+    write_audit(db, "scan_job.started", sensor_id=sensor.id, organization_id=organization_id, resource_type="scan_job", resource_id=job.id)
     db.commit()
     db.refresh(job)
     return job
@@ -1275,10 +1740,12 @@ def fail_scan_job(
     job.updated_at = now
     sensor.status = "online"
     sensor.last_seen_at = now
+    organization_id = get_site_or_404(db, sensor.site_id).organization_id
     write_audit(
         db,
         "scan_job.failed",
         sensor_id=sensor.id,
+        organization_id=organization_id,
         resource_type="scan_job",
         resource_id=job.id,
         details={"error_message": job.error_message},
@@ -1304,6 +1771,7 @@ def ingest_scan_endpoint(
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Scan job is already terminal")
 
     scan, findings = ingest_scan(db, sensor, payload)
+    organization_id = get_site_or_404(db, sensor.site_id).organization_id
     for finding in findings:
         export_finding(finding)
         if finding.severity in {"critical", "high"}:
@@ -1345,6 +1813,7 @@ def ingest_scan_endpoint(
         db,
         "scan.ingested",
         sensor_id=sensor.id,
+        organization_id=organization_id,
         resource_type="scan",
         resource_id=scan.id,
         details={
@@ -1373,14 +1842,21 @@ def ingest_scan_endpoint(
     )
 
 
-@app.get("/api/v1/assets", response_model=list[AssetOut], dependencies=[Depends(require_admin)])
+@app.get("/api/v1/assets", response_model=list[AssetOut])
 def list_assets(
     status_filter: str | None = None,
     vendor: str | None = None,
     site_id: str | None = None,
+    auth_context: dict = Depends(require_operator),
     db: Session = Depends(get_db),
 ) -> list[Asset]:
-    query = select(Asset).order_by(Asset.last_seen_at.desc())
+    organization_id = organization_id_from_context(auth_context)
+    query = (
+        select(Asset)
+        .join(Site, Site.id == Asset.site_id)
+        .where(Site.organization_id == organization_id)
+        .order_by(Asset.last_seen_at.desc())
+    )
     if site_id:
         query = query.where(Asset.site_id == site_id)
     if status_filter:
@@ -1390,9 +1866,13 @@ def list_assets(
     return list(db.scalars(query).all())
 
 
-@app.get("/api/v1/assets/{asset_id}", response_model=AssetDetailOut, dependencies=[Depends(require_admin)])
-def get_asset(asset_id: str, db: Session = Depends(get_db)) -> AssetDetailOut:
-    asset = get_asset_or_404(db, asset_id)
+@app.get("/api/v1/assets/{asset_id}", response_model=AssetDetailOut)
+def get_asset(
+    asset_id: str,
+    auth_context: dict = Depends(require_operator),
+    db: Session = Depends(get_db),
+) -> AssetDetailOut:
+    asset = get_asset_or_404(db, asset_id, organization_id_from_context(auth_context))
     observations = list(
         db.scalars(
             select(AssetObservation)
@@ -1412,22 +1892,39 @@ def get_asset(asset_id: str, db: Session = Depends(get_db)) -> AssetDetailOut:
     )
 
 
-@app.get("/api/v1/wifi-networks", response_model=list[WifiNetworkOut], dependencies=[Depends(require_admin)])
-def list_wifi_networks(site_id: str | None = None, db: Session = Depends(get_db)) -> list[WifiNetwork]:
-    query = select(WifiNetwork).order_by(WifiNetwork.last_seen_at.desc())
+@app.get("/api/v1/wifi-networks", response_model=list[WifiNetworkOut])
+def list_wifi_networks(
+    site_id: str | None = None,
+    auth_context: dict = Depends(require_operator),
+    db: Session = Depends(get_db),
+) -> list[WifiNetwork]:
+    organization_id = organization_id_from_context(auth_context)
+    query = (
+        select(WifiNetwork)
+        .join(Site, Site.id == WifiNetwork.site_id)
+        .where(Site.organization_id == organization_id)
+        .order_by(WifiNetwork.last_seen_at.desc())
+    )
     if site_id:
         query = query.where(WifiNetwork.site_id == site_id)
     return list(db.scalars(query).all())
 
 
-@app.get("/api/v1/baselines", response_model=list[BaselineRuleOut], dependencies=[Depends(require_admin)])
+@app.get("/api/v1/baselines", response_model=list[BaselineRuleOut])
 def list_baselines(
     site_id: str | None = None,
     kind: str | None = None,
     status_filter: str | None = "active",
+    auth_context: dict = Depends(require_operator),
     db: Session = Depends(get_db),
 ) -> list[BaselineRule]:
-    query = select(BaselineRule).order_by(BaselineRule.created_at.desc())
+    organization_id = organization_id_from_context(auth_context)
+    query = (
+        select(BaselineRule)
+        .join(Site, Site.id == BaselineRule.site_id)
+        .where(Site.organization_id == organization_id)
+        .order_by(BaselineRule.created_at.desc())
+    )
     if site_id:
         query = query.where(BaselineRule.site_id == site_id)
     if kind:
@@ -1439,8 +1936,13 @@ def list_baselines(
     return list(db.scalars(query).all())
 
 
-@app.post("/api/v1/baselines", response_model=BaselineRuleOut, dependencies=[Depends(require_admin)])
-def create_baseline(payload: BaselineRuleCreateRequest, db: Session = Depends(get_db)) -> BaselineRule:
+@app.post("/api/v1/baselines", response_model=BaselineRuleOut)
+def create_baseline(
+    payload: BaselineRuleCreateRequest,
+    auth_context: dict = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> BaselineRule:
+    get_site_or_404(db, payload.site_id, organization_id_from_context(auth_context))
     rule, _ = create_or_update_baseline(
         db,
         site_id=payload.site_id,
@@ -1459,14 +1961,14 @@ def create_baseline(payload: BaselineRuleCreateRequest, db: Session = Depends(ge
 @app.post(
     "/api/v1/assets/{asset_id}/baseline",
     response_model=BaselineRuleOut,
-    dependencies=[Depends(require_admin)],
 )
 def create_asset_baseline(
     asset_id: str,
     payload: BaselineFromEntityRequest,
+    auth_context: dict = Depends(require_admin),
     db: Session = Depends(get_db),
 ) -> BaselineRule:
-    asset = get_asset_or_404(db, asset_id)
+    asset = get_asset_or_404(db, asset_id, organization_id_from_context(auth_context))
     rule, _ = create_or_update_baseline(
         db,
         site_id=asset.site_id,
@@ -1485,14 +1987,15 @@ def create_asset_baseline(
 @app.post(
     "/api/v1/services/{service_id}/baseline",
     response_model=BaselineRuleOut,
-    dependencies=[Depends(require_admin)],
 )
 def create_service_baseline(
     service_id: str,
     payload: BaselineFromEntityRequest,
+    auth_context: dict = Depends(require_admin),
     db: Session = Depends(get_db),
 ) -> BaselineRule:
-    service = get_service_or_404(db, service_id)
+    organization_id = organization_id_from_context(auth_context)
+    service = get_service_or_404(db, service_id, organization_id)
     asset = get_asset_or_404(db, service.asset_id)
     rule, _ = create_or_update_baseline(
         db,
@@ -1516,14 +2019,14 @@ def create_service_baseline(
 @app.post(
     "/api/v1/wifi-networks/{wifi_id}/baseline",
     response_model=BaselineRuleOut,
-    dependencies=[Depends(require_admin)],
 )
 def create_wifi_baseline(
     wifi_id: str,
     payload: BaselineFromEntityRequest,
+    auth_context: dict = Depends(require_admin),
     db: Session = Depends(get_db),
 ) -> BaselineRule:
-    wifi = get_wifi_or_404(db, wifi_id)
+    wifi = get_wifi_or_404(db, wifi_id, organization_id_from_context(auth_context))
     if not wifi.bssid:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -1547,14 +2050,15 @@ def create_wifi_baseline(
 @app.patch(
     "/api/v1/baselines/{baseline_id}",
     response_model=BaselineRuleOut,
-    dependencies=[Depends(require_admin)],
 )
 def update_baseline(
     baseline_id: str,
     payload: BaselineRuleUpdateRequest,
+    auth_context: dict = Depends(require_admin),
     db: Session = Depends(get_db),
 ) -> BaselineRule:
-    rule = get_baseline_or_404(db, baseline_id)
+    organization_id = organization_id_from_context(auth_context)
+    rule = get_baseline_or_404(db, baseline_id, organization_id)
     old_status = rule.status
     fields = payload.model_fields_set
     if "reason" in fields:
@@ -1572,6 +2076,7 @@ def update_baseline(
     write_audit(
         db,
         "baseline.updated",
+        organization_id=organization_id,
         resource_type="baseline",
         resource_id=rule.id,
         details={"status": rule.status, "findings_updated": affected},
@@ -1584,16 +2089,21 @@ def update_baseline(
 @app.delete(
     "/api/v1/baselines/{baseline_id}",
     response_model=BaselineRuleOut,
-    dependencies=[Depends(require_admin)],
 )
-def disable_baseline(baseline_id: str, db: Session = Depends(get_db)) -> BaselineRule:
-    rule = get_baseline_or_404(db, baseline_id)
+def disable_baseline(
+    baseline_id: str,
+    auth_context: dict = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> BaselineRule:
+    organization_id = organization_id_from_context(auth_context)
+    rule = get_baseline_or_404(db, baseline_id, organization_id)
     rule.status = "disabled"
     rule.updated_at = utcnow()
     affected = release_rule_findings(db, rule)
     write_audit(
         db,
         "baseline.disabled",
+        organization_id=organization_id,
         resource_type="baseline",
         resource_id=rule.id,
         details={"findings_reopened": affected},
@@ -1603,15 +2113,22 @@ def disable_baseline(baseline_id: str, db: Session = Depends(get_db)) -> Baselin
     return rule
 
 
-@app.get("/api/v1/findings", response_model=list[FindingOut], dependencies=[Depends(require_admin)])
+@app.get("/api/v1/findings", response_model=list[FindingOut])
 def list_findings(
     severity: str | None = None,
     status_filter: str | None = None,
     site_id: str | None = None,
     type_filter: str | None = None,
+    auth_context: dict = Depends(require_operator),
     db: Session = Depends(get_db),
 ) -> list[Finding]:
-    query = select(Finding).order_by(Finding.created_at.desc())
+    organization_id = organization_id_from_context(auth_context)
+    query = (
+        select(Finding)
+        .join(Site, Site.id == Finding.site_id)
+        .where(Site.organization_id == organization_id)
+        .order_by(Finding.created_at.desc())
+    )
     if site_id:
         query = query.where(Finding.site_id == site_id)
     if severity:
@@ -1623,15 +2140,17 @@ def list_findings(
     return list(db.scalars(query).all())
 
 
-@app.get("/api/v1/audit-logs", response_model=list[AuditLogOut], dependencies=[Depends(require_admin)])
+@app.get("/api/v1/audit-logs", response_model=list[AuditLogOut])
 def list_audit_logs(
     action: str | None = None,
     resource_type: str | None = None,
     sensor_id: str | None = None,
     limit: int = Query(default=100, ge=1, le=500),
+    auth_context: dict = Depends(require_operator),
     db: Session = Depends(get_db),
 ) -> list[AuditLog]:
-    query = select(AuditLog).order_by(AuditLog.created_at.desc())
+    organization_id = organization_id_from_context(auth_context)
+    query = select(AuditLog).where(AuditLog.organization_id == organization_id).order_by(AuditLog.created_at.desc())
     if action:
         query = query.where(AuditLog.action.ilike(f"%{action}%"))
     if resource_type:
@@ -1641,9 +2160,13 @@ def list_audit_logs(
     return list(db.scalars(query.limit(limit)).all())
 
 
-@app.get("/api/v1/findings/{finding_id}", response_model=FindingDetailOut, dependencies=[Depends(require_admin)])
-def get_finding(finding_id: str, db: Session = Depends(get_db)) -> FindingDetailOut:
-    finding = get_finding_or_404(db, finding_id)
+@app.get("/api/v1/findings/{finding_id}", response_model=FindingDetailOut)
+def get_finding(
+    finding_id: str,
+    auth_context: dict = Depends(require_operator),
+    db: Session = Depends(get_db),
+) -> FindingDetailOut:
+    finding = get_finding_or_404(db, finding_id, organization_id_from_context(auth_context))
     notes = list(
         db.scalars(
             select(FindingNote).where(FindingNote.finding_id == finding.id).order_by(FindingNote.created_at.asc())
@@ -1667,18 +2190,23 @@ def get_finding(finding_id: str, db: Session = Depends(get_db)) -> FindingDetail
     )
 
 
-@app.post("/api/v1/findings/{finding_id}/status", response_model=FindingOut, dependencies=[Depends(require_admin)])
-def update_finding_status(finding_id: str, status_value: str, db: Session = Depends(get_db)) -> Finding:
+@app.post("/api/v1/findings/{finding_id}/status", response_model=FindingOut)
+def update_finding_status(
+    finding_id: str,
+    status_value: str,
+    auth_context: dict = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> Finding:
+    organization_id = organization_id_from_context(auth_context)
     if status_value not in {"open", "acknowledged", "resolved", "false_positive"}:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid finding status")
-    finding = db.get(Finding, finding_id)
-    if finding is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Finding not found")
+    finding = get_finding_or_404(db, finding_id, organization_id)
     finding.status = status_value
     finding.updated_at = utcnow()
     write_audit(
         db,
         "finding.status_updated",
+        organization_id=organization_id,
         resource_type="finding",
         resource_id=finding.id,
         details={"status": status_value},
@@ -1688,13 +2216,15 @@ def update_finding_status(finding_id: str, status_value: str, db: Session = Depe
     return finding
 
 
-@app.post("/api/v1/findings/{finding_id}/notes", response_model=FindingNoteOut, dependencies=[Depends(require_admin)])
+@app.post("/api/v1/findings/{finding_id}/notes", response_model=FindingNoteOut)
 def create_finding_note(
     finding_id: str,
     payload: FindingNoteCreateRequest,
+    auth_context: dict = Depends(require_admin),
     db: Session = Depends(get_db),
 ) -> FindingNote:
-    finding = get_finding_or_404(db, finding_id)
+    organization_id = organization_id_from_context(auth_context)
+    finding = get_finding_or_404(db, finding_id, organization_id)
     note = FindingNote(finding_id=finding.id, author=payload.author.strip(), body=payload.body.strip())
     finding.updated_at = utcnow()
     db.add(note)
@@ -1702,6 +2232,7 @@ def create_finding_note(
     write_audit(
         db,
         "finding.note_created",
+        organization_id=organization_id,
         resource_type="finding",
         resource_id=finding.id,
         details={"note_id": note.id},
@@ -1711,9 +2242,14 @@ def create_finding_note(
     return note
 
 
-@app.post("/api/v1/findings/{finding_id}/verify", response_model=ScanJobOut, dependencies=[Depends(require_admin)])
-def verify_finding(finding_id: str, db: Session = Depends(get_db)) -> ScanJob:
-    finding = get_finding_or_404(db, finding_id)
+@app.post("/api/v1/findings/{finding_id}/verify", response_model=ScanJobOut)
+def verify_finding(
+    finding_id: str,
+    auth_context: dict = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> ScanJob:
+    organization_id = organization_id_from_context(auth_context)
+    finding = get_finding_or_404(db, finding_id, organization_id)
     if not finding.asset_id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only asset findings can be verified by rescan")
     asset = db.get(Asset, finding.asset_id)
@@ -1742,6 +2278,7 @@ def verify_finding(finding_id: str, db: Session = Depends(get_db)) -> ScanJob:
         db,
         "finding.verify_queued",
         sensor_id=sensor.id,
+        organization_id=organization_id,
         resource_type="finding",
         resource_id=finding.id,
         details={"scan_job_id": job.id, "target_cidr": target_cidr},
@@ -1751,14 +2288,27 @@ def verify_finding(finding_id: str, db: Session = Depends(get_db)) -> ScanJob:
     return job
 
 
-@app.post("/api/v1/reports/generate", response_model=ReportOut, dependencies=[Depends(require_admin)])
-def generate_report(site_id: str | None = None, db: Session = Depends(get_db)) -> Report:
-    site = get_site_or_404(db, site_id) if site_id else db.scalar(select(Site).order_by(Site.created_at.asc()))
+@app.post("/api/v1/reports/generate", response_model=ReportOut)
+def generate_report(
+    site_id: str | None = None,
+    auth_context: dict = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> Report:
+    organization_id = organization_id_from_context(auth_context)
+    site = (
+        get_site_or_404(db, site_id, organization_id)
+        if site_id
+        else db.scalar(
+            select(Site)
+            .where(Site.organization_id == organization_id)
+            .order_by(Site.created_at.asc())
+        )
+    )
     if site is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No site has been registered")
     report = build_report(db, site.id)
     export_report(report)
-    write_audit(db, "report.generated", resource_type="report", resource_id=report.id)
+    write_audit(db, "report.generated", organization_id=organization_id, resource_type="report", resource_id=report.id)
     notify_event(
         db,
         "scheduled_report_ready",
@@ -1770,22 +2320,40 @@ def generate_report(site_id: str | None = None, db: Session = Depends(get_db)) -
     return report
 
 
-@app.get("/api/v1/reports", response_model=list[ReportOut], dependencies=[Depends(require_admin)])
-def list_reports(site_id: str | None = None, db: Session = Depends(get_db)) -> list[Report]:
-    query = select(Report).order_by(Report.created_at.desc())
+@app.get("/api/v1/reports", response_model=list[ReportOut])
+def list_reports(
+    site_id: str | None = None,
+    auth_context: dict = Depends(require_operator),
+    db: Session = Depends(get_db),
+) -> list[Report]:
+    organization_id = organization_id_from_context(auth_context)
+    query = (
+        select(Report)
+        .join(Site, Site.id == Report.site_id)
+        .where(Site.organization_id == organization_id)
+        .order_by(Report.created_at.desc())
+    )
     if site_id:
         query = query.where(Report.site_id == site_id)
     return list(db.scalars(query).all())
 
 
-@app.get("/api/v1/reports/{report_id}", response_model=ReportOut, dependencies=[Depends(require_admin)])
-def get_report(report_id: str, db: Session = Depends(get_db)) -> Report:
-    return get_report_or_404(db, report_id)
+@app.get("/api/v1/reports/{report_id}", response_model=ReportOut)
+def get_report(
+    report_id: str,
+    auth_context: dict = Depends(require_operator),
+    db: Session = Depends(get_db),
+) -> Report:
+    return get_report_or_404(db, report_id, organization_id_from_context(auth_context))
 
 
-@app.get("/api/v1/reports/{report_id}/export.html", response_class=HTMLResponse, dependencies=[Depends(require_admin)])
-def export_report_html(report_id: str, db: Session = Depends(get_db)) -> HTMLResponse:
-    report = get_report_or_404(db, report_id)
+@app.get("/api/v1/reports/{report_id}/export.html", response_class=HTMLResponse)
+def export_report_html(
+    report_id: str,
+    auth_context: dict = Depends(require_operator),
+    db: Session = Depends(get_db),
+) -> HTMLResponse:
+    report = get_report_or_404(db, report_id, organization_id_from_context(auth_context))
     site = db.get(Site, report.site_id)
     return HTMLResponse(
         content=render_report_html(report, site),
@@ -1796,10 +2364,14 @@ def export_report_html(report_id: str, db: Session = Depends(get_db)) -> HTMLRes
 @app.get(
     "/api/v1/notification-endpoints",
     response_model=list[NotificationEndpointOut],
-    dependencies=[Depends(require_admin)],
 )
-def list_notification_endpoints(site_id: str | None = None, db: Session = Depends(get_db)) -> list[NotificationEndpoint]:
-    query = select(NotificationEndpoint).order_by(NotificationEndpoint.created_at.desc())
+def list_notification_endpoints(
+    site_id: str | None = None,
+    auth_context: dict = Depends(require_operator),
+    db: Session = Depends(get_db),
+) -> list[NotificationEndpoint]:
+    organization_id = organization_id_from_context(auth_context)
+    query = select(NotificationEndpoint).where(NotificationEndpoint.organization_id == organization_id).order_by(NotificationEndpoint.created_at.desc())
     if site_id:
         query = query.where((NotificationEndpoint.site_id == site_id) | (NotificationEndpoint.site_id.is_(None)))
     return list(db.scalars(query).all())
@@ -1808,15 +2380,17 @@ def list_notification_endpoints(site_id: str | None = None, db: Session = Depend
 @app.post(
     "/api/v1/notification-endpoints",
     response_model=NotificationEndpointOut,
-    dependencies=[Depends(require_admin)],
 )
 def create_notification_endpoint(
     payload: NotificationEndpointCreateRequest,
+    auth_context: dict = Depends(require_admin),
     db: Session = Depends(get_db),
 ) -> NotificationEndpoint:
+    organization_id = organization_id_from_context(auth_context)
     if payload.site_id:
-        get_site_or_404(db, payload.site_id)
+        get_site_or_404(db, payload.site_id, organization_id)
     endpoint = NotificationEndpoint(
+        organization_id=organization_id,
         site_id=payload.site_id,
         name=payload.name.strip(),
         type=payload.type,
@@ -1829,6 +2403,7 @@ def create_notification_endpoint(
     write_audit(
         db,
         "notification_endpoint.created",
+        organization_id=organization_id,
         resource_type="notification_endpoint",
         resource_id=endpoint.id,
         details={"type": endpoint.type, "name": endpoint.name},
@@ -1841,14 +2416,15 @@ def create_notification_endpoint(
 @app.patch(
     "/api/v1/notification-endpoints/{endpoint_id}",
     response_model=NotificationEndpointOut,
-    dependencies=[Depends(require_admin)],
 )
 def update_notification_endpoint(
     endpoint_id: str,
     payload: NotificationEndpointUpdateRequest,
+    auth_context: dict = Depends(require_admin),
     db: Session = Depends(get_db),
 ) -> NotificationEndpoint:
-    endpoint = db.get(NotificationEndpoint, endpoint_id)
+    organization_id = organization_id_from_context(auth_context)
+    endpoint = db.scalar(select(NotificationEndpoint).where(NotificationEndpoint.id == endpoint_id, NotificationEndpoint.organization_id == organization_id))
     if endpoint is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Notification endpoint not found")
     if payload.name is not None:
@@ -1860,19 +2436,24 @@ def update_notification_endpoint(
     if payload.enabled is not None:
         endpoint.enabled = payload.enabled
     endpoint.updated_at = utcnow()
-    write_audit(db, "notification_endpoint.updated", resource_type="notification_endpoint", resource_id=endpoint.id)
+    write_audit(db, "notification_endpoint.updated", organization_id=organization_id, resource_type="notification_endpoint", resource_id=endpoint.id)
     db.commit()
     db.refresh(endpoint)
     return endpoint
 
 
-@app.delete("/api/v1/notification-endpoints/{endpoint_id}", dependencies=[Depends(require_admin)])
-def delete_notification_endpoint(endpoint_id: str, db: Session = Depends(get_db)) -> dict[str, str]:
-    endpoint = db.get(NotificationEndpoint, endpoint_id)
+@app.delete("/api/v1/notification-endpoints/{endpoint_id}")
+def delete_notification_endpoint(
+    endpoint_id: str,
+    auth_context: dict = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> dict[str, str]:
+    organization_id = organization_id_from_context(auth_context)
+    endpoint = db.scalar(select(NotificationEndpoint).where(NotificationEndpoint.id == endpoint_id, NotificationEndpoint.organization_id == organization_id))
     if endpoint is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Notification endpoint not found")
     db.delete(endpoint)
-    write_audit(db, "notification_endpoint.deleted", resource_type="notification_endpoint", resource_id=endpoint_id)
+    write_audit(db, "notification_endpoint.deleted", organization_id=organization_id, resource_type="notification_endpoint", resource_id=endpoint_id)
     db.commit()
     return {"status": "deleted"}
 
@@ -1880,10 +2461,14 @@ def delete_notification_endpoint(endpoint_id: str, db: Session = Depends(get_db)
 @app.post(
     "/api/v1/notification-endpoints/{endpoint_id}/test",
     response_model=NotificationTestResponse,
-    dependencies=[Depends(require_admin)],
 )
-def send_test_notification(endpoint_id: str, db: Session = Depends(get_db)) -> NotificationTestResponse:
-    endpoint = db.get(NotificationEndpoint, endpoint_id)
+def send_test_notification(
+    endpoint_id: str,
+    auth_context: dict = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> NotificationTestResponse:
+    organization_id = organization_id_from_context(auth_context)
+    endpoint = db.scalar(select(NotificationEndpoint).where(NotificationEndpoint.id == endpoint_id, NotificationEndpoint.organization_id == organization_id))
     if endpoint is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Notification endpoint not found")
     delivery = test_notification(db, endpoint)
@@ -1892,6 +2477,7 @@ def send_test_notification(endpoint_id: str, db: Session = Depends(get_db)) -> N
     write_audit(
         db,
         "notification_endpoint.tested",
+        organization_id=organization_id,
         resource_type="notification_endpoint",
         resource_id=endpoint.id,
         details={"ok": ok, "detail": detail, "delivery_id": delivery.id},
@@ -1903,15 +2489,16 @@ def send_test_notification(endpoint_id: str, db: Session = Depends(get_db)) -> N
 @app.get(
     "/api/v1/notification-deliveries",
     response_model=list[NotificationDeliveryOut],
-    dependencies=[Depends(require_admin)],
 )
 def list_notification_deliveries(
     endpoint_id: str | None = None,
     delivery_status: str | None = Query(default=None, alias="status", pattern="^(queued|retrying|delivered|failed)$"),
     limit: int = Query(default=50, ge=1, le=250),
+    auth_context: dict = Depends(require_operator),
     db: Session = Depends(get_db),
 ) -> list[NotificationDelivery]:
-    query = select(NotificationDelivery)
+    organization_id = organization_id_from_context(auth_context)
+    query = select(NotificationDelivery).where(NotificationDelivery.organization_id == organization_id)
     if endpoint_id:
         query = query.where(NotificationDelivery.endpoint_id == endpoint_id)
     if delivery_status:
@@ -1923,13 +2510,17 @@ def list_notification_deliveries(
 @app.post(
     "/api/v1/notification-deliveries/run-due",
     response_model=NotificationRunResponse,
-    dependencies=[Depends(require_admin)],
 )
-def run_due_notification_deliveries(db: Session = Depends(get_db)) -> NotificationRunResponse:
-    result = process_due_deliveries(db)
+def run_due_notification_deliveries(
+    auth_context: dict = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> NotificationRunResponse:
+    organization_id = None if auth_context.get("legacy") else organization_id_from_context(auth_context)
+    result = process_due_deliveries(db, organization_id=organization_id)
     write_audit(
         db,
         "notification_delivery.run_due",
+        organization_id=organization_id or organization_id_from_context(auth_context),
         resource_type="notification_delivery",
         details=result,
     )
@@ -1940,10 +2531,14 @@ def run_due_notification_deliveries(db: Session = Depends(get_db)) -> Notificati
 @app.post(
     "/api/v1/notification-deliveries/{delivery_id}/retry",
     response_model=NotificationDeliveryOut,
-    dependencies=[Depends(require_admin)],
 )
-def retry_notification_delivery(delivery_id: str, db: Session = Depends(get_db)) -> NotificationDelivery:
-    delivery = db.get(NotificationDelivery, delivery_id)
+def retry_notification_delivery(
+    delivery_id: str,
+    auth_context: dict = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> NotificationDelivery:
+    organization_id = organization_id_from_context(auth_context)
+    delivery = db.scalar(select(NotificationDelivery).where(NotificationDelivery.id == delivery_id, NotificationDelivery.organization_id == organization_id))
     if delivery is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Notification delivery not found")
     endpoint = db.get(NotificationEndpoint, delivery.endpoint_id)
@@ -1957,6 +2552,7 @@ def retry_notification_delivery(delivery_id: str, db: Session = Depends(get_db))
     write_audit(
         db,
         "notification_delivery.retried",
+        organization_id=organization_id,
         resource_type="notification_delivery",
         resource_id=delivery.id,
         details={"status": delivery.status, "attempts": delivery.attempts},
@@ -1966,6 +2562,9 @@ def retry_notification_delivery(delivery_id: str, db: Session = Depends(get_db))
     return delivery
 
 
-@app.get("/api/v1/core/export", dependencies=[Depends(require_admin)])
-def export_core_bundle(db: Session = Depends(get_db)) -> dict[str, object]:
-    return build_core_export(db)
+@app.get("/api/v1/core/export")
+def export_core_bundle(
+    auth_context: dict = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> dict[str, object]:
+    return build_core_export(db, organization_id=organization_id_from_context(auth_context))
