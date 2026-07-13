@@ -52,6 +52,17 @@ GET /api/v1/core/export
 Authorization: Bearer <admin-token>
 ```
 
+## Unified Operator Workspace
+
+The canonical SecOpsAI dashboard reads network assets, graph changes, and
+Edge-origin findings from Core. Its local/helper service can optionally enrich
+that view with live sites, sensors, schedules, and scan jobs from the Edge API.
+
+Keep `SECOPSAI_EDGE_ADMIN_TOKEN` on the helper host only. The browser receives
+normalized workspace data and never receives the administrator token. Scan and
+sensor administration remains in the Edge dashboard; Core remains canonical
+for finding triage and graph context.
+
 ## Contract
 
 The bundle uses:

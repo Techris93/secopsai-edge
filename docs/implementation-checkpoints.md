@@ -795,6 +795,50 @@ Known risks:
   Documents folders without Full Disk Access; the staged runner is the required
   service path and is covered by an installer regression test.
 
+## Checkpoint 017 - Unified Core-Backed Edge Workspace
+
+Status: complete
+
+Branches:
+
+- Edge repo: `codex/pilot-hardening-foundation`
+- Core repo: `codex/core-edge-hygiene`
+- Canonical dashboard: `codex/edge-unified-console`
+
+Completed changes:
+
+- Located the real SecOpsAI operator dashboard and added a dedicated Edge
+  workspace without duplicating Core's findings or graph storage.
+- Core CLI graph assets, graph changes, and `secopsai_edge` findings are the
+  canonical read model; the Edge API optionally enriches it with sites,
+  sensors, schedules, and active scan jobs.
+- Edge administrator credentials remain server-side in the Python helper. The
+  browser receives normalized operational data and an optional public sensor
+  administration URL only.
+- Added concurrent bounded Edge API reads, explicit Core/Edge health states,
+  responsive tables, and desktop/mobile operator layouts.
+- Removed the unused Tailwind development CDN dependency and hardened helper
+  responses against normal client disconnects.
+
+Validation:
+
+- Dashboard Python suite: 31 tests passed.
+- Dashboard Worker/UI suite and JavaScript syntax checks passed.
+- Real helper verification loaded 4 Core graph assets, 10 Edge-origin
+  findings, 1 live Edge sensor record, and scan-job context without returning
+  an administrator token.
+- Playwright desktop (`1440x1000`) and mobile (`390x844`) checks passed with
+  no browser warnings or errors and no overlapping mobile header content.
+
+Known risks:
+
+- Hosted use still requires an intentionally deployed/authenticated Core
+  helper because Core remains local-first; Cloudflare Pages cannot execute the
+  Core CLI itself.
+- Cross-surface write actions remain deliberately separate: canonical triage
+  happens in Core, while scan/sensor administration remains in the Edge
+  dashboard until a scoped command API is introduced.
+
 ## Completion Rules
 
 A checkpoint is complete only when:
