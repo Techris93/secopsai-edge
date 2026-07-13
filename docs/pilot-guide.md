@@ -24,7 +24,7 @@ SecOpsAI Edge discovers internal network assets, records service exposure, monit
 9. Generate a report.
 10. Open the report detail page, copy the executive summary or client brief, print, or download the report.
 11. Configure webhook/email/Telegram notifications.
-12. Sync Edge findings into SecOpsAI Core when needed.
+12. Install automatic Edge-to-Core sync and confirm its status/logs.
 13. Confirm important operator actions appear in Audit Log.
 
 ## Establish The Baseline

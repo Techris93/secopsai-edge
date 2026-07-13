@@ -7,10 +7,31 @@ SecOpsAI Edge exports a normalized graph and finding bundle for the main SecOpsA
 One-step local Core sync:
 
 ```bash
-./scripts/edge core sync --cloud --core-root /Users/chrixchange/secopsai --output edge-bundle.json
+./scripts/edge core sync --cloud --core-root "$HOME/secopsai" --output edge-bundle.json
 ```
 
 This exports the normalized Edge bundle from the configured API, saves it for audit/review, and imports it into the main SecOpsAI Core SQLite SOC/graph store.
+
+## Automatic Sync
+
+Install a supervised five-minute sync on the machine that runs Core:
+
+```bash
+./scripts/edge core sync-service install --cloud --core-root "$HOME/secopsai" --interval 300
+./scripts/edge core sync-service start
+```
+
+Operate and recover it with:
+
+```bash
+./scripts/edge core sync-service status
+./scripts/edge core sync-service logs
+./scripts/edge core sync-service run-now
+./scripts/edge core sync-service stop
+./scripts/edge core sync-service uninstall
+```
+
+macOS uses a launchd interval job. Linux uses a systemd user timer and one-shot service. The scanner worker and Core sync have separate lifecycle, logs, and failure boundaries. Configuration is owner-only JSON and contains paths/profile only; API credentials remain in the existing protected cloud configuration. An execution lock skips overlapping timer/manual runs.
 
 Local API:
 

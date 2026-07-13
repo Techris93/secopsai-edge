@@ -122,6 +122,18 @@ Flow:
 
 Remote jobs are limited to RFC1918 IPv4 CIDRs with `/24` or narrower ranges. Worker heartbeats update last-seen, version, OS, hostname, state, and active job while both waiting and scanning; stale claimed/running jobs are recovered so they do not remain stuck forever. Sites shows this runtime context. A disabled sensor can be re-enabled there without rotating its token; rotate the token separately if credential exposure is suspected.
 
+## Automatic Core Sync
+
+Keep Core assets/findings current without manually exporting bundles:
+
+```bash
+./scripts/edge core sync-service install --cloud --core-root "$HOME/secopsai" --interval 300
+./scripts/edge core sync-service start
+./scripts/edge core sync-service status
+```
+
+Use `run-now` after an important scan, and `logs` when the dashboard/Core inventory appears stale. The support bundle includes sync service status and recent redacted logs. Stopping or uninstalling this service does not stop the Edge scanner worker.
+
 ## Splunk HEC Export
 
 Set these environment variables before starting the API:

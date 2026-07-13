@@ -19,6 +19,8 @@ test("renders Core integration action buttons", () => {
   expect(screen.getByRole("button", { name: /Copy Triage/ })).toBeInTheDocument();
   expect(screen.getByRole("button", { name: /Copy API Sync/ })).toBeInTheDocument();
   expect(screen.getByRole("button", { name: /Copy One-Step Sync/ })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: /Install Auto Sync/ })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: /Check Sync Status/ })).toBeInTheDocument();
   expect(screen.getByRole("button", { name: /Copy Support Bundle/ })).toBeInTheDocument();
   expect(screen.getByLabelText("Edge install path")).toHaveValue("$HOME/secopsai-edge");
   expect(screen.queryByDisplayValue(/chrixchange/)).not.toBeInTheDocument();

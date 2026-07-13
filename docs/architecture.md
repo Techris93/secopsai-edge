@@ -9,6 +9,8 @@ flowchart LR
   API --> AI["AI Report Adapter"]
   API --> Splunk["Splunk HEC Optional"]
   Web["Next.js Dashboard"] --> API
+  API -->|"normalized bundle"| Sync["Supervised Core Sync"]
+  Sync --> Core["SecOpsAI Core SOC + Asset Graph"]
 ```
 
 ## Local Sensor
@@ -43,6 +45,9 @@ Core tables:
 - `reports`
 - `users`
 - `audit_logs`
+- `scan_schedules`
+- `notification_endpoints`
+- `notification_deliveries`
 
 ## Detection Rules
 
@@ -64,6 +69,6 @@ Suspicious scan-like behavior is left as a future rule because the MVP does not 
 
 The AI provider receives minimized finding payloads, not raw Nmap output, packet data, or full scan logs. The default provider is `mock`, which gives deterministic report output for local development. OpenAI Structured Outputs can be enabled with `AI_PROVIDER=openai`, `AI_API_KEY`, and `AI_MODEL`. A generic HTTP provider remains available with `AI_PROVIDER=http` and `AI_ENDPOINT`.
 
-## Future SecOpsAI Cloud Integration
+## SecOpsAI Core Integration
 
-Cloud sync should sit behind a dedicated exporter interface and reuse the same normalized finding/report payloads. Multi-tenancy, billing, fleet management, and remote update orchestration are intentionally out of scope for this MVP.
+Edge exports the versioned `secopsai.edge.bundle.v1` contract. A supervised launchd/systemd timer can export the normalized graph and findings from the hosted or local Edge API and import them into Core's SQLite SOC/graph store. The service is one-way, idempotent, separately logged, and does not share databases or move raw scanner output. Hosted Core ingestion, tenant isolation, billing, fleet management, and remote update orchestration remain later SaaS milestones.

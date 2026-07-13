@@ -66,6 +66,26 @@ export function CoreIntegrationPanel() {
         command: `cd "${edgeRoot}"\n./scripts/edge core sync --cloud --core-root "${coreRoot}" --output edge-bundle.json`
       },
       {
+        label: "Install Auto Sync",
+        icon: GitBranch,
+        command: `cd "${edgeRoot}"\n./scripts/edge core sync-service install --cloud --core-root "${coreRoot}" --interval 300\n./scripts/edge core sync-service start`
+      },
+      {
+        label: "Run Sync Now",
+        icon: GitBranch,
+        command: `cd "${edgeRoot}"\n./scripts/edge core sync-service run-now`
+      },
+      {
+        label: "Check Sync Status",
+        icon: ListTree,
+        command: `cd "${edgeRoot}"\n./scripts/edge core sync-service status`
+      },
+      {
+        label: "View Sync Logs",
+        icon: LifeBuoy,
+        command: `cd "${edgeRoot}"\n./scripts/edge core sync-service logs`
+      },
+      {
         label: "Copy Edge Test",
         icon: Terminal,
         command: `cd "${edgeRoot}"\n./scripts/edge test`
@@ -132,6 +152,9 @@ export function CoreIntegrationPanel() {
           Download Bundle
         </button>
       </div>
+      <p className="mt-2 text-sm leading-6 text-zinc-600">
+        Automatic sync runs independently from the scanner, imports only the normalized bundle, and keeps its own service logs.
+      </p>
 
       <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
         <label className="min-w-0 text-sm font-semibold text-ink">

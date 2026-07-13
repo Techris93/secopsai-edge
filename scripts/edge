@@ -12,10 +12,16 @@ ALEMBIC_BIN="$ROOT_DIR/.venv/bin/alembic"
 UVICORN_BIN="$ROOT_DIR/.venv/bin/uvicorn"
 API_URL_DEFAULT="http://127.0.0.1:8000"
 SERVICE_LABEL="ai.secopsai.edge"
+CORE_SYNC_SERVICE_LABEL="ai.secopsai.edge-core-sync"
 LOG_DIR="$HOME/Library/Logs/secopsai-edge"
 LAUNCH_AGENT_FILE="$HOME/Library/LaunchAgents/$SERVICE_LABEL.plist"
+CORE_SYNC_LAUNCH_AGENT_FILE="$HOME/Library/LaunchAgents/$CORE_SYNC_SERVICE_LABEL.plist"
+CORE_SYNC_CONFIG_FILE="${SECOPSAI_CORE_SYNC_CONFIG_FILE:-$ROOT_DIR/.core-sync-service.json}"
+CORE_SYNC_LOCK_DIR="${SECOPSAI_CORE_SYNC_LOCK_DIR:-$ROOT_DIR/.core-sync.lock}"
 SYSTEMD_USER_DIR="$HOME/.config/systemd/user"
 SYSTEMD_SERVICE_FILE="$SYSTEMD_USER_DIR/$SERVICE_LABEL.service"
+CORE_SYNC_SYSTEMD_SERVICE_FILE="$SYSTEMD_USER_DIR/$CORE_SYNC_SERVICE_LABEL.service"
+CORE_SYNC_SYSTEMD_TIMER_FILE="$SYSTEMD_USER_DIR/$CORE_SYNC_SERVICE_LABEL.timer"
 
 usage() {
   cat <<'EOF'
@@ -45,6 +51,9 @@ Usage:
                                       Export normalized graph/findings for SecOpsAI Core
   ./scripts/edge core sync [--cloud] [--core-root ~/secopsai]
                                       Export Edge data and import it into SecOpsAI Core
+  ./scripts/edge core sync-service install --cloud [--core-root ~/secopsai]
+  ./scripts/edge core sync-service start|stop|status|logs|run-now|uninstall
+                                      Manage automatic Edge-to-Core synchronization
   ./scripts/edge cloud configure <url> Save hosted Render API URL
   ./scripts/edge cloud register        Register this sensor against the hosted API
   ./scripts/edge test                  Run backend, frontend, build, and audit checks
@@ -101,6 +110,14 @@ load_env() {
 }
 
 load_cloud_env() {
+  override_url_set="${SECOPSAI_CLOUD_API_URL+x}"
+  override_url="${SECOPSAI_CLOUD_API_URL:-}"
+  override_admin_set="${SECOPSAI_CLOUD_ADMIN_TOKEN+x}"
+  override_admin="${SECOPSAI_CLOUD_ADMIN_TOKEN:-}"
+  override_sensor_id_set="${SECOPSAI_CLOUD_SENSOR_ID+x}"
+  override_sensor_id="${SECOPSAI_CLOUD_SENSOR_ID:-}"
+  override_sensor_token_set="${SECOPSAI_CLOUD_SENSOR_TOKEN+x}"
+  override_sensor_token="${SECOPSAI_CLOUD_SENSOR_TOKEN:-}"
   if [ -f "$CLOUD_ENV_FILE" ]; then
     set -a
     # shellcheck disable=SC1090
@@ -114,6 +131,11 @@ load_cloud_env() {
     . "$CLOUD_SENSOR_ENV_FILE"
     set +a
   fi
+
+  if [ -n "$override_url_set" ]; then export SECOPSAI_CLOUD_API_URL="$override_url"; fi
+  if [ -n "$override_admin_set" ]; then export SECOPSAI_CLOUD_ADMIN_TOKEN="$override_admin"; fi
+  if [ -n "$override_sensor_id_set" ]; then export SECOPSAI_CLOUD_SENSOR_ID="$override_sensor_id"; fi
+  if [ -n "$override_sensor_token_set" ]; then export SECOPSAI_CLOUD_SENSOR_TOKEN="$override_sensor_token"; fi
 }
 
 ensure_env_file() {
@@ -897,6 +919,238 @@ core_sync() {
   (cd "$core_root" && "$core_python" "${import_args[@]}")
 }
 
+save_core_sync_config() {
+  profile="$1"
+  core_root="$2"
+  output="$3"
+  db_path="$4"
+  interval="$5"
+  umask 077
+  CORE_SYNC_PROFILE="$profile" CORE_SYNC_CORE_ROOT="$core_root" CORE_SYNC_OUTPUT="$output" CORE_SYNC_DB_PATH="$db_path" CORE_SYNC_INTERVAL="$interval" CORE_SYNC_CONFIG_FILE="$CORE_SYNC_CONFIG_FILE" python3 - <<'PY'
+import json
+import os
+
+payload = {
+    "profile": os.environ["CORE_SYNC_PROFILE"],
+    "core_root": os.environ["CORE_SYNC_CORE_ROOT"],
+    "output": os.environ["CORE_SYNC_OUTPUT"],
+    "db_path": os.environ["CORE_SYNC_DB_PATH"],
+    "interval": int(os.environ["CORE_SYNC_INTERVAL"]),
+}
+with open(os.environ["CORE_SYNC_CONFIG_FILE"], "w", encoding="utf-8") as handle:
+    json.dump(payload, handle, indent=2, sort_keys=True)
+    handle.write("\n")
+PY
+  chmod 600 "$CORE_SYNC_CONFIG_FILE"
+}
+
+load_core_sync_config() {
+  [ -f "$CORE_SYNC_CONFIG_FILE" ] || fail "Core sync service is not configured. Run ./scripts/edge core sync-service install --cloud first."
+  config_values="$(CORE_SYNC_CONFIG_FILE="$CORE_SYNC_CONFIG_FILE" python3 - <<'PY'
+import json
+import os
+
+with open(os.environ["CORE_SYNC_CONFIG_FILE"], encoding="utf-8") as handle:
+    payload = json.load(handle)
+for key in ("profile", "core_root", "output", "db_path", "interval"):
+    value = str(payload.get(key, ""))
+    if "\n" in value or "\r" in value:
+        raise SystemExit(f"invalid newline in {key}")
+    print(value)
+PY
+)"
+  CORE_SYNC_PROFILE="$(printf "%s\n" "$config_values" | sed -n '1p')"
+  CORE_SYNC_CORE_ROOT="$(printf "%s\n" "$config_values" | sed -n '2p')"
+  CORE_SYNC_OUTPUT="$(printf "%s\n" "$config_values" | sed -n '3p')"
+  CORE_SYNC_DB_PATH="$(printf "%s\n" "$config_values" | sed -n '4p')"
+  CORE_SYNC_INTERVAL="$(printf "%s\n" "$config_values" | sed -n '5p')"
+  [ "$CORE_SYNC_PROFILE" = "local" ] || [ "$CORE_SYNC_PROFILE" = "cloud" ] || fail "Invalid Core sync service profile"
+}
+
+run_configured_core_sync() {
+  load_core_sync_config
+  if ! mkdir "$CORE_SYNC_LOCK_DIR" 2>/dev/null; then
+    lock_pid="$(cat "$CORE_SYNC_LOCK_DIR/pid" 2>/dev/null || true)"
+    if [[ "$lock_pid" =~ ^[0-9]+$ ]] && kill -0 "$lock_pid" 2>/dev/null; then
+      warn "Core synchronization is already running with PID $lock_pid; skipping overlapping run"
+      return 0
+    fi
+    rm -f "$CORE_SYNC_LOCK_DIR/pid" 2>/dev/null || true
+    rmdir "$CORE_SYNC_LOCK_DIR" 2>/dev/null || fail "Unable to clear stale Core sync lock at $CORE_SYNC_LOCK_DIR"
+    mkdir "$CORE_SYNC_LOCK_DIR"
+  fi
+  printf "%s\n" "$$" > "$CORE_SYNC_LOCK_DIR/pid"
+  (
+    trap 'rm -f "$CORE_SYNC_LOCK_DIR/pid"; rmdir "$CORE_SYNC_LOCK_DIR" 2>/dev/null || true' EXIT INT TERM
+    args=(--core-root "$CORE_SYNC_CORE_ROOT" --output "$CORE_SYNC_OUTPUT")
+    if [ "$CORE_SYNC_PROFILE" = "cloud" ]; then
+      args=(--cloud "${args[@]}")
+    fi
+    if [ -n "${CORE_SYNC_DB_PATH:-}" ]; then
+      args+=(--db-path "$CORE_SYNC_DB_PATH")
+    fi
+    core_sync "${args[@]}"
+  )
+}
+
+install_core_sync_service() {
+  profile="local"
+  core_root="${SECOPSAI_CORE_ROOT:-$HOME/secopsai}"
+  output="$ROOT_DIR/edge-bundle.json"
+  db_path=""
+  interval="300"
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --cloud) profile="cloud" ;;
+      --core-root) shift; core_root="${1:-}" ;;
+      --output|-o) shift; output="${1:-}" ;;
+      --db-path) shift; db_path="${1:-}" ;;
+      --interval) shift; interval="${1:-}" ;;
+      *) fail "Unknown core sync service option: $1" ;;
+    esac
+    shift || true
+  done
+  [[ "$interval" =~ ^[0-9]+$ ]] || fail "--interval must be an integer number of seconds"
+  [ "$interval" -ge 60 ] && [ "$interval" -le 86400 ] || fail "--interval must be between 60 and 86400 seconds"
+  case "$core_root$output$db_path" in *$'\n'*|*$'\r'*) fail "Core sync service paths cannot contain newlines" ;; esac
+  core_root="$(resolve_path "$core_root")"
+  output="$(resolve_path "$output")"
+  if [ -n "$db_path" ]; then
+    db_path="$(resolve_path "$db_path")"
+  fi
+  [ -d "$core_root" ] || fail "SecOpsAI Core root not found: $core_root"
+  if [ "$profile" = "cloud" ]; then
+    cloud_api_url >/dev/null
+    cloud_admin_token >/dev/null
+  fi
+  save_core_sync_config "$profile" "$core_root" "$output" "$db_path" "$interval"
+  mkdir -p "$LOG_DIR" "$SYSTEMD_USER_DIR"
+
+  if [ "$(uname -s)" = "Darwin" ]; then
+    mkdir -p "$(dirname "$CORE_SYNC_LAUNCH_AGENT_FILE")"
+    ROOT_DIR="$ROOT_DIR" LABEL="$CORE_SYNC_SERVICE_LABEL" INTERVAL="$interval" LOG_DIR="$LOG_DIR" OUTPUT="$CORE_SYNC_LAUNCH_AGENT_FILE" python3 - <<'PY'
+import os
+import plistlib
+
+payload = {
+    "Label": os.environ["LABEL"],
+    "ProgramArguments": [os.path.join(os.environ["ROOT_DIR"], "scripts", "edge"), "core", "sync-service", "run-configured"],
+    "WorkingDirectory": os.environ["ROOT_DIR"],
+    "RunAtLoad": True,
+    "StartInterval": int(os.environ["INTERVAL"]),
+    "ProcessType": "Background",
+    "StandardOutPath": os.path.join(os.environ["LOG_DIR"], "core-sync.out.log"),
+    "StandardErrorPath": os.path.join(os.environ["LOG_DIR"], "core-sync.err.log"),
+    "EnvironmentVariables": {"PATH": "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"},
+}
+with open(os.environ["OUTPUT"], "wb") as handle:
+    plistlib.dump(payload, handle, sort_keys=False)
+PY
+    info "Installed launchd Core sync service at $CORE_SYNC_LAUNCH_AGENT_FILE"
+  else
+    systemd_root="${ROOT_DIR//\\/\\\\}"
+    systemd_root="${systemd_root//\"/\\\"}"
+    systemd_root="${systemd_root//%/%%}"
+    cat > "$CORE_SYNC_SYSTEMD_SERVICE_FILE" <<EOF
+[Unit]
+Description=SecOpsAI Edge to Core synchronization
+After=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory="$systemd_root"
+ExecStart="$systemd_root/scripts/edge" core sync-service run-configured
+Environment=PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
+EOF
+    cat > "$CORE_SYNC_SYSTEMD_TIMER_FILE" <<EOF
+[Unit]
+Description=Run SecOpsAI Edge to Core synchronization periodically
+
+[Timer]
+OnBootSec=60
+OnUnitActiveSec=$interval
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+    systemctl --user daemon-reload || true
+    info "Installed systemd Core sync service and timer"
+  fi
+  printf "Start it with: ./scripts/edge core sync-service start\n"
+}
+
+start_core_sync_service() {
+  load_core_sync_config
+  if [ "$(uname -s)" = "Darwin" ]; then
+    [ -f "$CORE_SYNC_LAUNCH_AGENT_FILE" ] || fail "Core sync service is not installed"
+    launchctl bootout "gui/$(id -u)" "$CORE_SYNC_LAUNCH_AGENT_FILE" >/dev/null 2>&1 || true
+    launchctl bootstrap "gui/$(id -u)" "$CORE_SYNC_LAUNCH_AGENT_FILE"
+    launchctl enable "gui/$(id -u)/$CORE_SYNC_SERVICE_LABEL" >/dev/null 2>&1 || true
+  else
+    systemctl --user daemon-reload
+    systemctl --user enable --now "$CORE_SYNC_SERVICE_LABEL.timer"
+  fi
+  info "Started automatic Core synchronization"
+}
+
+stop_core_sync_service() {
+  if [ "$(uname -s)" = "Darwin" ]; then
+    launchctl bootout "gui/$(id -u)" "$CORE_SYNC_LAUNCH_AGENT_FILE" >/dev/null 2>&1 || true
+  else
+    systemctl --user disable --now "$CORE_SYNC_SERVICE_LABEL.timer" >/dev/null 2>&1 || true
+  fi
+  info "Stopped automatic Core synchronization"
+}
+
+core_sync_service_status() {
+  if [ "$(uname -s)" = "Darwin" ]; then
+    if launchctl print "gui/$(id -u)/$CORE_SYNC_SERVICE_LABEL" >/dev/null 2>&1; then
+      printf "Core sync service: running (%s)\n" "$CORE_SYNC_SERVICE_LABEL"
+    else
+      printf "Core sync service: not running (%s)\n" "$CORE_SYNC_SERVICE_LABEL"
+    fi
+    [ -f "$CORE_SYNC_LAUNCH_AGENT_FILE" ] && printf "Launch agent:      %s\n" "$CORE_SYNC_LAUNCH_AGENT_FILE"
+  else
+    systemctl --user status "$CORE_SYNC_SERVICE_LABEL.timer" --no-pager || true
+  fi
+  [ -f "$CORE_SYNC_CONFIG_FILE" ] && printf "Configuration:     %s\n" "$CORE_SYNC_CONFIG_FILE"
+  printf "Logs:              %s\n" "$LOG_DIR"
+}
+
+core_sync_service_logs() {
+  if [ "$(uname -s)" = "Darwin" ]; then
+    tail -n 80 "$LOG_DIR/core-sync.out.log" 2>/dev/null || true
+    tail -n 80 "$LOG_DIR/core-sync.err.log" 2>/dev/null || true
+  else
+    journalctl --user -u "$CORE_SYNC_SERVICE_LABEL.service" -n 120 --no-pager
+  fi
+}
+
+uninstall_core_sync_service() {
+  stop_core_sync_service
+  rm -f "$CORE_SYNC_LAUNCH_AGENT_FILE" "$CORE_SYNC_SYSTEMD_SERVICE_FILE" "$CORE_SYNC_SYSTEMD_TIMER_FILE" "$CORE_SYNC_CONFIG_FILE"
+  if [ "$(uname -s)" != "Darwin" ]; then
+    systemctl --user daemon-reload || true
+  fi
+  info "Uninstalled automatic Core synchronization"
+}
+
+core_sync_service() {
+  subcommand="${1:-status}"
+  shift || true
+  case "$subcommand" in
+    install) install_core_sync_service "$@" ;;
+    start) start_core_sync_service ;;
+    stop) stop_core_sync_service ;;
+    status) core_sync_service_status ;;
+    logs) core_sync_service_logs ;;
+    run-now|run-configured) run_configured_core_sync ;;
+    uninstall) uninstall_core_sync_service ;;
+    *) fail "Unknown core sync-service command: $subcommand" ;;
+  esac
+}
+
 core() {
   subcommand="${1:-help}"
   shift || true
@@ -907,6 +1161,9 @@ core() {
       ;;
     sync)
       core_sync "$@"
+      ;;
+    sync-service)
+      core_sync_service "$@"
       ;;
     help|-h|--help)
       usage
@@ -981,6 +1238,7 @@ support_bundle() {
     [ -f "$SENSOR_ENV_FILE" ] && printf ".sensor.env: present\n" || printf ".sensor.env: missing\n"
     [ -f "$CLOUD_ENV_FILE" ] && printf ".cloud.env: present\n" || printf ".cloud.env: missing\n"
     [ -f "$CLOUD_SENSOR_ENV_FILE" ] && printf ".cloud-sensor.env: present\n" || printf ".cloud-sensor.env: missing\n"
+    [ -f "$CORE_SYNC_CONFIG_FILE" ] && printf "Core sync config: present\n" || printf "Core sync config: missing\n"
 
     printf "\n== Service Status ==\n"
     if [ "$profile" = "cloud" ]; then
@@ -998,9 +1256,12 @@ support_bundle() {
       status || true
     fi
     worker_service_status || true
+    core_sync_service_status || true
 
     printf "\n== Recent Worker Logs ==\n"
     worker_service_logs || true
+    printf "\n== Recent Core Sync Logs ==\n"
+    core_sync_service_logs || true
   } 2>&1 | redact_support_stream > "$output"
 
   chmod 600 "$output"

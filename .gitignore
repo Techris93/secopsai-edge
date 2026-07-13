@@ -3,6 +3,9 @@
 .sensor.env
 .cloud.env
 .cloud-sensor.env
+.core-sync-service.json
+.core-sync.lock/
+edge-bundle.json
 .env*.local
 work/
 outputs/
