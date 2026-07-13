@@ -8,6 +8,7 @@ import { PageHeader } from "@/components/PageHeader";
 import {
   createSite,
   disableSensor,
+  enableSensor,
   fetchDashboardData,
   rotateSensorToken,
   updateSensor,
@@ -250,6 +251,16 @@ function SensorRow({
     }
   }
 
+  async function enable() {
+    try {
+      await enableSensor(sensor.id);
+      onMessage("Sensor enabled. The existing sensor token remains valid.");
+      await onChanged();
+    } catch (error) {
+      onMessage(error instanceof Error ? error.message : "Unable to enable sensor");
+    }
+  }
+
   return (
     <div className="rounded-md border border-line bg-paper p-3">
       <div className="grid gap-3 lg:grid-cols-[1fr_auto] lg:items-center">
@@ -262,6 +273,10 @@ function SensorRow({
           <div className="mt-2 flex flex-wrap gap-2 text-xs text-zinc-600">
             <span>{sensor.hostname ?? "No hostname"}</span>
             <span>{sensor.connection_state}</span>
+            <span>{sensor.worker_state ?? "state unknown"}</span>
+            <span>{sensor.version ? `v${sensor.version}` : "version unknown"}</span>
+            <span>{sensor.os_name ?? "OS unknown"}</span>
+            {sensor.current_job_id ? <span>Job {sensor.current_job_id}</span> : null}
             <span>{sensor.last_seen_at ? `Last seen ${timeAgo(sensor.last_seen_at)}` : "Never seen"}</span>
             {sensor.last_error ? <span className="text-danger">{sensor.last_error}</span> : null}
           </div>
@@ -275,10 +290,14 @@ function SensorRow({
             <KeyRound size={16} aria-hidden="true" />
             Rotate
           </button>
-          <button className="ButtonDanger" disabled={!live || sensor.connection_state === "disabled"} onClick={disable} type="button">
-            <PowerOff size={16} aria-hidden="true" />
-            Disable
-          </button>
+          {sensor.connection_state === "disabled" ? (
+            <button className="ButtonSecondary" disabled={!live} onClick={enable} type="button">Enable</button>
+          ) : (
+            <button className="ButtonDanger" disabled={!live} onClick={disable} type="button">
+              <PowerOff size={16} aria-hidden="true" />
+              Disable
+            </button>
+          )}
         </div>
       </div>
     </div>

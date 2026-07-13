@@ -3,13 +3,16 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import platform
 import socket
 import sys
+import threading
 import time
 from dataclasses import asdict
 from typing import Callable
 
 from secopsai_agent.api_client import SecOpsApiClient
+from secopsai_agent import __version__
 from secopsai_agent.models import ScanResult
 from secopsai_agent.network_scanner import NmapScanConfig, NmapScanner
 from secopsai_agent.wifi_scanner import MacOSWifiScanner
@@ -131,7 +134,7 @@ def _run_worker(
 
     try:
         while True:
-            client.heartbeat(sensor_id, "online", {"mode": "worker", "state": "waiting"})
+            client.heartbeat(sensor_id, "online", _heartbeat_details("waiting"))
             job = client.claim_scan_job(sensor_id)
             if not job:
                 if once:
@@ -142,6 +145,14 @@ def _run_worker(
 
             job_id = str(job["id"])
             active_job_id = job_id
+            heartbeat_stop = threading.Event()
+            heartbeat_thread = threading.Thread(
+                target=_heartbeat_loop,
+                args=(client, sensor_id, heartbeat_stop, job_id),
+                name="secopsai-heartbeat",
+                daemon=True,
+            )
+            heartbeat_thread.start()
             try:
                 target_cidr = str(job["target_cidr"])
                 include_wifi = bool(job.get("include_wifi"))
@@ -169,9 +180,16 @@ def _run_worker(
                     return 0
             except Exception as exc:
                 _fail_job(client, sensor_id, job_id, exc)
+                try:
+                    client.heartbeat(sensor_id, "online", _heartbeat_details("error", job_id, str(exc)))
+                except Exception:
+                    pass
                 active_job_id = None
                 if once:
                     return 1
+            finally:
+                heartbeat_stop.set()
+                heartbeat_thread.join(timeout=2)
     except KeyboardInterrupt:
         if active_job_id:
             try:
@@ -192,6 +210,36 @@ def _fail_job(client: SecOpsApiClient, sensor_id: str, job_id: str, exc: Excepti
         client.fail_scan_job(sensor_id, job_id, error)
     finally:
         print(json.dumps({"status": "failed", "job_id": job_id, "error": error}, indent=2))
+
+
+def _heartbeat_details(state: str, job_id: str | None = None, last_error: str | None = None) -> dict[str, object]:
+    details: dict[str, object] = {
+        "mode": "worker",
+        "state": state,
+        "version": __version__,
+        "os": f"{platform.system()} {platform.release()}",
+        "hostname": socket.gethostname(),
+    }
+    if job_id:
+        details["job_id"] = job_id
+    if last_error:
+        details["last_error"] = last_error[:2000]
+    return details
+
+
+def _heartbeat_loop(
+    client: SecOpsApiClient,
+    sensor_id: str,
+    stop: threading.Event,
+    job_id: str,
+    interval: float = 30.0,
+) -> None:
+    while not stop.is_set():
+        try:
+            client.heartbeat(sensor_id, "online", _heartbeat_details("scanning", job_id))
+        except Exception:
+            pass
+        stop.wait(max(interval, 1.0))
 
 
 def _scan_to_json(scan: ScanResult) -> dict[str, object]:

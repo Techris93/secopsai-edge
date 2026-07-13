@@ -567,6 +567,8 @@ def sensor_out(db: Session, sensor: Sensor) -> SensorOut:
         connection_state="disabled" if sensor.disabled_at else sensor_connection_state(sensor),
         version=sensor.version,
         os_name=sensor.os_name,
+        worker_state=sensor.worker_state,
+        current_job_id=sensor.current_job_id,
         last_error=sensor.last_error,
         disabled_at=sensor.disabled_at,
         created_at=sensor.created_at,
@@ -863,19 +865,39 @@ def heartbeat(
 ) -> dict[str, str]:
     if sensor.disabled_at is not None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Sensor is disabled")
+    previous = (
+        sensor.status,
+        sensor.version,
+        sensor.os_name,
+        sensor.worker_state,
+        sensor.current_job_id,
+        sensor.last_error,
+    )
     sensor.status = payload.status
     sensor.last_seen_at = utcnow()
     sensor.version = payload.details.get("version") or sensor.version
     sensor.os_name = payload.details.get("os") or payload.details.get("os_name") or sensor.os_name
+    sensor.hostname = payload.details.get("hostname") or sensor.hostname
+    sensor.worker_state = payload.details.get("state") or sensor.worker_state
+    sensor.current_job_id = payload.details.get("job_id")
     sensor.last_error = payload.details.get("last_error") or None
-    write_audit(
-        db,
-        "sensor.heartbeat",
-        sensor_id=sensor.id,
-        resource_type="sensor",
-        resource_id=sensor.id,
-        details=payload.details,
+    current = (
+        sensor.status,
+        sensor.version,
+        sensor.os_name,
+        sensor.worker_state,
+        sensor.current_job_id,
+        sensor.last_error,
     )
+    if current != previous:
+        write_audit(
+            db,
+            "sensor.state_changed",
+            sensor_id=sensor.id,
+            resource_type="sensor",
+            resource_id=sensor.id,
+            details=payload.details,
+        )
     db.commit()
     return {"status": "ok"}
 
@@ -936,6 +958,20 @@ def disable_sensor(sensor_id: str, db: Session = Depends(get_db)) -> SensorOut:
         {"status": "canceled", "updated_at": utcnow(), "error_message": "Sensor disabled"}
     )
     write_audit(db, "sensor.disabled", sensor_id=sensor.id, resource_type="sensor", resource_id=sensor.id)
+    db.commit()
+    db.refresh(sensor)
+    return sensor_out(db, sensor)
+
+
+@app.post("/api/v1/sensors/{sensor_id}/enable", response_model=SensorOut, dependencies=[Depends(require_admin)])
+def enable_sensor(sensor_id: str, db: Session = Depends(get_db)) -> SensorOut:
+    sensor = db.get(Sensor, sensor_id)
+    if sensor is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sensor not found")
+    sensor.disabled_at = None
+    sensor.status = "registered"
+    sensor.last_error = None
+    write_audit(db, "sensor.enabled", sensor_id=sensor.id, resource_type="sensor", resource_id=sensor.id)
     db.commit()
     db.refresh(sensor)
     return sensor_out(db, sensor)

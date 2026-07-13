@@ -199,6 +199,8 @@ export type Sensor = {
   connection_state: "online" | "offline" | string;
   version?: string | null;
   os_name?: string | null;
+  worker_state?: string | null;
+  current_job_id?: string | null;
   last_error?: string | null;
   disabled_at?: string | null;
   created_at: string;

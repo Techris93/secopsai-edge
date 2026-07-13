@@ -41,6 +41,8 @@ class Sensor(Base):
     token_hash: Mapped[str] = mapped_column(String(128), nullable=False)
     version: Mapped[str | None] = mapped_column(String(80))
     os_name: Mapped[str | None] = mapped_column(String(120))
+    worker_state: Mapped[str | None] = mapped_column(String(40))
+    current_job_id: Mapped[str | None] = mapped_column(String(36))
     last_error: Mapped[str | None] = mapped_column(Text)
     disabled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

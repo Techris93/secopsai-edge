@@ -397,6 +397,10 @@ export async function disableSensor(sensorId: string): Promise<Sensor> {
   return requestJson<Sensor>(`/api/v1/sensors/${sensorId}/disable`, { method: "POST" });
 }
 
+export async function enableSensor(sensorId: string): Promise<Sensor> {
+  return requestJson<Sensor>(`/api/v1/sensors/${sensorId}/enable`, { method: "POST" });
+}
+
 export async function createNotificationEndpoint(payload: {
   name: string;
   type: string;

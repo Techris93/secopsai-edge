@@ -707,6 +707,43 @@ Known risks:
 - Viewer accounts exist in the canonical role model, but a dedicated read-only
   operator route policy is still required before they are useful in the UI.
 
+## Checkpoint 015 - Sensor Runtime and Recovery
+
+Status: complete
+
+Branch:
+
+- Edge repo: `codex/pilot-hardening-foundation`
+
+Completed changes:
+
+- Worker heartbeats now include agent version, OS, hostname, runtime state,
+  active job ID, and bounded error context.
+- Long-running scans maintain a background heartbeat so an active sensor does
+  not appear offline while Nmap is still working.
+- Added persistent sensor runtime state with Alembic revision
+  `0008_sensor_runtime_state`.
+- Repeated identical heartbeats refresh last-seen state without producing an
+  unbounded audit row every 30 seconds; meaningful state transitions remain
+  audited.
+- Added sensor re-enable API/UI recovery and exposed version, OS, state, job,
+  and last error in the Sites operator screen.
+
+Validation:
+
+- Agent tests cover idle and in-scan heartbeat metadata and shutdown.
+- API tests cover runtime-state persistence, transition-only auditing, disable,
+  and re-enable recovery.
+- `./scripts/edge test`: 56 backend/agent tests passed, 8 frontend test files
+  with 12 tests passed, the static production build passed, and npm audit
+  reported 0 vulnerabilities.
+- Alembic reports `0008_sensor_runtime_state` as the single migration head.
+
+Known risks:
+
+- Signed automatic sensor releases and fleet rollout rings are still later
+  appliance/SaaS milestones. Pilot upgrades remain operator-managed.
+
 ## Completion Rules
 
 A checkpoint is complete only when:

@@ -8,7 +8,7 @@ from sqlalchemy.pool import StaticPool
 
 from secopsai_api.database import get_db
 from secopsai_api.main import app
-from secopsai_api.models import Asset, Base, Finding, NotificationEndpoint, Report, ScanJob, ScanRun, ScanSchedule, Sensor, Site, utcnow
+from secopsai_api.models import Asset, AuditLog, Base, Finding, NotificationEndpoint, Report, ScanJob, ScanRun, ScanSchedule, Sensor, Site, utcnow
 from secopsai_api.security import hash_secret
 
 
@@ -126,6 +126,37 @@ def test_sensor_rotation_and_disable() -> None:
 
     assert disable_response.status_code == 200
     assert disable_response.json()["connection_state"] == "disabled"
+
+    enable_response = client.post(f"/api/v1/sensors/{sensor.id}/enable", headers=admin_headers())
+    assert enable_response.status_code == 200
+    assert enable_response.json()["connection_state"] != "disabled"
+
+
+def test_heartbeat_tracks_runtime_state_without_audit_spam() -> None:
+    db = make_session()
+    sensor = seed_sensor(db)
+    client = make_client(db)
+    payload = {
+        "status": "online",
+        "details": {
+            "state": "scanning",
+            "job_id": "job-123",
+            "version": "0.1.0",
+            "os": "Darwin 25",
+            "hostname": "sensor-host",
+        },
+    }
+    headers = {"X-Sensor-Token": "sensor-token"}
+
+    assert client.post(f"/api/v1/sensors/{sensor.id}/heartbeat", headers=headers, json=payload).status_code == 200
+    assert client.post(f"/api/v1/sensors/{sensor.id}/heartbeat", headers=headers, json=payload).status_code == 200
+    db.refresh(sensor)
+    assert sensor.worker_state == "scanning"
+    assert sensor.current_job_id == "job-123"
+    assert sensor.version == "0.1.0"
+    assert sensor.hostname == "sensor-host"
+    state_events = db.query(AuditLog).filter(AuditLog.action == "sensor.state_changed").all()
+    assert len(state_events) == 1
 
 
 def test_onboarding_status_tracks_pilot_readiness() -> None:

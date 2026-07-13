@@ -32,4 +32,27 @@ def test_worker_sends_heartbeat_before_single_idle_poll(monkeypatch) -> None:
 
     assert result == 0
     assert fake_client.claims == 1
-    assert fake_client.heartbeats == [("sensor-1", "online", {"mode": "worker", "state": "waiting"})]
+    assert len(fake_client.heartbeats) == 1
+    sensor_id, status, details = fake_client.heartbeats[0]
+    assert (sensor_id, status) == ("sensor-1", "online")
+    assert details["mode"] == "worker"
+    assert details["state"] == "waiting"
+    assert details["version"] == "0.1.0"
+    assert details["os"]
+    assert details["hostname"]
+
+
+def test_scanning_heartbeat_includes_job_and_stops() -> None:
+    fake_client = FakeClient()
+    stop = __import__("threading").Event()
+
+    class StopAfterFirst:
+        def heartbeat(self, sensor_id, status="online", details=None):
+            result = fake_client.heartbeat(sensor_id, status, details)
+            stop.set()
+            return result
+
+    cli._heartbeat_loop(StopAfterFirst(), "sensor-1", stop, "job-1", interval=1)
+
+    assert fake_client.heartbeats[0][2]["state"] == "scanning"
+    assert fake_client.heartbeats[0][2]["job_id"] == "job-1"

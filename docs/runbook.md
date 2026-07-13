@@ -120,7 +120,7 @@ Flow:
 6. Refresh the dashboard as the job moves through queued, claimed, running, and completed.
 7. Use Cancel for active jobs or Retry for failed/canceled jobs when needed.
 
-Remote jobs are limited to RFC1918 IPv4 CIDRs with `/24` or narrower ranges. Worker heartbeats update the sensor last-seen timestamp; stale claimed/running jobs are recovered so they do not remain stuck forever.
+Remote jobs are limited to RFC1918 IPv4 CIDRs with `/24` or narrower ranges. Worker heartbeats update last-seen, version, OS, hostname, state, and active job while both waiting and scanning; stale claimed/running jobs are recovered so they do not remain stuck forever. Sites shows this runtime context. A disabled sensor can be re-enabled there without rotating its token; rotate the token separately if credential exposure is suspected.
 
 ## Splunk HEC Export
 

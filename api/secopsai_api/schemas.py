@@ -424,6 +424,8 @@ class SensorOut(BaseModel):
     connection_state: str
     version: str | None = None
     os_name: str | None = None
+    worker_state: str | None = None
+    current_job_id: str | None = None
     last_error: str | None = None
     disabled_at: datetime | None = None
     created_at: datetime
