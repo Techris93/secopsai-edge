@@ -4,7 +4,7 @@ This roadmap records product gaps, not historical aspirations. A capability is
 listed as complete only when it has implementation and test evidence in
 `docs/implementation-checkpoints.md`.
 
-## Current Product Baseline - v0.3.2
+## Current Product Baseline - v0.3.3
 
 The controlled-pilot baseline includes:
 
@@ -62,18 +62,14 @@ without founder supervision:
 
 ## Controlled Pilot Completion Sequence
 
-The checkpoint ledger is complete through `038`. The remaining controlled-pilot
+The checkpoint ledger is complete through `039`. The remaining controlled-pilot
 sequence is deliberately bounded and should be completed in this order:
 
-1. **Checkpoint 039 - Research and wireless operational boundary.** First
-   narrowly scoped package-research workflow, reproducible evidence export,
-   Linux/Raspberry Pi wireless validation, and explicit unsupported-platform
-   messaging.
-2. **Checkpoint 040 - External pilot acceptance.** Fresh-machine installation,
+1. **Checkpoint 040 - External pilot acceptance.** Fresh-machine installation,
    seven-day soak, schedule/notification/offline-sensor exercises, support SLO,
    paid Render/PITR activation, two-owner recovery, uninstall, and pilot exit
    checklist.
-3. **Checkpoint 041 - Controlled-pilot release closeout.** Exact-build deploy,
+2. **Checkpoint 041 - Controlled-pilot release closeout.** Exact-build deploy,
    release artifacts, public docs alignment, final security review, known-risk
    register, and a signed pilot go/no-go record.
 

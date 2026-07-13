@@ -72,6 +72,8 @@ Usage:
   ./scripts/edge cloud drift-check     Check Render API, scheduler, and database drift/expiry
   ./scripts/edge cloud backup          Create and verify a hosted Render PostgreSQL backup
   ./scripts/edge cloud uptime-check    Record API/readiness/dashboard health evidence
+  ./scripts/edge pilot check [--cloud] [--output FILE]
+                                      Run non-destructive pilot acceptance checks
   ./scripts/edge test                  Run backend, frontend, build, and audit checks
   ./scripts/edge support-bundle [--cloud]
                                       Create a redacted diagnostics bundle for support
@@ -1697,6 +1699,48 @@ cloud() {
   esac
 }
 
+pilot() {
+  subcommand="${1:-check}"
+  shift || true
+
+  case "$subcommand" in
+    check)
+      profile="local"
+      forwarded=()
+      while [ "$#" -gt 0 ]; do
+        case "$1" in
+          --cloud)
+            profile="cloud"
+            ;;
+          *)
+            forwarded+=("$1")
+            ;;
+        esac
+        shift || true
+      done
+      if [ "$profile" = "cloud" ]; then
+        target_api_url="$(cloud_api_url)"
+        target_dashboard_url="${SECOPSAI_DASHBOARD_URL:-https://secopsai-edge.pages.dev}"
+      else
+        load_env
+        target_api_url="$(api_url)"
+        target_dashboard_url="${SECOPSAI_DASHBOARD_URL:-http://127.0.0.1:3000}"
+      fi
+      [ -x "$PYTHON_BIN" ] || fail "Python environment is missing. Run ./scripts/edge setup first."
+      "$PYTHON_BIN" "$ROOT_DIR/scripts/pilot_acceptance.py" \
+        --api-url "$target_api_url" \
+        --dashboard-url "$target_dashboard_url" \
+        "${forwarded[@]}"
+      ;;
+    help|-h|--help)
+      usage
+      ;;
+    *)
+      fail "Unknown pilot command: $subcommand"
+      ;;
+  esac
+}
+
 main() {
   command="${1:-help}"
   shift || true
@@ -1713,6 +1757,7 @@ main() {
     web) start_web ;;
     register) register_sensor ;;
     cloud) cloud "$@" ;;
+    pilot) pilot "$@" ;;
     preview) preview_scan "$@" ;;
     wifi) wifi_command "$@" ;;
     scan) submit_scan "$@" ;;

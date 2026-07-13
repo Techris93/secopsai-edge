@@ -104,6 +104,18 @@ Record a non-secret hosted check when validating a deployment:
 ./scripts/edge cloud uptime-check --output hosted-health.jsonl
 ```
 
+Run the complete non-destructive controlled-pilot preflight after installing
+the sensor:
+
+```bash
+./scripts/edge pilot check --cloud --output pilot-acceptance.json
+```
+
+This checks the hosted API/dashboard, local Nmap/Python prerequisites, worker
+service, and Wi-Fi capability without scanning. Use
+`docs/pilot-acceptance.md` for the operator-only recovery, notification,
+seven-day soak, paid-storage, and pilot-exit exercises.
+
 The optional GitHub workflow runs every six hours only after the repository
 variable `SECOPSAI_ENABLE_HOSTED_MONITOR=true` is set. For a paid pilot, replace
 this coarse check with an independent five-minute readiness monitor. Internal

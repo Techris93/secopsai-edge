@@ -51,7 +51,7 @@ jobs:
       - name: Validate scripts and Python syntax
         run: |
           bash -n scripts/edge scripts/install-secopsai-edge.sh scripts/bootstrap-secopsai-edge.sh scripts/build-release scripts/database-backup scripts/render-postgres-backup scripts/render-start-api
-          python -m py_compile scripts/render-run-due-schedules scripts/render_drift_check.py scripts/render_psql_backup_proxy.py scripts/core-sync-runner.py scripts/hosted_health_check.py
+          python -m py_compile scripts/render-run-due-schedules scripts/render_drift_check.py scripts/render_psql_backup_proxy.py scripts/core-sync-runner.py scripts/hosted_health_check.py scripts/pilot_acceptance.py
           PYTHONPATH=api:agent python -m compileall -q api/secopsai_api agent/secopsai_agent
 
       - name: Exercise migrations and check schema drift
