@@ -36,6 +36,8 @@ The controlled-pilot baseline includes:
 - OpenClaw approval-gated Edge scan requests that create a Core approval,
   validate the target in Core and Edge, and queue work for the local worker
   without exposing credentials or raw scanner output.
+- OpenClaw approval-gated Edge report generation and worker start/stop actions,
+  constrained to allowlisted helper arguments and recorded in Core sessions.
 - OpenClaw research tools aligned with all twelve ecosystems supported by Core,
   including NuGet, Maven, Go, crates.io, Open VSX, and RubyGems.
 - Workspace retention policies, normalized customer export, owner-confirmed
@@ -96,6 +98,9 @@ external operator acceptance, not untracked feature development:
    a Core session and pending approval for an authorized scan. Applying the
    approval invokes only the structured Edge queue helper; direct Nmap and
    worker-service mutation remain outside the plugin.
+8. **Checkpoint 047 - Approval-gated Edge operations.** Report generation and
+   worker start/stop are now approval-backed Core session actions with no raw
+   helper output or credentials crossing into Core.
 
 Commercial SaaS/MSP, billing, broad fleet automation, appliance imaging, and
 multi-ecosystem research automation remain subsequent product horizons rather
@@ -126,9 +131,9 @@ than hidden requirements of the controlled-pilot release.
 - Add bidirectional workflow acknowledgements only after one-way ingestion and
   conflict ownership are operationally proven.
 - Expose approved Core/Edge actions through OpenClaw with explicit approval for
-  state-changing operations. Worker status, scan preview, and approval-gated
-  scan queueing are implemented; direct worker-service mutation and report
-  generation remain separately gated follow-up work.
+  state-changing operations. Worker status, scan preview, approval-gated scan
+  queueing, report generation, and worker start/stop are implemented. Token
+  rotation remains a separate administrative workflow.
 
 ## Wireless Intelligence
 
