@@ -4,7 +4,7 @@ This roadmap records product gaps, not historical aspirations. A capability is
 listed as complete only when it has implementation and test evidence in
 `docs/implementation-checkpoints.md`.
 
-## Current Product Baseline - v0.3.7
+## Current Product Baseline - v0.3.8
 
 The controlled-pilot baseline includes:
 
@@ -75,7 +75,7 @@ without founder supervision:
 
 ## Controlled Pilot Completion Sequence
 
-Implementation checkpoints are complete through `048`. The remaining work is
+Implementation checkpoints are complete through `052`. The remaining work is
 external operator acceptance, not untracked feature development:
 
 1. **Checkpoint 040 - External pilot acceptance.** Complete fresh-machine
@@ -106,6 +106,13 @@ external operator acceptance, not untracked feature development:
 9. **Checkpoint 048 - Sensor credential recovery CLI.** Sensor hosts can rotate
    a hosted sensor credential and restart the worker without manual secret-file
    editing or exposing the replacement token in command output.
+10. **Checkpoint 050 - Hosted health failure diagnostics.** Hosted API and
+    dashboard failures now produce stable non-secret error codes, and the
+    verified `v0.3.7` release records the release-gate evidence.
+11. **Checkpoint 052 - Authenticated pilot evidence.** The acceptance preflight
+    can require an operator credential and verify authenticated identity,
+    system status, onboarding, sites, sensors, schedules, findings, and reports
+    without recording the token or response bodies.
 
 Commercial SaaS/MSP, billing, broad fleet automation, appliance imaging, and
 multi-ecosystem research automation remain subsequent product horizons rather

@@ -110,6 +110,48 @@ def run_acceptance(args: argparse.Namespace) -> dict[str, Any]:
             ]
         )
 
+        access_token = os.environ.get("SECOPSAI_PILOT_ACCESS_TOKEN", "").strip()
+        authenticated_paths = (
+            ("authenticated_identity", "/api/v1/auth/me"),
+            ("authenticated_system_status", "/api/v1/system/status"),
+            ("authenticated_onboarding", "/api/v1/onboarding/status"),
+            ("authenticated_sites", "/api/v1/sites"),
+            ("authenticated_sensors", "/api/v1/sensors"),
+            ("authenticated_schedules", "/api/v1/scan-schedules"),
+            ("authenticated_findings", "/api/v1/findings"),
+            ("authenticated_reports", "/api/v1/reports"),
+        )
+        if access_token:
+            auth_headers = {"Authorization": f"Bearer {access_token}"}
+            required.extend(
+                hosted(
+                    name,
+                    f"{api_url}{path}",
+                    expect_json=True,
+                    headers=auth_headers,
+                )
+                for name, path in authenticated_paths
+            )
+        elif args.require_auth:
+            required.append(
+                _result(
+                    "authenticated_operator_credential",
+                    False,
+                    required=True,
+                    status="not_configured",
+                )
+            )
+        else:
+            advisory.append(
+                _result(
+                    "authenticated_operator_credential",
+                    False,
+                    required=False,
+                    status="not_configured",
+                    note="Set SECOPSAI_PILOT_ACCESS_TOKEN to verify authenticated product surfaces.",
+                )
+            )
+
     if not args.skip_worker:
         required.append(_worker_check())
 
@@ -142,6 +184,11 @@ def main() -> int:
     parser.add_argument("--skip-worker", action="store_true", help="Skip local worker-service check")
     parser.add_argument("--skip-wifi", action="store_true", help="Skip the no-scan Wi-Fi capability check")
     parser.add_argument("--require-wifi", action="store_true", help="Treat Wi-Fi capability as a required check")
+    parser.add_argument(
+        "--require-auth",
+        action="store_true",
+        help="Require SECOPSAI_PILOT_ACCESS_TOKEN and verify authenticated product surfaces",
+    )
     parser.add_argument("--skip-dependencies", action="store_true", help="Skip local Nmap/Python checks")
     args = parser.parse_args()
 

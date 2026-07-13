@@ -1,6 +1,6 @@
 # SecOpsAI Edge Sensor
 
-Current pilot release: [`v0.3.7`](https://github.com/Techris93/secopsai-edge/releases/tag/v0.3.7).
+Current pilot release: `v0.3.8` (release artifacts are published after the verified merge).
 
 Standalone MacBook-first MVP for an AI-assisted asset discovery and wireless intelligence sensor.
 

@@ -23,6 +23,23 @@ failures include a non-secret `error_code` such as `dns_resolution_failed`,
 `network_timeout`, `http_error`, or `invalid_json` so an operator can choose
 the right recovery path.
 
+For a real operator acceptance run, also verify the authenticated product
+surface. Keep the access token in the process environment rather than in the
+command line or an evidence file:
+
+```bash
+read -r -s SECOPSAI_PILOT_ACCESS_TOKEN
+export SECOPSAI_PILOT_ACCESS_TOKEN
+./scripts/edge pilot check --cloud --require-auth --output pilot-authenticated.json
+unset SECOPSAI_PILOT_ACCESS_TOKEN
+```
+
+When the token is present, the check verifies authenticated identity, system
+status, onboarding, sites, sensors, schedules, findings, and reports. It
+records only endpoint status, latency, and JSON validity. It never records the
+token or response bodies. Use `--require-auth` for the external pilot gate;
+without it, the authenticated check is reported as an advisory.
+
 Useful variants:
 
 ```bash
@@ -34,6 +51,10 @@ Useful variants:
 
 # Require an authorized Linux Wi-Fi inventory capability for a sensor build.
 ./scripts/edge pilot check --cloud --require-wifi --output pilot-wireless.json
+
+# Verify the hosted API and authenticated operator surfaces.
+SECOPSAI_PILOT_ACCESS_TOKEN="$PILOT_TOKEN" \
+  ./scripts/edge pilot check --cloud --require-auth --output pilot-authenticated.json
 ```
 
 ## Operator Acceptance Matrix

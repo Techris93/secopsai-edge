@@ -80,6 +80,8 @@ Usage:
   ./scripts/edge cloud uptime-check    Record API/readiness/dashboard health evidence
   ./scripts/edge pilot check [--cloud] [--output FILE]
                                       Run non-destructive pilot acceptance checks
+  SECOPSAI_PILOT_ACCESS_TOKEN=... ./scripts/edge pilot check --cloud --require-auth
+                                      Also verify authenticated operator surfaces
   ./scripts/edge test                  Run backend, frontend, build, and audit checks
   ./scripts/edge support-bundle [--cloud]
                                       Create a redacted diagnostics bundle for support

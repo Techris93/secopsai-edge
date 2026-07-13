@@ -2802,3 +2802,47 @@ Next checkpoint:
 
 - Continue the external acceptance matrix and commercial product tracks without
   treating local green tests as proof of hosted dashboard availability.
+
+## Checkpoint 052 - Authenticated Pilot Evidence
+
+Status: implementation complete; release and external pilot acceptance pending
+
+Scope:
+
+- Strengthen the non-destructive pilot acceptance command so it can verify a
+  real operator credential and the authenticated product surfaces before an
+  external user is invited.
+- Keep credentials, response bodies, and customer telemetry out of the
+  evidence record.
+
+Completed changes:
+
+- Added an optional `SECOPSAI_PILOT_ACCESS_TOKEN` environment input and the
+  `--require-auth` gate to `./scripts/edge pilot check`.
+- Authenticated checks cover identity, system status, onboarding, sites,
+  sensors, schedules, findings, and reports.
+- The health checker now supports authenticated JSON checks while recording
+  only URL, status code, latency, JSON validity, and non-secret error codes.
+- Missing credentials fail explicitly when `--require-auth` is supplied and are
+  advisory otherwise.
+- Updated the pilot acceptance guide and runbook with an environment-only
+  token workflow.
+- Corrected the roadmap baseline to `v0.3.8` and recorded that implementation
+  checkpoints now continue through this checkpoint.
+
+Validation required before release:
+
+- Focused pilot-acceptance and hosted-health tests.
+- Full Edge release gate with the version-matched `v0.3.8` archive.
+- Release assets publish from the exact verified merge commit.
+
+External boundary:
+
+- This proves the credential can reach the selected authenticated endpoints; it
+  does not prove a real scan, notification delivery, seven-day soak, paid
+  Render durability, or TL-WN722N hardware behavior.
+
+Next checkpoint:
+
+- Publish the verified release, then collect the remaining external pilot
+  evidence gates without treating this preflight as a substitute for them.
