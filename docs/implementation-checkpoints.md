@@ -2785,24 +2785,20 @@ Completed changes:
   degraded-readiness cases.
 - Updated pilot acceptance and operator runbook guidance with recovery paths.
 
-Validation required before merge:
-
-- Focused hosted-health and pilot-acceptance tests.
-- Full Edge release gate.
-- Hosted evidence confirms `/healthz` and `/readyz` remain healthy and records
-the current Pages DNS failure as a diagnosable non-secret result.
-
 Validation:
 
 - Focused hosted-health and pilot-acceptance tests passed: `6` tests.
 - Python compilation and diff checks passed.
 - The current hosted evidence classified the Pages failure as DNS reachability
   without recording a response body or resolver detail.
-- Full Edge release validation and `v0.3.7` publication remain required before
-  the checkpoint is considered released.
+- Full Edge release gate passed at merge commit `2bafb40`:
+  `129` backend/agent tests, `32` frontend tests, `28` desktop/mobile browser
+  workflows, production build, npm audit, archive checksum, and credential-path
+  checks.
+- Release [`v0.3.7`](https://github.com/Techris93/secopsai-edge/releases/tag/v0.3.7)
+  was published with the versioned archive, checksum, and bootstrap installer.
 
 Next checkpoint:
 
-- Merge the diagnostic improvement, then continue the external acceptance
-  matrix and commercial product tracks without treating local green tests as
-  proof of hosted dashboard availability.
+- Continue the external acceptance matrix and commercial product tracks without
+  treating local green tests as proof of hosted dashboard availability.
