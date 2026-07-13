@@ -2109,7 +2109,7 @@ Remaining boundary:
 
 ## Checkpoint 038 - Durable Pilot Operations
 
-Status: implementation complete; external activation pending
+Status: implementation and release complete; external pilot activation gated
 
 Completed changes:
 
@@ -2132,6 +2132,8 @@ Completed changes:
 - Added `./scripts/edge cloud uptime-check` and an opt-in six-hourly GitHub
   monitor that records non-secret API liveness, database/schema readiness,
   dashboard availability, latency, release, and commit evidence.
+- Removed duplicate full CI execution on feature-branch pushes. Pull requests
+  retain the complete verification gate and `main` retains post-merge proof.
 - Documented the 99.5% controlled-pilot readiness target, four-hour
   service-blocking response target, pilot export/deletion flow, and two-owner
   recovery exercise.
@@ -2141,6 +2143,10 @@ Completed changes:
 Branch:
 
 - Edge: `codex/durable-pilot-operations`
+- Pull request: `#25`
+- Feature commit: `11ba78f89b66ce5b72e10b836ef5d8e844f38e3d`
+- Merge commit: `9c7bf4db5e6507cd5cec89822acd2701a2628a18`
+- Release: `v0.3.2`
 
 Implementation validation:
 
@@ -2156,8 +2162,31 @@ Implementation validation:
 - Local product gate passed with `112` backend/agent tests, `32` frontend
   component tests, `28` desktop/mobile browser workflows, a production static
   build, automated WCAG A/AA checks, and `0` npm audit vulnerabilities.
-- Exact migration, full release gate, CI, deployment, restore evidence, and
-  deployed browser validation will be recorded after the pull request merge.
+- `./scripts/release-gate` passed at the feature commit and verified migration
+  head `0015_data_lifecycle`, the complete test/build/audit suite, release
+  archive contents, and archive checksum.
+- Pull-request CI runs `29268475422` and `29268492081` passed. Main-branch CI
+  run `29268758557` passed on the exact merge, including the PostgreSQL
+  migration/schema-drift exercise, matching-major backup/restore drill,
+  Python dependency audit, dashboard build, and browser matrix.
+- Release workflow `29269017675` published the private `v0.3.2` GitHub release
+  from the exact merge. The downloaded versioned archive matched its SHA-256
+  manifest; its digest is
+  `3d65a4be99ac7e310f72fc31dc50defbab909b62aa428a11bebc5b77cd015582`.
+- Render API deploy `dep-d9ahjjt8nd3s73ch4tg0` and scheduler deploy
+  `dep-d9ahjkd8nd3s73ch4u90` became live on the exact merge. `/healthz`
+  reported version `0.3.2` and commit `9c7bf4db5e65`; `/readyz` reported schema
+  revision `0015_data_lifecycle`.
+- Cloudflare production deployment
+  `5fc83a67-259b-4a75-aa7f-70f5b320050b` published source `9c7bf4d` with demo
+  mode disabled and the hosted Render API URL. A deployed-browser Settings
+  check confirmed the new Data Lifecycle panel and hosted-health command
+  controls on the canonical Pages URL.
+- The current workstation's shell resolver timed out for `pages.dev` during a
+  CLI availability probe even though Cloudflare reported the deployment live
+  and the in-app browser loaded the canonical URL. The independent monitor
+  required before a paid pilot must run from a separate provider/network so a
+  local DNS path cannot mask or invent availability.
 
 Activation boundaries:
 
