@@ -99,11 +99,19 @@ export default function WifiPage() {
                 </div>
                 <div className="rounded-md bg-paper p-3">
                   <dt className="text-zinc-500">Signal</dt>
-                  <dd className="mt-1 font-medium text-ink">{network.signal ?? "Unknown"} dBm</dd>
+                  <dd className="mt-1 font-medium text-ink">
+                    {network.signal == null ? "Unknown" : `${network.signal} dBm`}
+                  </dd>
                 </div>
                 <div className="rounded-md bg-paper p-3">
                   <dt className="text-zinc-500">Last Seen</dt>
                   <dd className="mt-1 font-medium text-ink">{timeAgo(network.last_seen_at)}</dd>
+                </div>
+                <div className="col-span-2 rounded-md bg-paper p-3">
+                  <dt className="text-zinc-500">Collection Source</dt>
+                  <dd className="mt-1 break-all font-mono text-xs font-medium text-ink">
+                    {network.source ?? "unknown"}
+                  </dd>
                 </div>
               </dl>
               <button

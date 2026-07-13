@@ -48,7 +48,7 @@ class WifiNetworkIn(BaseModel):
     signal: float | None = None
     encryption: str | None = None
     observed_at: datetime | None = None
-    source: str = "macos"
+    source: str = "unknown"
 
 
 class ScanIn(BaseModel):
@@ -415,6 +415,7 @@ class WifiNetworkOut(BaseModel):
     channel: int | None = None
     signal: float | None = None
     encryption: str | None = None
+    source: str = "unknown"
     status: str
     first_seen_at: datetime
     last_seen_at: datetime

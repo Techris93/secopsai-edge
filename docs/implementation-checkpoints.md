@@ -2212,3 +2212,72 @@ A checkpoint is complete only when:
 - Tests or validation commands are recorded.
 - Known risks and next tasks are updated.
 - The repo status is checked and summarized.
+
+## Checkpoint 039 - Research And Wireless Operational Boundary
+
+Status: implementation complete; merge, release, and physical pilot validation pending
+
+Scope:
+
+- Keep Wi-Fi collection metadata-only and platform-explicit. Do not add packet
+  capture, monitor mode, injection, deauthentication, or other active wireless
+  operations to the pilot sensor.
+- Add Linux `iw` inventory with interface selection, capability diagnostics,
+  dBm/channel normalization, and explicit unsupported/permission failures.
+- Preserve Wi-Fi source/interface provenance through Edge storage and Core
+  export without sending raw scan output to AI or Core.
+- Make independent research case exports reproducible and auditable.
+- Add safe local artifact hash-only evidence and a guided package-case start
+  flow for defensive, public-source research.
+
+Completed changes:
+
+- Added `LinuxIwWifiScanner`, `wifi-status`, managed-mode `iw` collection,
+  `SECOPSAI_WIFI_INTERFACE` support, and explicit `CAP_NET_ADMIN` guidance.
+- Added macOS legacy `airport` capability reporting and clear boundaries around
+  the absence of supported monitor-mode collection on current macOS.
+- Added Wi-Fi `source` provenance to normalized API models, detection records,
+  Core export, dashboard cards, sample data, and migration `0016_wifi_provenance`.
+- Added Core research export schema
+  `secopsai.research.case.v1` and checksum manifest schema
+  `secopsai.research.export-manifest.v1`. JSON, Markdown, and manifest output
+  is byte-stable for an unchanged case.
+- Added `secopsai research case add-artifact`, which hashes a regular local file
+  through a bounded stream, rejects symbolic links and oversized files, stores
+  no absolute path, and never executes or unpacks the artifact.
+- Added `secopsai research case start-package`, which creates a draft package
+  case, records analyst-supplied public source metadata, and optionally hashes
+  a local artifact without fetching or executing it.
+- Added research-case tests, wireless parser/capability tests, provenance
+  coverage, and the defensive research workflow documentation.
+
+Validation:
+
+- Edge `./scripts/edge test`: `119` backend/agent tests, `32` frontend tests,
+  production static build, browser matrix, accessibility checks, and zero npm
+  audit vulnerabilities passed.
+- Core `.venv/bin/python -m pytest tests`: `239` tests passed. Research-focused
+  tests cover deterministic exports, checksum manifests, symlink rejection,
+  hash-only evidence, and guided package starts.
+- `./scripts/edge wifi status` completed on this macOS host using the explicit
+  `macos:airport` capability path. No network scan or physical adapter claim
+  was made.
+- `git diff --check`, Python compilation, shell syntax, and migration-head
+  checks passed during implementation.
+
+Known boundaries:
+
+- Physical TL-WN722N V4 behavior remains hardware/chipset/driver dependent and
+  requires an authorized Linux pilot validation; it is not represented as
+  tested by fixture-only parser coverage.
+- The macOS `airport` path is a legacy metadata inventory boundary. A modern
+  macOS passive/monitor-mode sensor is not claimed by this checkpoint.
+- External release/deployment evidence, paid Render storage, independent
+  uptime monitoring, and pilot operator exercises remain checkpoint 040/041
+  work.
+
+Next checkpoint:
+
+- Execute the external pilot acceptance matrix, including a real Linux sensor
+  validation where hardware is available, hosted recovery/backup proof, and
+  independent availability evidence.

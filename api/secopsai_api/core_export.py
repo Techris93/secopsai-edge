@@ -153,6 +153,7 @@ def build_core_export(db: Session, organization_id: str | None = None) -> dict[s
                     "channel": wifi.channel,
                     "signal": wifi.signal,
                     "encryption": wifi.encryption,
+                    "source": wifi.source,
                     "status": wifi.status,
                     "first_seen_at": _iso(wifi.first_seen_at),
                     "last_seen_at": _iso(wifi.last_seen_at),

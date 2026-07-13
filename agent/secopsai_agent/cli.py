@@ -15,7 +15,7 @@ from secopsai_agent.api_client import SecOpsApiClient
 from secopsai_agent import __version__
 from secopsai_agent.models import ScanResult
 from secopsai_agent.network_scanner import NmapScanConfig, NmapScanner
-from secopsai_agent.wifi_scanner import MacOSWifiScanner
+from secopsai_agent.wifi_scanner import create_wifi_scanner, wifi_capability
 
 
 def main() -> int:
@@ -44,8 +44,19 @@ def main() -> int:
     worker.add_argument("--poll-interval", type=float, default=30.0)
     worker.add_argument("--once", action="store_true")
 
+    wifi_status = subcommands.add_parser(
+        "wifi-status",
+        help="Inspect local Wi-Fi inventory support without scanning.",
+    )
+    wifi_status.add_argument("--interface", default=os.getenv("SECOPSAI_WIFI_INTERFACE"))
+
     args = parser.parse_args()
     scanner = NmapScanner()
+
+    if args.command == "wifi-status":
+        capability = wifi_capability(interface=args.interface)
+        print(json.dumps(capability.to_dict(), indent=2))
+        return 0 if capability.supported else 2
 
     if args.command == "preview":
         print(json.dumps(scanner.preview(NmapScanConfig(args.target_cidr)), indent=2))
@@ -94,13 +105,13 @@ def _run_scan(
     result = ScanResult(
         sensor_id=sensor_id,
         target_cidr=target_cidr,
-        scan_source=f"macos:{socket.gethostname()}",
+        scan_source=f"{platform.system().lower()}:{socket.gethostname()}",
     )
     result.assets = scanner.discover(NmapScanConfig(target_cidr=target_cidr), progress=progress)
     if include_wifi:
         if progress:
             progress("Collecting local Wi-Fi inventory.")
-        result.wifi_networks = MacOSWifiScanner().scan()
+        result.wifi_networks = create_wifi_scanner().scan()
     return result.complete()
 
 

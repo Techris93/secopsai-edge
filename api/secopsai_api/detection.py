@@ -316,6 +316,7 @@ def upsert_wifi(
     wifi.channel = observed.channel
     wifi.signal = observed.signal
     wifi.encryption = observed.encryption
+    wifi.source = observed.source
     wifi.status = "active"
     wifi.last_seen_at = observed.observed_at or utcnow()
     db.flush()

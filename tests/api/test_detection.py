@@ -2,7 +2,7 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 
 from secopsai_api.detection import ingest_scan
-from secopsai_api.models import Base, Finding, Sensor, Site
+from secopsai_api.models import Base, Finding, Sensor, Site, WifiNetwork
 from secopsai_api.schemas import AssetObservationIn, ScanIn, ServiceIn, WifiNetworkIn
 
 
@@ -55,7 +55,12 @@ def test_duplicate_ssid_with_new_bssid_creates_finding() -> None:
     second = ScanIn(
         sensor_id=sensor.id,
         wifi_networks=[
-            WifiNetworkIn(ssid="OfficeWiFi", bssid="bb:bb:bb:bb:bb:bb", encryption="WPA2")
+            WifiNetworkIn(
+                ssid="OfficeWiFi",
+                bssid="bb:bb:bb:bb:bb:bb",
+                encryption="WPA2",
+                source="linux:iw:wlan1",
+            )
         ],
     )
 
@@ -64,6 +69,10 @@ def test_duplicate_ssid_with_new_bssid_creates_finding() -> None:
     db.commit()
 
     assert any(finding.type == "duplicate_ssid" for finding in findings)
+    observed = db.scalar(
+        select(WifiNetwork).where(WifiNetwork.bssid == "bb:bb:bb:bb:bb:bb")
+    )
+    assert observed is not None and observed.source == "linux:iw:wlan1"
 
 
 def test_missing_device_detection_marks_asset_missing() -> None:

@@ -65,6 +65,7 @@ export type WifiNetwork = {
   channel?: number | null;
   signal?: number | null;
   encryption?: string | null;
+  source?: string | null;
   status: string;
   first_seen_at: string;
   last_seen_at: string;

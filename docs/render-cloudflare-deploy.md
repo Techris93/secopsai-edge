@@ -53,11 +53,11 @@ The repository includes `render.yaml`.
 Expected response:
 
 ```json
-{"status":"ok","version":"0.3.2","commit":"<commit>"}
+{"status":"ok","version":"0.3.3","commit":"<commit>"}
 ```
 
 `/readyz` must return `status: ready` and schema revision
-`0015_data_lifecycle`. Settings > System Health exposes the same safe
+`0016_wifi_provenance`. Settings > System Health exposes the same safe
 release/schema context to an authenticated operator.
 
 The Render start script runs Alembic migrations before starting Uvicorn. Keep

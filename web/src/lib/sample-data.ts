@@ -62,6 +62,7 @@ export const sampleData: DashboardData = {
       channel: 6,
       signal: -48,
       encryption: "WPA2",
+      source: "macos:airport",
       status: "active",
       first_seen_at: now,
       last_seen_at: now
@@ -74,6 +75,7 @@ export const sampleData: DashboardData = {
       channel: 11,
       signal: -62,
       encryption: "Open",
+      source: "linux:iw:wlan1",
       status: "active",
       first_seen_at: now,
       last_seen_at: now

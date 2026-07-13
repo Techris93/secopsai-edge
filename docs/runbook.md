@@ -38,8 +38,14 @@ The preview prints the exact Nmap commands that would be executed.
 Add Wi-Fi observations when macOS exposes the local wireless scanner:
 
 ```bash
+./scripts/edge wifi status
 ./scripts/edge scan 192.168.1.0/24 --wifi
 ```
+
+On Linux/Raspberry Pi, install `iw`, select the intended interface with
+`SECOPSAI_WIFI_INTERFACE`, and review the permission boundary in
+`docs/wireless-support.md`. Do not queue Wi-Fi jobs until `wifi status` reports
+the expected backend and interface.
 
 ## Generate an AI Report
 

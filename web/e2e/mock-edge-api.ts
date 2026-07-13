@@ -123,10 +123,10 @@ async function handleRoute(route: Route, state: MockEdgeApi): Promise<void> {
     return json(route, {
       status: state.systemHealth,
       environment: "test",
-      version: "0.3.2",
+      version: "0.3.3",
       commit: "browser-e2e",
-      schema_revision: "0015_data_lifecycle",
-      expected_schema_revision: "0015_data_lifecycle",
+      schema_revision: "0016_wifi_provenance",
+      expected_schema_revision: "0016_wifi_provenance",
       ai_provider: "mock",
       organization_id: "organization-demo",
       server_time: new Date().toISOString()
