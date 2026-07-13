@@ -1853,11 +1853,14 @@ Known activation boundary:
 
 ## Checkpoint 035 - Durable Account Recovery And Browser Workflows
 
-Status: implementation complete; merge and hosted activation pending
+Status: complete
 
-Branch:
+Branch and release:
 
 - Edge: `codex/account-recovery`
+- Pull request: `#19`
+- Merge commit: `31b3980052dd978c8c02988bb491dccbd27e84c6`
+- Release: `v0.2.9`
 
 Completed changes:
 
@@ -1895,8 +1898,37 @@ Validation before PR:
 - Playwright passed all `8` workflow executions across desktop and mobile
   Chromium.
 
+Merge, release, and deployment evidence:
+
+- Pull-request CI runs `29255109320` and `29255112703` passed before merge.
+  Main CI run `29255330493` then repeated migrations, backend/agent tests,
+  dependency audits, release inspection, PostgreSQL backup/restore, the static
+  dashboard build, `27` component tests, all `8` desktop/mobile browser
+  workflows, and clean generated-state verification on the merge commit.
+- Release workflow `29255994140` rebuilt and verified the exact tag, then
+  published versioned and stable sensor archives, the standalone bootstrap,
+  and SHA-256 manifests. GitHub artifact attestations remain unavailable for
+  this user-owned private repository; the release workflow records that
+  limitation explicitly and publishes checksums.
+- Render API deployment `dep-d9aeprcvikkc73eatna0` and scheduler deployment
+  `dep-d9aeprkvikkc73eatnlg` are live on exact merge `31b3980`. The public API
+  reports version `0.2.9`, matching commit `31b3980052dd`, and readiness schema
+  revision `0013_account_recovery`.
+- Cloudflare Pages production deployment
+  `2dcc86d7-4719-4350-8b3c-de4152e13633` serves source `31b3980` with the
+  hosted Render API URL and dashboard demo mode disabled.
+- Deployed Settings browser QA confirmed the account-recovery control, hosted
+  API URL, explicit disconnected session state, no demo banner, no framework
+  error, no desktop horizontal overflow, and a clean console. Mobile layout is
+  covered by the exact-build Pixel 7 Playwright project; the in-app browser's
+  temporary viewport override did not apply, so no separate deployed-mobile
+  claim is made here.
+
 Activation boundary:
 
+- Render configuration has no contract drift, but the free pilot PostgreSQL
+  database reports expiry on `2026-07-20`. A paid durable database or an
+  explicit backup/migration decision is required before any customer pilot.
 - Hosted password-reset email requires approved SMTP credentials and the
   deployed Cloudflare Settings URL. The application safely records retrying or
   failed delivery state when those values are absent; no email provider or paid
