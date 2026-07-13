@@ -295,6 +295,8 @@ def system_status(
         "schema_revision": revision,
         "expected_schema_revision": settings.expected_schema_revision,
         "ai_provider": settings.ai_provider,
+        "ai_max_findings_per_report": settings.ai_max_findings_per_report,
+        "ai_report_cooldown_seconds": settings.ai_report_cooldown_seconds,
         "organization_id": organization_id_from_context(auth_context),
         "server_time": utcnow().isoformat(),
     }
@@ -3468,6 +3470,27 @@ def generate_report(
     )
     if site is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No site has been registered")
+    if settings.ai_report_cooldown_seconds:
+        latest_report = db.scalar(
+            select(Report)
+            .where(Report.site_id == site.id)
+            .order_by(Report.created_at.desc())
+            .limit(1)
+        )
+        if latest_report is not None:
+            latest_created = latest_report.created_at
+            now = utcnow()
+            if latest_created.tzinfo is None and now.tzinfo is not None:
+                latest_created = latest_created.replace(tzinfo=now.tzinfo)
+            elapsed = max(0.0, (now - latest_created).total_seconds())
+            remaining = settings.ai_report_cooldown_seconds - elapsed
+            if remaining > 0:
+                retry_after = max(1, int(remaining + 0.999))
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail=f"Report generation is rate limited for this site; retry in {retry_after} seconds",
+                    headers={"Retry-After": str(retry_after)},
+                )
     report = build_report(db, site.id)
     export_report(report)
     write_audit(db, "report.generated", organization_id=organization_id, resource_type="report", resource_id=report.id)

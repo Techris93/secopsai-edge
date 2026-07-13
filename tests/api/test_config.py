@@ -81,3 +81,18 @@ def test_production_smtp_requires_a_secure_reset_url() -> None:
 def test_pilot_configuration_uses_the_same_secret_guardrails_as_production() -> None:
     with pytest.raises(RuntimeError, match="Unsafe production configuration"):
         replace(Settings(), environment="pilot")
+
+
+def test_ai_report_guardrails_reject_unbounded_or_invalid_values() -> None:
+    with pytest.raises(RuntimeError, match="AI_MAX_FINDINGS_PER_REPORT"):
+        replace(Settings(), ai_max_findings_per_report=0)
+    with pytest.raises(RuntimeError, match="AI_REPORT_COOLDOWN_SECONDS"):
+        replace(Settings(), ai_report_cooldown_seconds=-1)
+    with pytest.raises(RuntimeError, match="AI_REPORT_COOLDOWN_SECONDS"):
+        replace(Settings(), ai_report_cooldown_seconds=86_401)
+
+
+def test_ai_report_cooldown_can_be_disabled_for_controlled_tests() -> None:
+    settings = replace(Settings(), ai_report_cooldown_seconds=0)
+
+    assert settings.ai_report_cooldown_seconds == 0

@@ -13,6 +13,8 @@ vi.mock("@/lib/api", () => ({
     schema_revision: "0016_wifi_provenance",
     expected_schema_revision: "0016_wifi_provenance",
     ai_provider: "mock",
+    ai_max_findings_per_report: 50,
+    ai_report_cooldown_seconds: 300,
     organization_id: "org-alpha",
     server_time: "2026-07-13T00:00:00Z"
   }))

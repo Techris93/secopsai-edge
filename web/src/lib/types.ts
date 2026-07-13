@@ -208,6 +208,8 @@ export type SystemStatus = {
   schema_revision?: string | null;
   expected_schema_revision: string;
   ai_provider: string;
+  ai_max_findings_per_report: number;
+  ai_report_cooldown_seconds: number;
   organization_id: string;
   server_time: string;
 };

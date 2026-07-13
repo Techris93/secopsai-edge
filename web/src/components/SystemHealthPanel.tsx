@@ -30,7 +30,8 @@ export function SystemHealthPanel() {
     ["Release", system.version],
     ["Commit", system.commit.slice(0, 12)],
     ["Database schema", `${system.schema_revision ?? "missing"}${system.schema_revision === system.expected_schema_revision ? " (current)" : " (upgrade required)"}`],
-    ["AI provider", system.ai_provider]
+    ["AI provider", system.ai_provider],
+    ["AI report guardrail", `${system.ai_max_findings_per_report} findings; ${system.ai_report_cooldown_seconds}s cooldown`]
   ] : [];
 
   return (
