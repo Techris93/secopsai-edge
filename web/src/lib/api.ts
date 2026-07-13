@@ -7,6 +7,8 @@ import type {
   AuditLog,
   BaselineRule,
   DashboardData,
+  DataLifecyclePolicy,
+  DataLifecycleRun,
   Finding,
   FindingDetail,
   FindingNote,
@@ -426,6 +428,49 @@ export async function updateSite(siteId: string, name: string): Promise<Site> {
     method: "PATCH",
     body: JSON.stringify({ name })
   });
+}
+
+export async function downloadSiteExport(siteId: string): Promise<Blob> {
+  const sessionToken = getDashboardSessionToken();
+  if (!sessionToken) throw new Error("Dashboard session required");
+  const response = await fetch(`${API_BASE_URL}/api/v1/sites/${siteId}/export`, {
+    headers: { Authorization: `Bearer ${sessionToken}` },
+    cache: "no-store"
+  });
+  if (!response.ok) throw await responseError(response);
+  return response.blob();
+}
+
+export async function deleteSite(
+  siteId: string,
+  payload: {
+    confirmation: string;
+    current_password: string;
+    code?: string;
+    acknowledge_permanent: boolean;
+  }
+): Promise<{ status: string; site_id: string; deleted: Record<string, number> }> {
+  return requestJson(`/api/v1/sites/${siteId}`, {
+    method: "DELETE",
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function fetchDataLifecyclePolicy(): Promise<DataLifecyclePolicy> {
+  return requestJson<DataLifecyclePolicy>("/api/v1/data-lifecycle");
+}
+
+export async function updateDataLifecyclePolicy(
+  payload: Omit<DataLifecyclePolicy, "organization_id" | "last_run_at" | "created_at" | "updated_at">
+): Promise<DataLifecyclePolicy> {
+  return requestJson<DataLifecyclePolicy>("/api/v1/data-lifecycle", {
+    method: "PATCH",
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function runDataLifecycle(): Promise<DataLifecycleRun> {
+  return requestJson<DataLifecycleRun>("/api/v1/data-lifecycle/run-now", { method: "POST" });
 }
 
 export async function createScanSchedule(payload: {

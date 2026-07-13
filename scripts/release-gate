@@ -12,13 +12,13 @@ if ! git diff --quiet || ! git diff --cached --quiet; then
   exit 1
 fi
 bash -n scripts/edge scripts/install-secopsai-edge.sh scripts/bootstrap-secopsai-edge.sh scripts/build-release scripts/database-backup scripts/render-postgres-backup scripts/render-start-api
-python3 -m py_compile scripts/render-run-due-schedules scripts/render_drift_check.py scripts/render_psql_backup_proxy.py scripts/core-sync-runner.py
+python3 -m py_compile scripts/render-run-due-schedules scripts/render_drift_check.py scripts/render_psql_backup_proxy.py scripts/core-sync-runner.py scripts/hosted_health_check.py
 
 [ -x "$PYTHON_BIN" ] || { echo "Run ./scripts/edge setup first" >&2; exit 1; }
 [ -x "$ALEMBIC_BIN" ] || { echo "Alembic is not installed in .venv" >&2; exit 1; }
 
 heads="$(PYTHONPATH=api "$ALEMBIC_BIN" -c api/alembic.ini heads | awk '{print $1}')"
-[ "$heads" = "0014_operator_access" ] || {
+[ "$heads" = "0015_data_lifecycle" ] || {
   echo "Unexpected Alembic head: $heads" >&2
   exit 1
 }

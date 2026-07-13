@@ -28,6 +28,15 @@ SecOpsAI Edge discovers internal network assets, records service exposure, monit
 10. Approve known assets, accepted services, and trusted BSSIDs to establish the site baseline.
 11. Generate a report.
 12. Open the report detail page, verify the frozen reporting period and metrics, then copy the executive summary/client brief or download the client-ready PDF.
+13. Open Settings > Data Lifecycle, confirm the agreed retention periods, and record the last-cleanup state.
+14. Run `./scripts/edge cloud uptime-check --output hosted-health.jsonl` and retain the non-secret evidence with the pilot record.
+
+## Ending A Pilot
+
+Use [data-lifecycle.md](data-lifecycle.md). Export the site and final report,
+create a verified backup under the agreed terms, disable schedules/sensors,
+perform owner-confirmed deletion, uninstall the worker, and record the
+`site.deleted` audit event plus any agreed backup-destruction date.
 13. Configure webhook/email/Telegram notifications.
 14. Install automatic Edge-to-Core sync, choosing local import or hosted Core
     push, and confirm its status/logs.

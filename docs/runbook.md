@@ -92,6 +92,18 @@ Node dependencies, and performs a real backup/restore drill.
 
 Do not route pilot traffic to an API whose `/readyz` response is not `200`.
 
+Record a non-secret hosted check when validating a deployment:
+
+```bash
+./scripts/edge cloud uptime-check --output hosted-health.jsonl
+```
+
+The optional GitHub workflow runs every six hours only after the repository
+variable `SECOPSAI_ENABLE_HOSTED_MONITOR=true` is set. For a paid pilot, replace
+this coarse check with an independent five-minute readiness monitor. Internal
+controlled-pilot target: 99.5% monthly readiness and a four-hour response to a
+service-blocking incident; this is an operating target, not a contractual SLA.
+
 ## Backup And Restore
 
 Create and immediately verify an owner-only PostgreSQL custom archive:
@@ -144,6 +156,41 @@ quarterly documented restore drill.
 An archive is not considered recoverable until it has restored into a separate
 database on the same PostgreSQL major and schema/table counts have been checked.
 Never treat `pg_restore --list` alone as a restore test.
+
+Render free PostgreSQL has no managed backup and expires after 30 days. A
+verified logical archive protects the current demo, but it does not make the
+deployment pilot durable. Before external data is accepted, upgrade to paid
+PostgreSQL with point-in-time recovery and a paid always-on API, then perform a
+PITR restore into a separate database and capture the result in the pilot
+record.
+
+## Data Retention, Export, And Deletion
+
+Settings > Data Lifecycle controls organization-scoped retention. The scheduler
+evaluates cleanup every five minutes but processes a workspace no more than
+once per 24 hours. **Run cleanup** is an explicit administrator override.
+
+Sites > Export downloads a normalized, secret-free customer bundle. Sites >
+Delete is owner-only and requires current password, exact site-name
+confirmation, explicit acknowledgement, and MFA when enabled. Export and make a
+verified backup first. See [data-lifecycle.md](data-lifecycle.md) for the data
+contract and pilot-exit sequence.
+
+## Operator Recovery Exercise
+
+Complete this with two real owner accounts before external access:
+
+1. Owner A invites Owner B and the configured provider delivers the link.
+2. Owner B accepts, enables TOTP MFA, stores recovery codes offline, signs out,
+   and completes an MFA login.
+3. Owner B uses one recovery code and confirms it cannot be reused.
+4. Owner A performs the owner-assisted MFA reset for Owner B.
+5. Owner B signs in, re-enrolls MFA, and stores the replacement recovery codes.
+6. Verify invitation, login, recovery-code use, MFA reset, and re-enrollment in
+   Audit Log; record timestamps and operators in the pilot acceptance record.
+
+Do not use the founder's only owner account for this drill, and never paste a
+password, TOTP secret, recovery code, or invitation token into support notes.
 
 ## Manage Approved Baselines
 

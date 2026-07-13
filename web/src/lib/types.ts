@@ -161,6 +161,27 @@ export type Site = {
   created_at: string;
 };
 
+export type DataLifecyclePolicy = {
+  organization_id: string;
+  observation_days: number;
+  scan_history_days: number;
+  notification_delivery_days: number;
+  account_access_days: number;
+  credential_history_days: number;
+  report_days: number;
+  audit_log_days: number;
+  last_run_at?: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type DataLifecycleRun = {
+  organizations: number;
+  skipped: number;
+  deleted: Record<string, number>;
+  run_at: string;
+};
+
 export type Organization = {
   id: string;
   name: string;

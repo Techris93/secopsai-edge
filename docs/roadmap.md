@@ -4,7 +4,7 @@ This roadmap records product gaps, not historical aspirations. A capability is
 listed as complete only when it has implementation and test evidence in
 `docs/implementation-checkpoints.md`.
 
-## Current Product Baseline - v0.3.1
+## Current Product Baseline - v0.3.2
 
 The controlled-pilot baseline includes:
 
@@ -29,16 +29,19 @@ The controlled-pilot baseline includes:
   private release archives, Render API/PostgreSQL, Cloudflare dashboard,
   Render configuration drift checks, and matching-major hosted backups.
 - Versioned Edge-to-Core graph/finding export and automated local Core sync.
+- Workspace retention policies, normalized customer export, owner-confirmed
+  site deletion, and non-secret hosted availability evidence.
 
 ## Immediate Pilot Hardening
 
 These are the remaining highest-priority gaps before inviting an external pilot
 without founder supervision:
 
-1. **Paid pilot infrastructure.** A matching-major hosted export and isolated
-   restore drill now protect the current demo data. Move Render API/PostgreSQL
-   from free demo plans, enable managed backups or point-in-time recovery, and
-   define an uptime target before accepting paid-pilot data.
+1. **Paid pilot infrastructure activation.** A matching-major hosted export,
+   isolated restore drill, lifecycle controls, and 99.5% internal readiness
+   target now protect the demo. The account owner must still move Render
+   API/PostgreSQL from free demo plans and perform a paid-database PITR drill
+   before accepting external data.
 2. **Browser and accessibility operations.** Desktop/mobile Chromium now
    protects login, password recovery, invitation acceptance, MFA, scan queueing,
    finding triage, schedule creation, report generation, sensor enrollment, PDF
@@ -61,9 +64,10 @@ without founder supervision:
 The checkpoint ledger is complete through `037`. The remaining controlled-pilot
 sequence is deliberately bounded and should be completed in this order:
 
-1. **Checkpoint 038 - Durable pilot infrastructure and recovery proof.** Paid
-   database/API decision, managed backups or equivalent, restore drill,
-   retention/deletion controls, uptime target, and operator recovery exercise.
+1. **Checkpoint 038 - Durable pilot operations activation.** Retention,
+   customer export/deletion, uptime evidence, and recovery procedures are
+   implemented. Paid Render activation, PITR evidence, and the real two-owner
+   recovery exercise remain external account actions.
 2. **Checkpoint 039 - Research and wireless operational boundary.** First
    narrowly scoped package-research workflow, reproducible evidence export,
    Linux/Raspberry Pi wireless validation, and explicit unsupported-platform

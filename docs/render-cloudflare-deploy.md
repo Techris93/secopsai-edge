@@ -53,11 +53,11 @@ The repository includes `render.yaml`.
 Expected response:
 
 ```json
-{"status":"ok","version":"0.3.1","commit":"<commit>"}
+{"status":"ok","version":"0.3.2","commit":"<commit>"}
 ```
 
 `/readyz` must return `status: ready` and schema revision
-`0014_operator_access`. Settings > System Health exposes the same safe
+`0015_data_lifecycle`. Settings > System Health exposes the same safe
 release/schema context to an authenticated operator.
 
 The Render start script runs Alembic migrations before starting Uvicorn. Keep
@@ -67,8 +67,24 @@ automatic table creation, and localhost CORS origins. Development is the only
 mode that permits local defaults.
 
 The Blueprint still uses free plans to avoid silently creating paid resources.
-Free instances are suitable only for development/demo. Move the API and
-database to paid plans with managed backups before storing paid-pilot data.
+Free instances are suitable only for development/demo. Render explicitly says
+free services are not for production, free web services spin down after idle
+time, and free PostgreSQL expires after 30 days without managed backups. Before
+storing pilot data, move both the API and database to paid instance types. Any
+paid Render PostgreSQL instance includes point-in-time recovery; validate a
+recovery into a separate database before relying on it.
+
+Current operating decision:
+
+- controlled demo: free API/database plus verified local logical backup;
+- external or paid pilot: always-on paid API, paid PostgreSQL with PITR, daily
+  logical export, and an isolated restore drill;
+- never represent the free deployment as durable pilot infrastructure.
+
+Changing instance types creates recurring cost and therefore remains an
+explicit account-owner action rather than an automated repository deployment.
+See [Render free-instance limits](https://render.com/docs/free) and
+[Render PostgreSQL recovery](https://render.com/docs/postgresql-backups).
 
 Check the checked-in Blueprint against the live Render resources after every
 infrastructure or dashboard change:
@@ -195,7 +211,38 @@ Generate a hosted report:
 The dashboard stores scan schedules, notification retries, and account-recovery
 email state in Render Postgres. The included Render cron runs every five minutes
 and processes due schedules, notification deliveries, and account-access email
-deliveries.
+deliveries. It also evaluates retention policies; each workspace cleanup runs
+at most once per 24 hours.
+
+## Hosted Availability Evidence
+
+Run the non-secret liveness/readiness/dashboard check manually:
+
+```bash
+./scripts/edge cloud uptime-check --output hosted-health.jsonl
+```
+
+The JSONL evidence records URLs, status codes, latency, build version/commit,
+and schema revision. It does not record response bodies, credentials, headers,
+or customer telemetry.
+
+The `Hosted Health Monitor` GitHub workflow is manual by default. To opt into a
+six-hourly demo monitor without editing the workflow:
+
+```bash
+gh variable set SECOPSAI_ENABLE_HOSTED_MONITOR --body true
+```
+
+Disable it with:
+
+```bash
+gh variable delete SECOPSAI_ENABLE_HOSTED_MONITOR
+```
+
+The controlled-pilot internal target is 99.5% monthly API readiness with a
+four-hour support response for a service-blocking incident. The six-hourly
+GitHub check is low-cost evidence, not a customer SLA monitor. A paid pilot
+requires an independent five-minute monitor and an agreed escalation contact.
 
 Minimum local/manual trigger:
 

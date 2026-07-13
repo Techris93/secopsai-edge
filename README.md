@@ -13,6 +13,7 @@ Standalone MacBook-first MVP for an AI-assisted asset discovery and wireless int
 - Scoped Core/dashboard credentials with advance expiry warnings and overlap-safe rotation.
 - Docker Compose for local PostgreSQL.
 - Tests for scan safety, Nmap parsing, detection rules, and AI payload redaction.
+- Workspace retention controls plus normalized customer export and owner-confirmed site deletion.
 
 ## Product Role
 
@@ -120,6 +121,7 @@ Replace `192.168.1.0/24` with your own authorized local network.
 ./scripts/edge database backup
 ./scripts/edge cloud drift-check
 ./scripts/edge cloud backup
+./scripts/edge cloud uptime-check --output hosted-health.jsonl
 ./scripts/edge worker status
 ./scripts/edge worker logs
 ./scripts/edge schedules run-due --cloud
@@ -171,6 +173,7 @@ Pilot docs:
 - [docs/demo-script.md](docs/demo-script.md)
 - [docs/security-boundaries.md](docs/security-boundaries.md)
 - [docs/msp-pilot.md](docs/msp-pilot.md)
+- [docs/data-lifecycle.md](docs/data-lifecycle.md)
 
 ## Hosting
 

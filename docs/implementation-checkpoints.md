@@ -2107,6 +2107,74 @@ Remaining boundary:
 - Checkpoint `038` still owns durable hosted storage, backup/restore, retention,
   uptime, and real operator recovery proof.
 
+## Checkpoint 038 - Durable Pilot Operations
+
+Status: implementation complete; external activation pending
+
+Completed changes:
+
+- Added migration `0015_data_lifecycle` and organization-scoped retention
+  policies for normalized observations, scan history, notification deliveries,
+  account-access records, expired credential metadata, reports, and audit logs.
+- Added a once-per-24-hours retention runner to the existing five-minute
+  scheduler plus an explicit administrator **Run cleanup** action in Settings.
+- Added versioned `secopsai.edge.site-export.v1` customer exports, including
+  minimized notification-delivery and site-scoped audit history. Raw
+  observation payloads, token hashes, account/MFA material, integration
+  credentials, notification payload/response bodies, destinations, and
+  endpoint error text are excluded; secret-shaped audit fields are redacted.
+- Added owner-only site deletion with active-job protection, exact-name and
+  permanent-action confirmation, current-password proof, MFA proof when
+  enabled, ordered transactional deletion, and a minimal post-deletion audit
+  record.
+- Added Settings data-lifecycle controls and clickable site Export/Delete
+  workflows with explicit success/error states.
+- Added `./scripts/edge cloud uptime-check` and an opt-in six-hourly GitHub
+  monitor that records non-secret API liveness, database/schema readiness,
+  dashboard availability, latency, release, and commit evidence.
+- Documented the 99.5% controlled-pilot readiness target, four-hour
+  service-blocking response target, pilot export/deletion flow, and two-owner
+  recovery exercise.
+- Advanced the application, agent, dashboard, installer, migration, and release
+  baseline to `0.3.2`.
+
+Branch:
+
+- Edge: `codex/durable-pilot-operations`
+
+Implementation validation:
+
+- Site export tests prove workspace isolation and exclusion of raw payloads,
+  token hashes, and private notification targets.
+- Deletion tests cover legacy-token rejection, exact confirmation, active-job
+  blocking, password proof, MFA enforcement, ordered deletion, and retained
+  minimal audit evidence.
+- Retention tests cover configurable policies, tenant isolation, recent-record
+  preservation, expired-record removal, and the 24-hour due-run guard.
+- Hosted-health tests cover successful evidence recording and degraded
+  readiness failure without storing response bodies.
+- Local product gate passed with `112` backend/agent tests, `32` frontend
+  component tests, `28` desktop/mobile browser workflows, a production static
+  build, automated WCAG A/AA checks, and `0` npm audit vulnerabilities.
+- Exact migration, full release gate, CI, deployment, restore evidence, and
+  deployed browser validation will be recorded after the pull request merge.
+
+Activation boundaries:
+
+- The current Render API and PostgreSQL remain free demo resources. Render
+  states that free web services spin down and free PostgreSQL expires after 30
+  days without backups. An account owner must approve recurring cost and move
+  both resources to paid instance types before external pilot data is accepted.
+- After upgrade, perform Render point-in-time recovery into a separate database
+  and record the recovery time and validation evidence. The existing matching-
+  major logical backup/restore remains a second recovery path.
+- Configure an approved email provider, enroll a second real owner, and execute
+  the invitation, MFA, recovery-code, owner-reset, and re-enrollment drill. Test
+  coverage cannot substitute for this operator exercise.
+- The opt-in six-hour GitHub monitor is coarse controlled-pilot evidence, not a
+  contractual SLA monitor. Paid pilots require an independent five-minute
+  monitor and named escalation contact.
+
 ## Completion Rules
 
 A checkpoint is complete only when:

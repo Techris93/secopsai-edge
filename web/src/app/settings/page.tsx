@@ -5,6 +5,7 @@ import { ApiConnectionPanel } from "@/components/ApiConnectionPanel";
 import { AccountManagementPanel } from "@/components/AccountManagementPanel";
 import { BaselinePanel } from "@/components/BaselinePanel";
 import { CoreIntegrationPanel } from "@/components/CoreIntegrationPanel";
+import { DataLifecyclePanel } from "@/components/DataLifecyclePanel";
 import { CopyCommand } from "@/components/CopyCommand";
 import { NotificationPanel } from "@/components/NotificationPanel";
 import { PageHeader } from "@/components/PageHeader";
@@ -48,6 +49,7 @@ export default function SettingsPage() {
         <AccountManagementPanel />
         <NotificationPanel />
         <BaselinePanel />
+        <DataLifecyclePanel />
 
         <section className="rounded-lg border border-line bg-white p-4 shadow-panel xl:col-span-2">
           <div className="flex items-center gap-2">
@@ -59,6 +61,8 @@ export default function SettingsPage() {
             <CopyCommand command="./scripts/edge status --cloud" icon={Radar} />
             <CopyCommand command="./scripts/edge cloud drift-check" icon={Radar} />
             <CopyCommand command="./scripts/edge cloud backup" icon={Database} />
+            <CopyCommand command="./scripts/edge cloud uptime-check --output hosted-health.jsonl" icon={Radar} />
+            <CopyCommand command="gh variable set SECOPSAI_ENABLE_HOSTED_MONITOR --body true" icon={Terminal} />
             <CopyCommand command="./scripts/edge preview 192.168.1.0/24" icon={ShieldCheck} />
             <CopyCommand command="./scripts/edge scan 192.168.1.0/24 --cloud" icon={Terminal} />
           </div>

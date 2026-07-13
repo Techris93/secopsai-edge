@@ -8,7 +8,9 @@ vi.mock("@/lib/api", () => ({
   apiBaseUrl: vi.fn(() => "https://edge.example.test"),
   createSite: vi.fn(),
   createSensorEnrollment: vi.fn(),
+  deleteSite: vi.fn(),
   disableSensor: vi.fn(),
+  downloadSiteExport: vi.fn(),
   enableSensor: vi.fn(),
   fetchDashboardData: vi.fn(),
   revokeSensorEnrollment: vi.fn(),
@@ -66,5 +68,27 @@ describe("SitesPage sensor enrollment", () => {
     expect(command).toHaveTextContent("--enrollment-token");
     expect(screen.getByText(/Private pilots need GitHub CLI access/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Copy install command" })).toBeInTheDocument();
+  });
+
+  it("gates permanent site deletion behind explicit owner proof", async () => {
+    vi.mocked(api.deleteSite).mockResolvedValue({ status: "deleted", site_id: "site-alpha", deleted: {} });
+    render(React.createElement(SitesPage));
+
+    fireEvent.click(await screen.findByRole("button", { name: "Delete" }));
+    const deleteButton = screen.getByRole("button", { name: "Delete site permanently" });
+    expect(deleteButton).toBeDisabled();
+
+    fireEvent.change(screen.getByLabelText("Type Alpha Office"), { target: { value: "Alpha Office" } });
+    fireEvent.change(screen.getByLabelText("Current password"), { target: { value: "owner-password" } });
+    fireEvent.click(screen.getByLabelText(/I understand this action is permanent/));
+    expect(deleteButton).toBeEnabled();
+    fireEvent.click(deleteButton);
+
+    await waitFor(() => expect(api.deleteSite).toHaveBeenCalledWith("site-alpha", {
+      confirmation: "Alpha Office",
+      current_password: "owner-password",
+      code: undefined,
+      acknowledge_permanent: true
+    }));
   });
 });

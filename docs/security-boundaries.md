@@ -89,6 +89,20 @@ notification history, audit history, and Core export are all server-filtered to 
 organization; a workspace selector is not treated as a security boundary by itself. Existing data
 is backfilled into `Default Workspace` during migration `0009_organizations`.
 
+## Export And Deletion Boundary
+
+Site export is authenticated, workspace scoped, versioned, and audit logged.
+It returns normalized customer data while excluding raw observation payloads,
+credential hashes, account/MFA material, integration tokens, and notification
+destinations. The resulting file still contains sensitive network identifiers
+and must be handled as customer security data.
+
+Permanent site deletion rejects legacy platform-token sessions and requires an
+owner user login, exact site-name confirmation, current password, explicit
+acknowledgement, and MFA proof when enabled. Active scan jobs block deletion.
+Deletion uses an ordered transaction across all site-owned records and writes a
+minimal post-deletion audit event without the site name or telemetry.
+
 ## Baseline Boundary
 
 Approved baselines are scoped to one site and a stable entity identifier. The API rejects empty or broad matchers, restricts each baseline kind to compatible finding types, records changes in the audit log, and reopens baseline-acknowledged findings when a rule is disabled. Trusting a BSSID does not approve weak or open encryption unless an operator deliberately creates that separate policy through the API.

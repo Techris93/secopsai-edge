@@ -1,0 +1,31 @@
+name: Hosted Health Monitor
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 */6 * * *"
+
+permissions:
+  contents: read
+
+jobs:
+  verify-hosted-surfaces:
+    if: github.event_name == 'workflow_dispatch' || vars.SECOPSAI_ENABLE_HOSTED_MONITOR == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - name: Check API readiness and dashboard availability
+        run: >-
+          python scripts/hosted_health_check.py
+          --api-url https://secopsai-edge-api.onrender.com
+          --dashboard-url https://secopsai-edge.pages.dev
+          --output hosted-health.jsonl
+      - name: Preserve health evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: hosted-health-${{ github.run_id }}
+          path: hosted-health.jsonl
+          if-no-files-found: warn
+          retention-days: 30

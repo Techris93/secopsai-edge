@@ -66,6 +66,47 @@ test("authenticated report PDF downloads with a readable filename", async ({ pag
   expect(api.requests.some((item) => item.method === "GET" && item.path === "/api/v1/reports/report-1/export.pdf")).toBe(true);
 });
 
+test("workspace owner can update retention and run cleanup", async ({ page }) => {
+  const api = await installEdgeApiMock(page);
+  await page.goto("/settings");
+
+  const observationDays = page.getByLabel("Asset observations retention days");
+  await expect(observationDays).toHaveValue("90");
+  await observationDays.fill("120");
+  await page.getByRole("button", { name: "Save policy" }).click();
+  await expect(page.getByText("Retention policy saved", { exact: true })).toBeVisible();
+
+  await page.getByRole("button", { name: "Run cleanup" }).click();
+  await expect(page.getByText("Cleanup complete: 3 expired records removed", { exact: true })).toBeVisible();
+  expect(api.requests.some((item) => item.method === "PATCH" && item.path === "/api/v1/data-lifecycle")).toBe(true);
+  expect(api.requests.some((item) => item.method === "POST" && item.path === "/api/v1/data-lifecycle/run-now")).toBe(true);
+});
+
+test("workspace owner can export a site and must pass the permanent deletion gate", async ({ page }) => {
+  const api = await installEdgeApiMock(page);
+  await page.goto("/sites");
+
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Export" }).click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toBe("demo-site-secopsai-edge.json");
+  await expect(page.getByText("Site export downloaded", { exact: true })).toBeVisible();
+
+  await page.getByRole("button", { name: "Delete", exact: true }).click();
+  const permanentDelete = page.getByRole("button", { name: "Delete site permanently" });
+  await expect(permanentDelete).toBeDisabled();
+  await page.getByLabel("Type Demo Site").fill("Demo Site");
+  await page.getByLabel("Current password").fill("owner-browser-password");
+  await page.getByLabel(/I understand this action is permanent/).check();
+  await expect(permanentDelete).toBeEnabled();
+  await permanentDelete.click();
+
+  await expect(page.getByText("Site data permanently deleted", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 3, name: "Demo Site" })).toHaveCount(0);
+  expect(api.requests.some((item) => item.method === "GET" && item.path === "/api/v1/sites/site-demo/export")).toBe(true);
+  expect(api.requests.some((item) => item.method === "DELETE" && item.path === "/api/v1/sites/site-demo")).toBe(true);
+});
+
 test("keyboard users can skip navigation and identify the current page", async ({ page }) => {
   await installEdgeApiMock(page);
   await page.goto("/findings");
