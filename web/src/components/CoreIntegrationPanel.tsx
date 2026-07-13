@@ -4,6 +4,7 @@ import { AlertTriangle, CheckCircle2, Clipboard, Download, GitBranch, KeyRound, 
 import type { ComponentType } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { apiBaseUrl, createIntegrationToken, downloadCoreBundle, fetchAuthIdentity, listIntegrationTokens, revokeIntegrationToken, rotateIntegrationToken } from "@/lib/api";
+import { copyText } from "@/lib/clipboard";
 import type { IntegrationToken, IntegrationTokenSecret } from "@/lib/types";
 
 const DEFAULT_EDGE_ROOT = process.env.NEXT_PUBLIC_EDGE_ROOT ?? "$HOME/secopsai-edge";
@@ -130,14 +131,9 @@ export function CoreIntegrationPanel() {
 
   async function copyCommand(label: string, command: string) {
     setBusyAction(label);
-    try {
-      await navigator.clipboard.writeText(command);
-      setMessage(`${label} copied`);
-    } catch {
-      setMessage("Clipboard unavailable");
-    } finally {
-      setBusyAction(null);
-    }
+    const copied = await copyText(command);
+    setMessage(copied ? `${label} copied` : "Clipboard unavailable. Select and copy the command manually.");
+    setBusyAction(null);
   }
 
   async function downloadBundle() {
