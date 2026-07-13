@@ -83,12 +83,14 @@ export function NotificationPanel() {
 
       <form className="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1fr)_9rem_minmax(0,1fr)_12rem_auto]" onSubmit={onSubmit}>
         <input
+          aria-label="Notification name"
           className="focus-ring rounded-md border border-line bg-white px-3 py-2 text-sm"
           value={form.name}
           onChange={(event) => setForm({ ...form, name: event.target.value })}
           placeholder="Endpoint name"
         />
         <select
+          aria-label="Notification type"
           className="focus-ring rounded-md border border-line bg-white px-3 py-2 text-sm"
           value={form.type}
           onChange={(event) => setForm({ ...form, type: event.target.value })}
@@ -98,12 +100,14 @@ export function NotificationPanel() {
           <option value="telegram">Telegram</option>
         </select>
         <input
+          aria-label="Notification destination"
           className="focus-ring rounded-md border border-line bg-white px-3 py-2 text-sm"
           value={form.target}
           onChange={(event) => setForm({ ...form, target: event.target.value })}
           placeholder="URL, email, or chat ID"
         />
         <select
+          aria-label="Notification site"
           className="focus-ring rounded-md border border-line bg-white px-3 py-2 text-sm"
           value={form.site_id}
           onChange={(event) => setForm({ ...form, site_id: event.target.value })}
@@ -123,6 +127,7 @@ export function NotificationPanel() {
         {events.map((eventName) => (
           <label key={eventName} className="flex items-center gap-2 rounded-md bg-paper px-3 py-2 text-xs font-medium text-ink">
             <input
+              aria-label={`Notify on ${eventName.replaceAll("_", " ")}`}
               checked={form.events.includes(eventName)}
               className="h-4 w-4 rounded border-line text-sea"
               onChange={(event) => toggleEvent(eventName, event.target.checked)}
@@ -149,7 +154,7 @@ export function NotificationPanel() {
           Refresh
         </button>
       </div>
-      <div className="mt-3 overflow-x-auto rounded-md border border-line">
+      <div aria-label="Scrollable notification delivery table" className="focus-ring mt-3 overflow-x-auto rounded-md border border-line" role="region" tabIndex={0}>
         <table className="min-w-full text-left text-sm">
           <thead className="bg-paper text-xs uppercase text-zinc-600">
             <tr>

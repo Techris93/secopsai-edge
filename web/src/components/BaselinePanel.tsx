@@ -58,7 +58,7 @@ export function BaselinePanel() {
 
       {message ? <p className="border-b border-line bg-paper px-4 py-3 text-sm text-zinc-700">{message}</p> : null}
 
-      <div className="overflow-x-auto">
+      <div aria-label="Scrollable baseline table" className="focus-ring overflow-x-auto" role="region" tabIndex={0}>
         <table className="w-full min-w-[760px] text-left text-sm">
           <thead className="bg-paper text-xs uppercase text-zinc-600">
             <tr>

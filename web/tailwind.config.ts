@@ -9,7 +9,7 @@ const config: Config = {
         paper: "#f7f8f6",
         line: "#d9ded7",
         sea: "#0f766e",
-        amber: "#b7791f",
+        amber: "#92400e",
         danger: "#b91c1c"
       },
       boxShadow: {

@@ -334,6 +334,7 @@ export function CoreIntegrationPanel() {
         <label className="min-w-0 text-sm font-semibold text-ink">
           Edge install path
           <input
+            aria-label="Edge repository path"
             className="focus-ring mt-2 w-full rounded-md border border-line bg-white px-3 py-2 font-mono text-sm font-normal"
             onChange={(event) => updateRoot(EDGE_ROOT_KEY, event.target.value, setEdgeRoot)}
             spellCheck={false}
@@ -343,6 +344,7 @@ export function CoreIntegrationPanel() {
         <label className="min-w-0 text-sm font-semibold text-ink">
           Core install path
           <input
+            aria-label="Core repository path"
             className="focus-ring mt-2 w-full rounded-md border border-line bg-white px-3 py-2 font-mono text-sm font-normal"
             onChange={(event) => updateRoot(CORE_ROOT_KEY, event.target.value, setCoreRoot)}
             spellCheck={false}
@@ -352,6 +354,7 @@ export function CoreIntegrationPanel() {
         <label className="min-w-0 text-sm font-semibold text-ink">
           Core API URL
           <input
+            aria-label="Core API URL"
             className="focus-ring mt-2 w-full rounded-md border border-line bg-white px-3 py-2 font-mono text-sm font-normal"
             inputMode="url"
             onChange={(event) => updateRoot(CORE_API_URL_KEY, event.target.value, setCoreApiUrl)}

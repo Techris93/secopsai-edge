@@ -53,6 +53,7 @@ export default function ReportsPage() {
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             <LiveState live={live} mode={mode} error={error} />
             <select
+              aria-label="Report site"
               className="focus-ring rounded-md border border-line bg-white px-3 py-2 text-sm"
               value={site}
               onChange={(event) => setSite(event.target.value)}
@@ -80,6 +81,12 @@ export default function ReportsPage() {
         {reports.map((report) => (
           <ReportCard key={report.id} report={report} />
         ))}
+        {data && !reports.length ? (
+          <section className="rounded-lg border border-line bg-white px-4 py-8 text-center shadow-panel">
+            <h2 className="text-base font-semibold text-ink">No reports yet</h2>
+            <p className="mt-1 text-sm text-zinc-600">Generate a report after the first authorized scan completes.</p>
+          </section>
+        ) : null}
       </div>
     </>
   );

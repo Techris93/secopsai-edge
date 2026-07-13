@@ -228,8 +228,8 @@ export function AccountManagementPanel() {
       <p className="mt-2 text-sm text-zinc-600">Manage pilot access and revoke sessions when credentials or roles change.</p>
 
       {canManage ? <form className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr)_9rem_auto]" onSubmit={addUser}>
-        <input className="focus-ring min-w-0 rounded-md border border-line px-3 py-2 text-sm" type="email" placeholder="user@example.com" value={invite.email} onChange={(event) => setInvite({ ...invite, email: event.target.value })} required />
-        <select className="focus-ring rounded-md border border-line px-3 py-2 text-sm" value={invite.role} onChange={(event) => setInvite({ ...invite, role: event.target.value })}>
+        <input aria-label="Invitation email" className="focus-ring min-w-0 rounded-md border border-line px-3 py-2 text-sm" type="email" placeholder="user@example.com" value={invite.email} onChange={(event) => setInvite({ ...invite, email: event.target.value })} required />
+        <select aria-label="Invitation role" className="focus-ring rounded-md border border-line px-3 py-2 text-sm" value={invite.role} onChange={(event) => setInvite({ ...invite, role: event.target.value })}>
           <option value="viewer">Viewer</option><option value="admin">Admin</option>{currentRole === "owner" ? <option value="owner">Owner</option> : null}
         </select>
         <button className="focus-ring inline-flex items-center justify-center gap-2 rounded-md bg-sea px-3 py-2 text-sm font-semibold text-white disabled:bg-zinc-300" disabled={busy} type="submit"><UserPlus size={16} aria-hidden="true" />Invite</button>
@@ -238,7 +238,7 @@ export function AccountManagementPanel() {
       {canManage && invitations.some((invitation) => invitation.state === "pending") ? (
         <div className="mt-4 border-t border-line pt-4">
           <h3 className="text-sm font-semibold text-ink">Pending invitations</h3>
-          <div className="mt-2 overflow-x-auto">
+          <div aria-label="Scrollable pending invitation table" className="focus-ring mt-2 overflow-x-auto" role="region" tabIndex={0}>
             <table className="w-full min-w-[620px] text-left text-sm">
               <thead className="text-xs uppercase text-zinc-600"><tr><th className="py-2 pr-3">Account</th><th className="py-2 pr-3">Role</th><th className="py-2 pr-3">Delivery</th><th className="py-2 pr-3">Expires</th><th className="py-2">Action</th></tr></thead>
               <tbody className="divide-y divide-line">
@@ -257,7 +257,7 @@ export function AccountManagementPanel() {
         </div>
       ) : null}
 
-      {canManage ? <div className="mt-4 overflow-x-auto rounded-md border border-line">
+      {canManage ? <div aria-label="Scrollable user and session table" className="focus-ring mt-4 overflow-x-auto rounded-md border border-line" role="region" tabIndex={0}>
         <table className="w-full min-w-[720px] text-left text-sm">
           <thead className="bg-paper text-xs uppercase text-zinc-600"><tr><th className="px-3 py-2">User</th><th className="px-3 py-2">Role</th><th className="px-3 py-2">State</th><th className="px-3 py-2">MFA</th><th className="px-3 py-2">Last login</th><th className="px-3 py-2">Actions</th></tr></thead>
           <tbody className="divide-y divide-line">
@@ -273,7 +273,7 @@ export function AccountManagementPanel() {
             <MailWarning size={17} className="text-amber" aria-hidden="true" />
             <h3 className="text-sm font-semibold text-ink">Account email delivery</h3>
           </div>
-          <div className="mt-3 overflow-x-auto rounded-md border border-line">
+          <div aria-label="Scrollable account delivery table" className="focus-ring mt-3 overflow-x-auto rounded-md border border-line" role="region" tabIndex={0}>
             <table className="w-full min-w-[680px] text-left text-sm">
               <thead className="bg-paper text-xs uppercase text-zinc-600"><tr><th className="px-3 py-2">Account</th><th className="px-3 py-2">Purpose</th><th className="px-3 py-2">State</th><th className="px-3 py-2">Attempts</th><th className="px-3 py-2">Detail</th><th className="px-3 py-2">Action</th></tr></thead>
               <tbody className="divide-y divide-line">
@@ -317,6 +317,7 @@ export function AccountManagementPanel() {
 
           <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
             <input
+              aria-label="Current password for MFA"
               className="focus-ring min-w-0 rounded-md border border-line px-3 py-2 text-sm"
               type="password"
               autoComplete="current-password"
@@ -325,6 +326,7 @@ export function AccountManagementPanel() {
               onChange={(event) => setMfaCredentials({ ...mfaCredentials, password: event.target.value })}
             />
             <input
+              aria-label="MFA verification code"
               className="focus-ring min-w-0 rounded-md border border-line px-3 py-2 font-mono text-sm"
               autoComplete="one-time-code"
               placeholder="6-digit code or recovery code"
@@ -385,8 +387,8 @@ export function AccountManagementPanel() {
 
       {currentUser ? (
         <form className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]" onSubmit={changePassword}>
-          <input className="focus-ring min-w-0 rounded-md border border-line px-3 py-2 text-sm" type="password" placeholder="Current password" value={passwords.current} onChange={(event) => setPasswords({ ...passwords, current: event.target.value })} required />
-          <input className="focus-ring min-w-0 rounded-md border border-line px-3 py-2 text-sm" type="password" placeholder="New password (12+ characters)" minLength={12} value={passwords.next} onChange={(event) => setPasswords({ ...passwords, next: event.target.value })} required />
+          <input aria-label="Current account password" className="focus-ring min-w-0 rounded-md border border-line px-3 py-2 text-sm" type="password" placeholder="Current password" value={passwords.current} onChange={(event) => setPasswords({ ...passwords, current: event.target.value })} required />
+          <input aria-label="New account password" className="focus-ring min-w-0 rounded-md border border-line px-3 py-2 text-sm" type="password" placeholder="New password (12+ characters)" minLength={12} value={passwords.next} onChange={(event) => setPasswords({ ...passwords, next: event.target.value })} required />
           <button className="ButtonSecondary" disabled={busy} type="submit"><KeyRound size={16} aria-hidden="true" />Change my password</button>
         </form>
       ) : null}
@@ -399,7 +401,7 @@ function UserRow({ user, busy, actorRole, currentUserId, onChange, onResetMfa }:
   return (
     <tr>
       <td className="px-3 py-3 font-medium text-ink">{user.email}</td>
-      <td className="px-3 py-3"><select className="focus-ring rounded border border-line px-2 py-1" value={user.role} disabled={busy || (user.role === "owner" && actorRole !== "owner")} onChange={(event) => void onChange(user, { role: event.target.value })}><option value="viewer">Viewer</option><option value="admin">Admin</option>{actorRole === "owner" ? <option value="owner">Owner</option> : null}</select></td>
+      <td className="px-3 py-3"><select aria-label={`Role for ${user.email}`} className="focus-ring rounded border border-line px-2 py-1" value={user.role} disabled={busy || (user.role === "owner" && actorRole !== "owner")} onChange={(event) => void onChange(user, { role: event.target.value })}><option value="viewer">Viewer</option><option value="admin">Admin</option>{actorRole === "owner" ? <option value="owner">Owner</option> : null}</select></td>
       <td className="px-3 py-3">{user.active ? "Active" : "Disabled"}</td>
       <td className="px-3 py-3">{user.mfa_enabled ? "Enabled" : "Not enabled"}</td>
       <td className="px-3 py-3 text-zinc-600">{user.last_login_at ? new Date(user.last_login_at).toLocaleString() : "Never"}</td>

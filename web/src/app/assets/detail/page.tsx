@@ -211,7 +211,7 @@ function AssetDetailView() {
               <Server size={20} className="text-sea" aria-hidden="true" />
               <h2 className="text-lg font-semibold text-ink">Recent Observations</h2>
             </div>
-            <div className="mt-4 overflow-x-auto rounded-md border border-line">
+            <div aria-label="Scrollable asset observation table" className="focus-ring mt-4 overflow-x-auto rounded-md border border-line" role="region" tabIndex={0}>
               <table className="w-full min-w-[780px] text-left text-sm">
                 <thead className="bg-paper text-xs uppercase text-zinc-600">
                   <tr>

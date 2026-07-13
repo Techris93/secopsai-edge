@@ -21,7 +21,7 @@ test("pilot operator can queue a scan and triage a finding", async ({ page }) =>
   });
 
   await page.getByRole("link", { name: "Findings" }).click();
-  await expect(page.getByRole("heading", { name: "Findings" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Findings", exact: true })).toBeVisible();
   await page.getByLabel("Select New device detected").check();
   await page.getByRole("button", { name: "Acknowledge" }).click();
   await expect(page.getByText("1 finding updated")).toBeVisible();

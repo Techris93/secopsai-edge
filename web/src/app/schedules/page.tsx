@@ -103,6 +103,7 @@ export default function SchedulesPage() {
               <label className="grid gap-1 text-sm font-medium text-ink">
                 Site
                 <select
+                  aria-label="Schedule site"
                   className="focus-ring rounded-md border border-line bg-white px-3 py-2 text-sm"
                   value={form.site_id}
                   onChange={(event) => setForm({ ...form, site_id: event.target.value, sensor_id: "" })}
@@ -116,6 +117,7 @@ export default function SchedulesPage() {
               <label className="grid gap-1 text-sm font-medium text-ink">
                 Sensor
                 <select
+                  aria-label="Schedule sensor"
                   className="focus-ring rounded-md border border-line bg-white px-3 py-2 text-sm"
                   value={form.sensor_id}
                   onChange={(event) => setForm({ ...form, sensor_id: event.target.value })}
@@ -131,6 +133,7 @@ export default function SchedulesPage() {
               <label className="grid gap-1 text-sm font-medium text-ink">
                 Frequency
                 <select
+                  aria-label="Schedule frequency"
                   className="focus-ring rounded-md border border-line bg-white px-3 py-2 text-sm"
                   value={form.frequency}
                   onChange={(event) => setForm({ ...form, frequency: event.target.value })}
@@ -144,6 +147,7 @@ export default function SchedulesPage() {
             </div>
             <label className="flex items-center gap-2 text-sm font-medium text-ink">
               <input
+                aria-label="Include Wi-Fi inventory"
                 checked={form.include_wifi}
                 className="h-4 w-4 rounded border-line text-sea"
                 onChange={(event) => setForm({ ...form, include_wifi: event.target.checked })}
@@ -168,6 +172,7 @@ export default function SchedulesPage() {
             <h2 className="text-lg font-semibold text-ink">Schedules</h2>
             <div className="flex flex-wrap gap-2">
               <select
+                aria-label="Filter schedules by site"
                 className="focus-ring h-10 rounded-md border border-line bg-white px-3 text-sm"
                 value={listSite}
                 onChange={(event) => setListSite(event.target.value)}

@@ -227,6 +227,7 @@ export function ApiConnectionPanel() {
           </div>
           <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
             <input
+              aria-label="New password"
               className="focus-ring min-w-0 rounded-md border border-line bg-white px-3 py-2 text-sm"
               type="password"
               autoComplete="new-password"
@@ -237,6 +238,7 @@ export function ApiConnectionPanel() {
               required
             />
             <input
+              aria-label="Confirm new password"
               className="focus-ring min-w-0 rounded-md border border-line bg-white px-3 py-2 text-sm"
               type="password"
               autoComplete="new-password"
@@ -264,6 +266,7 @@ export function ApiConnectionPanel() {
           </p>
           <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
             <input
+              aria-label="Invitation account password"
               className="focus-ring min-w-0 rounded-md border border-line bg-white px-3 py-2 text-sm"
               type="password"
               autoComplete="new-password"
@@ -274,6 +277,7 @@ export function ApiConnectionPanel() {
               required
             />
             <input
+              aria-label="Confirm invitation account password"
               className="focus-ring min-w-0 rounded-md border border-line bg-white px-3 py-2 text-sm"
               type="password"
               autoComplete="new-password"
@@ -298,6 +302,7 @@ export function ApiConnectionPanel() {
           </div>
           <div className="mt-3 flex flex-col gap-3 sm:flex-row">
             <input
+              aria-label="MFA code or recovery code"
               className="focus-ring min-w-0 flex-1 rounded-md border border-line bg-white px-3 py-2 font-mono text-sm"
               value={mfaCode}
               onChange={(event) => setMfaCode(event.target.value)}
@@ -315,6 +320,7 @@ export function ApiConnectionPanel() {
       <form className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_auto]" onSubmit={onSubmit}>
         <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
           <input
+            aria-label="Operator email"
             className="focus-ring min-w-0 w-full rounded-md border border-line bg-white px-3 py-2 text-sm"
             value={email}
             onChange={(event) => setEmail(event.target.value)}
@@ -329,6 +335,7 @@ export function ApiConnectionPanel() {
               aria-hidden="true"
             />
             <input
+              aria-label="Operator password"
               className="focus-ring w-full rounded-md border border-line bg-white py-2 pl-10 pr-3 text-sm"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
@@ -372,6 +379,7 @@ export function ApiConnectionPanel() {
               aria-hidden="true"
             />
             <input
+              aria-label="Emergency administrator token"
               className="focus-ring w-full rounded-md border border-line bg-white py-2 pl-10 pr-3 text-sm"
               value={adminToken}
               onChange={(event) => setAdminToken(event.target.value)}

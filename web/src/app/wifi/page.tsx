@@ -59,6 +59,7 @@ export default function WifiPage() {
 
       <div className="mb-4 flex justify-end">
         <select
+          aria-label="Wi-Fi site"
           className="focus-ring w-full rounded-md border border-line bg-white px-3 py-2 text-sm sm:w-56"
           value={site}
           onChange={(event) => setSite(event.target.value)}
@@ -118,6 +119,12 @@ export default function WifiPage() {
             </section>
           );
         })}
+        {data && !networks.length ? (
+          <section className="rounded-lg border border-line bg-white px-4 py-8 text-center shadow-panel md:col-span-2 xl:col-span-3">
+            <h2 className="text-base font-semibold text-ink">No Wi-Fi networks observed</h2>
+            <p className="mt-1 text-sm text-zinc-600">Enable Wi-Fi inventory on a compatible local sensor and run an authorized scan.</p>
+          </section>
+        ) : null}
       </div>
     </>
   );

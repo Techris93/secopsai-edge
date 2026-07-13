@@ -8,7 +8,7 @@ vi.mock("@/lib/api", () => ({
   fetchSystemStatus: vi.fn(async () => ({
     status: "ready",
     environment: "pilot",
-    version: "0.3.0",
+    version: "0.3.1",
     commit: "abc123def456789",
     schema_revision: "0014_operator_access",
     expected_schema_revision: "0014_operator_access",

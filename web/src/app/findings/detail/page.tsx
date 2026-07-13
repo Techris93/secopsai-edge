@@ -87,7 +87,7 @@ function FindingDetailView() {
             <p className="mt-4 text-sm leading-6 text-zinc-700">{finding.summary}</p>
 
             <h2 className="mt-6 text-lg font-semibold text-ink">Evidence</h2>
-            <pre className="mt-3 overflow-x-auto rounded-md bg-ink p-3 text-xs text-white">
+            <pre aria-label="Scrollable finding evidence" className="focus-ring mt-3 overflow-x-auto rounded-md bg-ink p-3 text-xs text-white" tabIndex={0}>
               {JSON.stringify(finding.evidence, null, 2)}
             </pre>
 
@@ -134,6 +134,7 @@ function FindingDetailView() {
               </div>
               <form className="mt-4 grid gap-3" onSubmit={addNote}>
                 <textarea
+                  aria-label="Finding note"
                   className="focus-ring min-h-28 rounded-md border border-line bg-white px-3 py-2 text-sm"
                   value={note}
                   onChange={(event) => setNote(event.target.value)}
