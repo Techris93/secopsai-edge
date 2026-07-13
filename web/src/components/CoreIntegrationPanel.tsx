@@ -9,14 +9,17 @@ import type { IntegrationToken, IntegrationTokenSecret } from "@/lib/types";
 
 const DEFAULT_EDGE_ROOT = process.env.NEXT_PUBLIC_EDGE_ROOT ?? "$HOME/secopsai-edge";
 const DEFAULT_CORE_ROOT = process.env.NEXT_PUBLIC_CORE_ROOT ?? "$HOME/secopsai";
+const DEFAULT_CORE_API_URL = "https://secopsai-core-api.onrender.com";
 const EDGE_ROOT_KEY = "secopsai_edge_root";
 const CORE_ROOT_KEY = "secopsai_core_root";
+const CORE_API_URL_KEY = "secopsai_core_api_url";
 
 export function CoreIntegrationPanel() {
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [edgeRoot, setEdgeRoot] = useState(DEFAULT_EDGE_ROOT);
   const [coreRoot, setCoreRoot] = useState(DEFAULT_CORE_ROOT);
+  const [coreApiUrl, setCoreApiUrl] = useState(DEFAULT_CORE_API_URL);
   const [tokens, setTokens] = useState<IntegrationToken[]>([]);
   const [newToken, setNewToken] = useState<IntegrationTokenSecret | null>(null);
   const [canManageTokens, setCanManageTokens] = useState(false);
@@ -24,6 +27,7 @@ export function CoreIntegrationPanel() {
   useEffect(() => {
     setEdgeRoot(window.localStorage.getItem(EDGE_ROOT_KEY) || DEFAULT_EDGE_ROOT);
     setCoreRoot(window.localStorage.getItem(CORE_ROOT_KEY) || DEFAULT_CORE_ROOT);
+    setCoreApiUrl(window.localStorage.getItem(CORE_API_URL_KEY) || DEFAULT_CORE_API_URL);
   }, []);
 
   useEffect(() => {
@@ -90,9 +94,19 @@ export function CoreIntegrationPanel() {
         command: `cd "${edgeRoot}"\nSECOPSAI_EDGE_CORE_TOKEN="$(python3 -c 'import getpass; print(getpass.getpass("Core export token: "))')"; export SECOPSAI_EDGE_CORE_TOKEN\n./scripts/edge core sync --cloud --core-root "${coreRoot}" --output edge-bundle.json\nunset SECOPSAI_EDGE_CORE_TOKEN`
       },
       {
+        label: "Copy Hosted Push",
+        icon: GitBranch,
+        command: `cd "${edgeRoot}"\nSECOPSAI_EDGE_CORE_TOKEN="$(python3 -c 'import getpass; print(getpass.getpass("Edge Core export token: "))')"; export SECOPSAI_EDGE_CORE_TOKEN\nSECOPSAI_CORE_INGEST_TOKEN="$(python3 -c 'import getpass; print(getpass.getpass("Core ingest token: "))')"; export SECOPSAI_CORE_INGEST_TOKEN\n./scripts/edge core push --cloud --core-api-url "${coreApiUrl}" --output edge-bundle.json\nunset SECOPSAI_EDGE_CORE_TOKEN SECOPSAI_CORE_INGEST_TOKEN`
+      },
+      {
         label: "Install Auto Sync",
         icon: GitBranch,
         command: `cd "${edgeRoot}"\nSECOPSAI_EDGE_CORE_TOKEN="$(python3 -c 'import getpass; print(getpass.getpass("Core export token: "))')"; export SECOPSAI_EDGE_CORE_TOKEN\n./scripts/edge core sync-service install --cloud --core-root "${coreRoot}" --interval 300\nunset SECOPSAI_EDGE_CORE_TOKEN\n./scripts/edge core sync-service start`
+      },
+      {
+        label: "Install Hosted Sync",
+        icon: GitBranch,
+        command: `cd "${edgeRoot}"\nSECOPSAI_EDGE_CORE_TOKEN="$(python3 -c 'import getpass; print(getpass.getpass("Edge Core export token: "))')"; export SECOPSAI_EDGE_CORE_TOKEN\nSECOPSAI_CORE_INGEST_TOKEN="$(python3 -c 'import getpass; print(getpass.getpass("Core ingest token: "))')"; export SECOPSAI_CORE_INGEST_TOKEN\n./scripts/edge core sync-service install --cloud --core-api-url "${coreApiUrl}" --interval 300\nunset SECOPSAI_EDGE_CORE_TOKEN SECOPSAI_CORE_INGEST_TOKEN\n./scripts/edge core sync-service start`
       },
       {
         label: "Run Sync Now",
@@ -126,7 +140,7 @@ export function CoreIntegrationPanel() {
       }
       ];
     },
-    [coreRoot, edgeRoot]
+    [coreApiUrl, coreRoot, edgeRoot]
   );
 
   async function copyCommand(label: string, command: string) {
@@ -316,7 +330,7 @@ export function CoreIntegrationPanel() {
         </div> : <p className="mt-3 text-sm text-zinc-600">Workspace owners and administrators manage integration credentials.</p>}
       </div>
 
-      <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
+      <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
         <label className="min-w-0 text-sm font-semibold text-ink">
           Edge install path
           <input
@@ -333,6 +347,16 @@ export function CoreIntegrationPanel() {
             onChange={(event) => updateRoot(CORE_ROOT_KEY, event.target.value, setCoreRoot)}
             spellCheck={false}
             value={coreRoot}
+          />
+        </label>
+        <label className="min-w-0 text-sm font-semibold text-ink">
+          Core API URL
+          <input
+            className="focus-ring mt-2 w-full rounded-md border border-line bg-white px-3 py-2 font-mono text-sm font-normal"
+            inputMode="url"
+            onChange={(event) => updateRoot(CORE_API_URL_KEY, event.target.value, setCoreApiUrl)}
+            spellCheck={false}
+            value={coreApiUrl}
           />
         </label>
       </div>
@@ -359,7 +383,6 @@ export function CoreIntegrationPanel() {
     </section>
   );
 }
-
 type CommandButtonProps = {
   label: string;
   command: string;

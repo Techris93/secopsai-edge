@@ -23,7 +23,6 @@ beforeEach(() => {
   window.localStorage.clear();
   vi.clearAllMocks();
 });
-
 test("renders Core integration action buttons", async () => {
   render(React.createElement(CoreIntegrationPanel));
   await waitFor(() => expect(api.listIntegrationTokens).toHaveBeenCalled());
@@ -38,11 +37,14 @@ test("renders Core integration action buttons", async () => {
     expect.stringContaining("Copy Triage"),
     expect.stringContaining("Copy API Sync"),
     expect.stringContaining("Copy One-Step Sync"),
+    expect.stringContaining("Copy Hosted Push"),
     expect.stringContaining("Install Auto Sync"),
+    expect.stringContaining("Install Hosted Sync"),
     expect.stringContaining("Check Sync Status"),
     expect.stringContaining("Copy Support Bundle")
   ]));
   expect(screen.getByLabelText("Edge install path")).toHaveValue("$HOME/secopsai-edge");
+  expect(screen.getByLabelText("Core API URL")).toHaveValue("https://secopsai-core-api.onrender.com");
   expect(screen.queryByDisplayValue(/chrixchange/)).not.toBeInTheDocument();
 });
 
@@ -111,6 +113,32 @@ test("updates copied commands from operator-configured install paths", async () 
 
   await waitFor(() => expect(writeText).toHaveBeenCalledWith('cd "/opt/secopsai-edge"\n./scripts/edge test'));
   expect(window.localStorage.getItem("secopsai_edge_root")).toBe("/opt/secopsai-edge");
+});
+
+test("copies a hosted Core push without placing credentials in the command text", async () => {
+  const writeText = vi.fn().mockResolvedValue(undefined);
+  Object.defineProperty(navigator, "clipboard", {
+    configurable: true,
+    value: { writeText }
+  });
+  render(React.createElement(CoreIntegrationPanel));
+
+  fireEvent.change(screen.getByLabelText("Core API URL"), {
+    target: { value: "https://core.pilot.example" }
+  });
+  fireEvent.click(screen.getByRole("button", { name: /Copy Hosted Push/ }));
+
+  await waitFor(() => expect(writeText).toHaveBeenCalled());
+  const command = String(writeText.mock.calls[0][0]);
+  expect(command).toContain("core push --cloud");
+  expect(command).toContain("https://core.pilot.example");
+  expect(command).toContain("SECOPSAI_EDGE_CORE_TOKEN");
+  expect(command).toContain("SECOPSAI_CORE_INGEST_TOKEN");
+  expect(command).toContain("getpass.getpass");
+  expect(command).not.toContain("hosted-core-ingest-secret");
+  expect(window.localStorage.getItem("secopsai_core_api_url")).toBe(
+    "https://core.pilot.example"
+  );
 });
 
 test("creates scoped workspace tokens and offers revocation", async () => {

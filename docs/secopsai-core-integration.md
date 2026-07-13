@@ -1,6 +1,8 @@
 # SecOpsAI Core Integration
 
-SecOpsAI Edge exports a normalized graph and finding bundle for the main SecOpsAI Core local SOC store.
+SecOpsAI Edge exports a normalized graph and finding bundle for the main
+SecOpsAI Core store. Core can remain local-first or receive the bundle through
+its protected hosted ingestion API.
 
 ## Export
 
@@ -13,6 +15,25 @@ unset SECOPSAI_EDGE_CORE_TOKEN
 ```
 
 This exports the normalized Edge bundle from the configured API, saves it for audit/review, and imports it into the main SecOpsAI Core SQLite SOC/graph store.
+
+## Push To A Hosted Core API
+
+The hosted path uses two unrelated credentials: a workspace-scoped
+`core:export` token from Edge and the organization-bound ingest token from the
+Core deployment. Neither credential is placed in a process argument.
+
+```bash
+export SECOPSAI_EDGE_CORE_TOKEN="$(python3 -c 'import getpass; print(getpass.getpass("Edge Core export token: "))')"
+export SECOPSAI_CORE_INGEST_TOKEN="$(python3 -c 'import getpass; print(getpass.getpass("Core ingest token: "))')"
+./scripts/edge core push --cloud \
+  --core-api-url https://secopsai-core-api.onrender.com \
+  --output edge-bundle.json
+unset SECOPSAI_EDGE_CORE_TOKEN SECOPSAI_CORE_INGEST_TOKEN
+```
+
+The transfer rejects non-loopback plain HTTP, redirects, responses larger than
+the contract limit, and a Core response that does not confirm import. The
+saved bundle is owner-only and remains useful for audit/recovery.
 
 ## Automatic Sync
 
@@ -45,6 +66,19 @@ privacy-protected Documents folder. Configuration and credentials are separate
 owner-only JSON files; the token is passed to Core through the child
 environment, never process arguments or the plist/unit. An advisory file lock
 skips overlapping timer/manual runs.
+
+For hosted Core, install the same supervised service without a local Core
+checkout:
+
+```bash
+export SECOPSAI_EDGE_CORE_TOKEN="$(python3 -c 'import getpass; print(getpass.getpass("Edge Core export token: "))')"
+export SECOPSAI_CORE_INGEST_TOKEN="$(python3 -c 'import getpass; print(getpass.getpass("Core ingest token: "))')"
+./scripts/edge core sync-service install --cloud \
+  --core-api-url https://secopsai-core-api.onrender.com \
+  --interval 300
+unset SECOPSAI_EDGE_CORE_TOKEN SECOPSAI_CORE_INGEST_TOKEN
+./scripts/edge core sync-service start
+```
 
 Local API:
 
@@ -108,7 +142,8 @@ The bundle uses:
   "source_instance": {
     "product": "secopsai_edge",
     "api": "secopsai-edge-api",
-    "version": "0.2.7"
+    "version": "0.2.8",
+    "organization_id": "<edge-workspace-id>"
   },
   "cursor": {
     "mode": "full",

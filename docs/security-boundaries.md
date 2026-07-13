@@ -95,3 +95,12 @@ expiry, and last-use metadata. Rotation returns a new secret once and keeps the
 previous credential active so the consumer can be verified before revocation.
 This overlap is deliberate; operators must revoke the previous credential
 after a successful handover.
+
+Hosted Core ingestion has a second, independent credential boundary. The Edge
+bridge reads with a workspace-scoped `core:export` token and writes with a Core
+ingest token bound to the same organization ID. Both are held in an owner-only
+service credential file and omitted from process arguments, logs, dashboard
+storage, and support bundles. The bridge refuses redirects, non-loopback plain
+HTTP, oversized responses, and unconfirmed imports. Core independently rejects
+raw scanner fields, oversized graph contracts, duplicate identifiers, and
+cross-organization bundles; its read credential cannot ingest data.

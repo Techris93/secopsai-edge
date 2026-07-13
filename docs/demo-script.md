@@ -65,3 +65,7 @@ Confirm:
 .venv/bin/python -m secopsai.cli graph assets
 .venv/bin/python -m secopsai.cli triage list --source secopsai_edge
 ```
+
+For a hosted Core demo, use **Copy Hosted Push** instead. The command prompts
+for the Edge export and Core ingest credentials without echoing them, then
+shows normalized node/edge/finding import counts.

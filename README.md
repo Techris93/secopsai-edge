@@ -139,6 +139,16 @@ SECOPSAI_EDGE_CORE_TOKEN="$(python3 -c 'import getpass; print(getpass.getpass("C
 unset SECOPSAI_EDGE_CORE_TOKEN
 ```
 
+When Core runs behind its protected HTTP API, push the same minimized bundle
+without requiring a Core checkout on the sensor host:
+
+```bash
+export SECOPSAI_EDGE_CORE_TOKEN="$(python3 -c 'import getpass; print(getpass.getpass("Edge Core export token: "))')"
+export SECOPSAI_CORE_INGEST_TOKEN="$(python3 -c 'import getpass; print(getpass.getpass("Core ingest token: "))')"
+./scripts/edge core push --cloud --core-api-url https://<core-api>.onrender.com
+unset SECOPSAI_EDGE_CORE_TOKEN SECOPSAI_CORE_INGEST_TOKEN
+```
+
 The hosted dashboard can also queue remote scan jobs. Keep the worker running locally so queued jobs
 execute on your MacBook/Raspberry Pi, where the LAN is actually reachable. The dashboard shows
 sensor online/offline status from worker heartbeats and provides cancel/retry controls for remote jobs.
