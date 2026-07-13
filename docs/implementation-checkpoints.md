@@ -2454,3 +2454,50 @@ Next checkpoint:
 - Re-audit the main Core, unified Dashboard, and OpenClaw integration surfaces
   for the next code-completable product gap. Do not infer customer readiness
   from hosted health alone.
+
+## Checkpoint 043 - Cross-Product Sync Freshness
+
+Status: complete
+
+Scope:
+
+- Make Edge-to-Core synchronization freshness visible to Core operators and
+  local automation.
+- Keep the status surface read-only and limited to normalized lifecycle
+  metadata.
+- Record the merged cross-repository implementation and verification evidence.
+
+Completed changes:
+
+- Core now exposes `secopsai edge status` with human-readable and JSON output
+  for recent source identity, contract version, bundle timestamp, local sync
+  timestamp, and cursor records.
+- OpenClaw now exposes the read-only `secopsai_edge_sync_status` tool using the
+  canonical Core CLI contract.
+- Core integration documentation and this Edge ledger now describe the shared
+  freshness signal and its raw-telemetry boundary.
+
+Evidence:
+
+- Core PR #40 merged to `main` as `63e3f1a`; full Core suite passed with
+  `239` tests.
+- OpenClaw plugin PR #2 merged to `master` as `20fa060`; TypeScript build and
+  both plugin contract tests passed.
+- The canonical Dashboard already exposes the corresponding Edge-to-Core
+  freshness state from Core workspace data in production deployment
+  `ddbba4b9-e9fd-48ec-ab74-f660875f1839`.
+- Edge roadmap alignment remains merged in `2c266ce`, with controlled release
+  work through checkpoint 042 and external pilot acceptance gates still open.
+
+Acceptance boundary:
+
+- This checkpoint proves the code and contract surfaces. It does not replace
+  the external paid-infrastructure, notification, second-owner recovery,
+  fresh-host soak, wireless hardware, or independent dashboard-availability
+  evidence required by the controlled pilot acceptance record.
+
+Next checkpoint:
+
+- Continue the code-completable pilot-hardening audit with the highest-impact
+  remaining gap, while keeping the external acceptance matrix separate from
+  implementation claims.
