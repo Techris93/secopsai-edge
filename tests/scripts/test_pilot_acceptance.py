@@ -17,7 +17,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:
         if self.path == "/healthz":
-            self._write_json({"status": "ok", "version": "0.3.3", "commit": "9084569"})
+            self._write_json({"status": "ok", "version": "0.3.4", "commit": "release-034"})
         elif self.path == "/readyz":
             self._write_json(
                 {"status": "ready" if self.ready else "not_ready", "schema_revision": "0016_wifi_provenance"},
