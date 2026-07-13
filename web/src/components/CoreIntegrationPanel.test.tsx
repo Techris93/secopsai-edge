@@ -15,7 +15,8 @@ vi.mock("@/lib/api", () => ({
     organizations: []
   }),
   listIntegrationTokens: vi.fn().mockResolvedValue([]),
-  revokeIntegrationToken: vi.fn()
+  revokeIntegrationToken: vi.fn(),
+  rotateIntegrationToken: vi.fn()
 }));
 
 beforeEach(() => {
@@ -97,6 +98,8 @@ test("creates scoped workspace tokens and offers revocation", async () => {
     scopes: ["core:export"],
     state: "active",
     expires_at: "2026-10-01T00:00:00Z",
+    expires_in_days: 90,
+    rotation_recommended: false,
     created_at: "2026-07-01T00:00:00Z",
     access_token: "secopsai_integration_one-time-secret"
   };
@@ -112,7 +115,7 @@ test("creates scoped workspace tokens and offers revocation", async () => {
 
   expect(await screen.findByText("secopsai_integration_one-time-secret")).toBeInTheDocument();
   expect(api.createIntegrationToken).toHaveBeenCalledWith("SecOpsAI Core sync", ["core:export"]);
-  fireEvent.click(screen.getByRole("button", { name: "Revoke SecOpsAI Core sync" }));
+  fireEvent.click(screen.getByRole("button", { name: "Revoke SecOpsAI Core sync (token-al)" }));
   await waitFor(() => expect(api.revokeIntegrationToken).toHaveBeenCalledWith("token-alpha"));
   expect(await screen.findByText("Integration token revoked")).toBeInTheDocument();
 });
@@ -125,6 +128,8 @@ test("creates a read-only operator dashboard token", async () => {
     scopes: ["operations:read"],
     state: "active",
     expires_at: "2026-10-01T00:00:00Z",
+    expires_in_days: 90,
+    rotation_recommended: false,
     created_at: "2026-07-01T00:00:00Z",
     access_token: "secopsai_integration_operations-secret"
   });
@@ -137,4 +142,39 @@ test("creates a read-only operator dashboard token", async () => {
     "SecOpsAI operator dashboard",
     ["operations:read"]
   );
+});
+
+test("warns about expiry and creates an overlapping replacement", async () => {
+  const expiring = {
+    id: "token-expiring",
+    organization_id: "org-alpha",
+    name: "SecOpsAI operator dashboard",
+    scopes: ["operations:read"],
+    state: "active",
+    expires_at: "2026-07-20T00:00:00Z",
+    expires_in_days: 7,
+    rotation_recommended: true,
+    created_at: "2026-04-20T00:00:00Z"
+  };
+  vi.mocked(api.listIntegrationTokens).mockResolvedValue([expiring]);
+  vi.mocked(api.rotateIntegrationToken).mockResolvedValue({
+    ...expiring,
+    id: "token-replacement",
+    expires_at: "2026-10-11T00:00:00Z",
+    expires_in_days: 90,
+    rotation_recommended: false,
+    access_token: "secopsai_integration_replacement-secret"
+  });
+
+  render(React.createElement(CoreIntegrationPanel));
+
+  expect(await screen.findByText("Rotation recommended")).toBeInTheDocument();
+  expect(screen.getByText(/7 days left/)).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Rotate SecOpsAI operator dashboard (token-ex)" }));
+
+  await waitFor(() => expect(api.rotateIntegrationToken).toHaveBeenCalledWith("token-expiring"));
+  expect(await screen.findByText("secopsai_integration_replacement-secret")).toBeInTheDocument();
+  expect(screen.getByText(/Update the downstream service/)).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Revoke SecOpsAI operator dashboard (token-re)" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Revoke SecOpsAI operator dashboard (token-ex)" })).toBeInTheDocument();
 });

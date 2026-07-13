@@ -176,10 +176,22 @@ def require_operations_read_access(
     return get_dashboard_auth_context(credentials, db)
 
 
+def require_integration_token_access(
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    if not credentials or credentials.scheme.lower() != "bearer":
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing bearer token")
+    credential = credentials.credentials
+    if not credential.startswith(INTEGRATION_TOKEN_PREFIXES):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Integration token required")
+    return authenticate_integration_token(db, credential)
+
+
 def authenticate_integration_token(
     db: Session,
     credential: str,
-    required_scope: str,
+    required_scope: str | None = None,
 ) -> dict[str, Any]:
     token = db.scalar(
         select(IntegrationToken).where(IntegrationToken.token_hash == hash_secret(credential))
@@ -194,7 +206,7 @@ def authenticate_integration_token(
     if (
         token.revoked_at is not None
         or token.expires_at <= comparison_now
-        or required_scope not in (token.scopes or [])
+        or (required_scope is not None and required_scope not in (token.scopes or []))
         or organization is None
         or not organization.active
     ):

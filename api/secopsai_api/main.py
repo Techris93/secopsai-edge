@@ -71,6 +71,7 @@ from secopsai_api.schemas import (
     IntegrationTokenCreateRequest,
     IntegrationTokenCreateResponse,
     IntegrationTokenOut,
+    IntegrationTokenRotateRequest,
     NotificationEndpointCreateRequest,
     NotificationDeliveryOut,
     NotificationEndpointOut,
@@ -124,6 +125,7 @@ from secopsai_api.security import (
     DUMMY_PASSWORD_HASH,
     require_admin,
     require_core_export_access,
+    require_integration_token_access,
     require_operations_read_access,
     require_operator,
     require_sensor_for_path,
@@ -749,6 +751,8 @@ def sensor_enrollment_out(db: Session, enrollment: SensorEnrollment) -> SensorEn
 def integration_token_out(token: IntegrationToken) -> IntegrationTokenOut:
     now = utcnow()
     comparison_now = now if token.expires_at.tzinfo is not None else now.replace(tzinfo=None)
+    remaining_seconds = (token.expires_at - comparison_now).total_seconds()
+    expires_in_days = max(0, int((remaining_seconds + 86_399) // 86_400))
     if token.revoked_at is not None:
         state = "revoked"
     elif token.expires_at <= comparison_now:
@@ -762,6 +766,8 @@ def integration_token_out(token: IntegrationToken) -> IntegrationTokenOut:
         scopes=list(token.scopes or []),
         state=state,
         expires_at=token.expires_at,
+        expires_in_days=expires_in_days,
+        rotation_recommended=state == "active" and expires_in_days <= 14,
         last_used_at=token.last_used_at,
         revoked_at=token.revoked_at,
         created_at=token.created_at,
@@ -1493,6 +1499,73 @@ def create_integration_token(
     db.refresh(token)
     return IntegrationTokenCreateResponse(
         **integration_token_out(token).model_dump(),
+        access_token=secret,
+    )
+
+
+@app.get("/api/v1/integration-tokens/self", response_model=IntegrationTokenOut)
+def inspect_integration_token(
+    auth_context: dict = Depends(require_integration_token_access),
+    db: Session = Depends(get_db),
+) -> IntegrationTokenOut:
+    token = db.get(IntegrationToken, str(auth_context["integration_token_id"]))
+    if token is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Integration token not found")
+    return integration_token_out(token)
+
+
+@app.post(
+    "/api/v1/integration-tokens/{token_id}/rotate",
+    response_model=IntegrationTokenCreateResponse,
+)
+def rotate_integration_token(
+    token_id: str,
+    payload: IntegrationTokenRotateRequest,
+    auth_context: dict = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> IntegrationTokenCreateResponse:
+    organization_id = organization_id_from_context(auth_context)
+    previous = db.scalar(
+        select(IntegrationToken).where(
+            IntegrationToken.id == token_id,
+            IntegrationToken.organization_id == organization_id,
+        )
+    )
+    if previous is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Integration token not found")
+    if integration_token_out(previous).state != "active":
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Only active integration tokens can be rotated")
+
+    secret = generate_integration_token()
+    replacement = IntegrationToken(
+        organization_id=organization_id,
+        name=previous.name,
+        token_hash=hash_secret(secret),
+        scopes=list(previous.scopes or []),
+        created_by=str(auth_context.get("uid")) if auth_context.get("uid") else None,
+        expires_at=utcnow() + timedelta(days=payload.expires_in_days),
+    )
+    db.add(replacement)
+    db.flush()
+    write_audit(
+        db,
+        "integration_token.rotated",
+        user_id=str(auth_context.get("uid")) if auth_context.get("uid") else None,
+        organization_id=organization_id,
+        resource_type="integration_token",
+        resource_id=previous.id,
+        details={
+            "name": previous.name,
+            "scopes": list(previous.scopes or []),
+            "replacement_id": replacement.id,
+            "replacement_expires_at": replacement.expires_at.isoformat(),
+            "previous_remains_active": True,
+        },
+    )
+    db.commit()
+    db.refresh(replacement)
+    return IntegrationTokenCreateResponse(
+        **integration_token_out(replacement).model_dump(),
         access_token=secret,
     )
 

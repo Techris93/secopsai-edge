@@ -85,3 +85,9 @@ mutate Edge state or access assets, findings, reports, users, audit logs, or
 another workspace. The canonical dashboard helper must use
 `SECOPSAI_EDGE_OPERATIONS_TOKEN`; the legacy administrator-token fallback is a
 temporary migration path and must not be exposed to browser configuration.
+
+An integration credential may read only its own identifier, scopes, state,
+expiry, and last-use metadata. Rotation returns a new secret once and keeps the
+previous credential active so the consumer can be verified before revocation.
+This overlap is deliberate; operators must revoke the previous credential
+after a successful handover.

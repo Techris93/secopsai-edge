@@ -84,6 +84,19 @@ after its one-time creation response. Neither scope can mutate scans, sensors,
 users, or settings. Scan and sensor administration remains in the Edge
 dashboard; Core remains canonical for finding triage and graph context.
 
+Each scoped credential can inspect only its own non-secret lifecycle metadata
+at `GET /api/v1/integration-tokens/self`. Edge and the canonical dashboard warn
+when 14 days remain. To rotate without downtime:
+
+1. Choose **Rotate** beside the credential in Edge Settings.
+2. Copy the replacement secret when it is shown once.
+3. Update the Core sync service or canonical dashboard helper.
+4. Verify one successful sync or Edge workspace refresh.
+5. Revoke the previous credential, using its short ID and creation timestamp to
+   distinguish it from the replacement.
+
+Rotation deliberately keeps the previous credential active until step 5.
+
 ## Contract
 
 The bundle uses:
@@ -95,7 +108,7 @@ The bundle uses:
   "source_instance": {
     "product": "secopsai_edge",
     "api": "secopsai-edge-api",
-    "version": "0.2.3"
+    "version": "0.2.4"
   },
   "cursor": {
     "mode": "full",

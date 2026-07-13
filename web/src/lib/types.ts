@@ -262,6 +262,8 @@ export type IntegrationToken = {
   scopes: string[];
   state: "active" | "expired" | "revoked" | string;
   expires_at: string;
+  expires_in_days: number;
+  rotation_recommended: boolean;
   last_used_at?: string | null;
   revoked_at?: string | null;
   created_at: string;

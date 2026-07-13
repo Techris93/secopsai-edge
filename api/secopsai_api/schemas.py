@@ -109,6 +109,10 @@ class IntegrationTokenCreateRequest(BaseModel):
     expires_in_days: int = Field(default=90, ge=1, le=365)
 
 
+class IntegrationTokenRotateRequest(BaseModel):
+    expires_in_days: int = Field(default=90, ge=1, le=365)
+
+
 class IntegrationTokenOut(BaseModel):
     id: str
     organization_id: str
@@ -116,6 +120,8 @@ class IntegrationTokenOut(BaseModel):
     scopes: list[str]
     state: str
     expires_at: datetime
+    expires_in_days: int
+    rotation_recommended: bool
     last_used_at: datetime | None = None
     revoked_at: datetime | None = None
     created_at: datetime
