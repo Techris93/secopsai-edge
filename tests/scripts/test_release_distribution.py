@@ -20,7 +20,7 @@ def _write_release(
     fail_install: bool = False,
     unsafe_member: bool = False,
 ) -> None:
-    archive_name = "secopsai-edge-0.3.3.tar.gz"
+    archive_name = "secopsai-edge-0.3.4.tar.gz"
     archive = fixture_dir / archive_name
     installer = f"""#!/usr/bin/env bash
 set -euo pipefail
@@ -34,7 +34,7 @@ printf '%s\\n' {marker!r} > \"$(dirname \"$0\")/../installed-version.txt\"
             info = tarfile.TarInfo("../outside.txt")
             payload = b"must not escape"
         else:
-            info = tarfile.TarInfo("secopsai-edge-0.3.3/scripts/install-secopsai-edge.sh")
+            info = tarfile.TarInfo("secopsai-edge-0.3.4/scripts/install-secopsai-edge.sh")
             info.mode = 0o755
             payload = installer
         info.size = len(payload)
@@ -118,7 +118,7 @@ def _run_bootstrap(
             "bash",
             str(BOOTSTRAP),
             "--version",
-            "0.3.3",
+            "0.3.4",
             "--install-dir",
             str(tmp_path / "install"),
             *extra,
@@ -149,7 +149,7 @@ def test_bootstrap_downloads_private_release_with_authenticated_gh(tmp_path: Pat
             "bash",
             str(BOOTSTRAP),
             "--version",
-            "0.3.3",
+        "0.3.4",
             "--install-dir",
             str(tmp_path / "install"),
         ],
@@ -162,8 +162,8 @@ def test_bootstrap_downloads_private_release_with_authenticated_gh(tmp_path: Pat
     assert result.returncode == 0, result.stderr
     assert (tmp_path / "install" / "installed-version.txt").read_text().strip() == "private-release"
     assert log.read_text().splitlines() == [
-        "secopsai-edge-0.3.3.tar.gz",
-        "secopsai-edge-0.3.3.tar.gz.sha256",
+        "secopsai-edge-0.3.4.tar.gz",
+        "secopsai-edge-0.3.4.tar.gz.sha256",
     ]
 
 
