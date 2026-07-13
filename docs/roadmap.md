@@ -31,6 +31,8 @@ The controlled-pilot baseline includes:
 - Versioned Edge-to-Core graph/finding export and automated local Core sync.
 - Unified Core console visibility for Edge sync freshness, including current,
   stale, and never-synced states.
+- OpenClaw read-only Edge operator checks for local worker status and safe
+  private-CIDR scan previews, with no direct scan or service mutation.
 - Workspace retention policies, normalized customer export, owner-confirmed
   site deletion, and non-secret hosted availability evidence.
 
@@ -64,7 +66,7 @@ without founder supervision:
 
 ## Controlled Pilot Completion Sequence
 
-Implementation checkpoints are complete through `042`. The remaining work is
+Implementation checkpoints are complete through `044`. The remaining work is
 external operator acceptance, not untracked feature development:
 
 1. **Checkpoint 040 - External pilot acceptance.** Complete fresh-machine
@@ -77,6 +79,11 @@ external operator acceptance, not untracked feature development:
    report cooldown, operator visibility, release archive, Render identity, and
    Edge Pages deployment are verified. Attach the external evidence and signed
    pilot go/no-go record before calling the controlled pilot customer-ready.
+4. **Checkpoint 043 - Cross-product sync freshness.** Core, Dashboard, and
+   OpenClaw now share the same normalized Edge-to-Core freshness signal.
+5. **Checkpoint 044 - Safe OpenClaw Edge operator tools.** OpenClaw can check
+   the local worker and preview an authorized private CIDR without executing or
+   uploading a scan.
 
 Commercial SaaS/MSP, billing, broad fleet automation, appliance imaging, and
 multi-ecosystem research automation remain subsequent product horizons rather
@@ -107,7 +114,9 @@ than hidden requirements of the controlled-pilot release.
 - Add bidirectional workflow acknowledgements only after one-way ingestion and
   conflict ownership are operationally proven.
 - Expose approved Core/Edge actions through OpenClaw with explicit approval for
-  state-changing operations.
+  state-changing operations. The current read-only worker-status and scan-
+  preview tools are the first control-plane surface; direct scan/service
+  mutations remain approval-gated follow-up work.
 
 ## Wireless Intelligence
 
