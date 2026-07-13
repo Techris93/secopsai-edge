@@ -1704,13 +1704,15 @@ Activation required:
 
 ## Checkpoint 033 - Protected Hosted Core Ingestion
 
-Status: implementation complete; Edge PR and release verification pending
+Status: complete
 
 Branches and merged dependencies:
 
 - Core PR: `#38` (`codex/core-ingestion-api`)
 - Core merge: `6ceb4310c16f8cef068abac4b13351c8ba191174`
-- Edge branch: `codex/hosted-core-push`
+- Edge PR: `#16` (`codex/hosted-core-push`)
+- Edge merge: `f554a786b96ada97a4a48ad2aebaf1c284742871`
+- Edge release: `v0.2.8`
 
 Completed changes:
 
@@ -1748,6 +1750,25 @@ Validation:
 - `./scripts/edge test`: 95 backend/agent tests and 25 frontend tests passed;
   the static production build completed and npm audit found zero
   vulnerabilities.
+- Edge PR branch and pull-request CI runs `29248909572` and `29248916665`
+  passed. Main CI run `29249073906` then repeated migrations, tests, audits,
+  release inspection, PostgreSQL backup/restore, dashboard build, and clean
+  generated-state checks on the merge commit.
+- Release workflow `29249103680` published versioned and stable sensor archives,
+  the standalone bootstrap, and SHA-256 manifests from the verified `v0.2.8`
+  tag. GitHub artifact attestations remain unavailable for this user-owned
+  private repository, so the verified release workflow publishes checksums.
+- Render API deployment `dep-d9adcum8bjmc73aar24g` and scheduler deployment
+  `dep-d9adcuu8bjmc73aar2bg` are live on exact merge `f554a78`. The public API
+  reports version `0.2.8`, matching commit `f554a786b96a`, and ready schema
+  revision `0012_integration_tokens`.
+- Cloudflare Pages production deployment
+  `4cf87d7a-3cb8-4822-ba52-b7993484249e` serves exact merge `f554a78` with the
+  hosted Render API URL and dashboard demo mode disabled.
+- Deployed Settings browser QA passed at desktop and `390x844`: both hosted Core
+  actions were present, the copy action showed its explicit success state, the
+  console was clean, no framework error rendered, and mobile had no horizontal
+  overflow (`clientWidth == scrollWidth == 390`).
 
 Known deployment boundary:
 
