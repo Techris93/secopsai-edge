@@ -29,6 +29,8 @@ The controlled-pilot baseline includes:
   private release archives, Render API/PostgreSQL, Cloudflare dashboard,
   Render configuration drift checks, and matching-major hosted backups.
 - Versioned Edge-to-Core graph/finding export and automated local Core sync.
+- Unified Core console visibility for Edge sync freshness, including current,
+  stale, and never-synced states.
 - Workspace retention policies, normalized customer export, owner-confirmed
   site deletion, and non-secret hosted availability evidence.
 
@@ -62,17 +64,19 @@ without founder supervision:
 
 ## Controlled Pilot Completion Sequence
 
-Implementation checkpoints are complete through `041`. The remaining work is
+Implementation checkpoints are complete through `042`. The remaining work is
 external operator acceptance, not untracked feature development:
 
 1. **Checkpoint 040 - External pilot acceptance.** Complete fresh-machine
    installation, seven-day soak, schedule/notification/offline-sensor
    exercises, support SLO, paid Render/PITR activation, two-owner recovery,
    uninstall, and the pilot exit checklist.
-2. **Checkpoint 041 - Release closeout.** The exact verified `v0.3.4` build is
-   published, hosted identity is verified, and public operator docs are aligned.
-   Attach the external evidence and signed pilot go/no-go record before calling
-   the controlled pilot customer-ready.
+2. **Checkpoint 041 - Release closeout.** The exact verified `v0.3.4` build
+   closeout was superseded by the verified `v0.3.5` release in checkpoint 042.
+3. **Checkpoint 042 - AI report cost guardrail and release evidence.** The
+   report cooldown, operator visibility, release archive, Render identity, and
+   Edge Pages deployment are verified. Attach the external evidence and signed
+   pilot go/no-go record before calling the controlled pilot customer-ready.
 
 Commercial SaaS/MSP, billing, broad fleet automation, appliance imaging, and
 multi-ecosystem research automation remain subsequent product horizons rather
