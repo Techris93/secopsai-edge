@@ -2653,3 +2653,52 @@ Next checkpoint:
   continue the external pilot acceptance matrix and remaining commercial
   operations rather than treating approval-gated automation as customer
   readiness.
+
+## Checkpoint 047 - Approval-Gated Edge Operations
+
+Status: implementation complete; external pilot acceptance remains pending
+
+Scope:
+
+- Complete the remaining explicit OpenClaw Edge operator actions without
+  weakening the approval and local-execution boundary.
+- Add report generation and worker lifecycle control as auditable Core session
+  payloads.
+
+Completed changes:
+
+- Added Core validation and bounded structured helper execution for
+  `edge_report` and `edge_worker` payloads.
+- Restricted worker operations to `start` and `stop`; arbitrary Edge commands
+  are rejected before subprocess execution.
+- Added OpenClaw `secopsai_edge_request_report` and
+  `secopsai_edge_request_worker_action` tools. Both only create pending Core
+  approvals; `secopsai_session_resolve_approval` remains the apply boundary.
+- Added failure events, blocked session steps, successful operation events, and
+  raw-helper-output exclusion coverage.
+- Updated Core and plugin operator guides with report/worker examples and the
+  credential boundary.
+
+Validation:
+
+- Core focused action/session tests: `10` passed.
+- OpenClaw `npm test`: TypeScript build and plugin contract tests passed.
+- Edge `./scripts/edge test`: `125` backend/agent tests, `32` frontend tests,
+  `28` desktop/mobile browser workflows, production build, and zero npm audit
+  vulnerabilities passed before this documentation-only Edge checkpoint.
+- Core docs command and plugin-tool contract verification remain required at
+  merge.
+
+Safety boundary:
+
+- Report output is discarded by Core; the report remains in Edge's authenticated
+  report store.
+- Worker lifecycle actions are an explicit two-value allowlist.
+- No Edge credential, raw Nmap output, packet data, or helper stdout/stderr is
+  persisted in Core sessions.
+
+Next checkpoint:
+
+- Merge the cross-repository changes, then audit token rotation, notification
+  delivery, and external pilot activation evidence as the remaining product
+  readiness work.

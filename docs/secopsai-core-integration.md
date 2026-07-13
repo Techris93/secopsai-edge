@@ -133,6 +133,17 @@ validation and queues the job for the local worker. Core keeps only normalized
 approval and queue metadata; credentials, helper output, and raw scan logs
 remain local.
 
+Report and worker lifecycle requests use the same pattern:
+
+```text
+secopsai_edge_request_report
+secopsai_edge_request_worker_action action=start
+secopsai_session_resolve_approval sessionId=SES-... approvalId=APR-... decision=approved apply=true
+```
+
+The allowlisted Edge helper actions are `report --cloud`, `worker start`, and
+`worker stop`. They are never executed directly by OpenClaw.
+
 Use two separate helper-host credentials:
 
 - `SECOPSAI_EDGE_ACCESS_TOKEN` has `core:export` and can read only the
