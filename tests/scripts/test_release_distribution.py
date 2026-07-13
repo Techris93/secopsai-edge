@@ -19,7 +19,7 @@ def _write_release(
     fail_install: bool = False,
     unsafe_member: bool = False,
 ) -> None:
-    archive_name = "secopsai-edge-0.2.0.tar.gz"
+    archive_name = "secopsai-edge-0.2.1.tar.gz"
     archive = fixture_dir / archive_name
     installer = f"""#!/usr/bin/env bash
 set -euo pipefail
@@ -33,7 +33,7 @@ printf '%s\\n' {marker!r} > \"$(dirname \"$0\")/../installed-version.txt\"
             info = tarfile.TarInfo("../outside.txt")
             payload = b"must not escape"
         else:
-            info = tarfile.TarInfo("secopsai-edge-0.2.0/scripts/install-secopsai-edge.sh")
+            info = tarfile.TarInfo("secopsai-edge-0.2.1/scripts/install-secopsai-edge.sh")
             info.mode = 0o755
             payload = installer
         info.size = len(payload)
@@ -79,7 +79,7 @@ def _run_bootstrap(tmp_path: Path, *extra: str) -> subprocess.CompletedProcess[s
             "bash",
             str(BOOTSTRAP),
             "--version",
-            "0.2.0",
+            "0.2.1",
             "--install-dir",
             str(tmp_path / "install"),
             *extra,

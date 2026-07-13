@@ -50,9 +50,14 @@ jobs:
           (cd dist && shasum -a 256 secopsai-edge.tar.gz > secopsai-edge.tar.gz.sha256)
 
       - name: Attest package provenance
+        if: ${{ !github.event.repository.private }}
         uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4
         with:
           subject-path: "dist/*.tar.gz"
+
+      - name: Record private repository provenance limitation
+        if: ${{ github.event.repository.private }}
+        run: echo "::notice::GitHub artifact attestations are unavailable for user-owned private repositories; publishing SHA-256 manifests from the verified tag workflow."
 
       - name: Publish GitHub release
         env:

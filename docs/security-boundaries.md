@@ -68,8 +68,9 @@ unless the operator explicitly opts in. Credential files and backup archives
 are excluded from Git.
 
 Sensor releases are built from committed Git content, version-matched across
-API/agent/dashboard, published with SHA-256 checksums, and receive GitHub build
-provenance attestations. The bootstrap requires HTTPS, verifies the checksum
+API/agent/dashboard, and published with SHA-256 checksums. Public repositories
+also receive GitHub build-provenance attestations; GitHub does not offer that
+feature to user-owned private repositories. The bootstrap requires HTTPS, verifies the checksum
 before extraction, refuses to overwrite an installation without `--upgrade`,
 preserves credentials, and rolls back the directory swap when installation
 fails. Release archives exclude ignored credentials, virtual environments,

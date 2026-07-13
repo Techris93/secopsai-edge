@@ -1192,6 +1192,57 @@ Known risks:
 - Node 24 actions require current GitHub-hosted or self-hosted runner versions;
   this project currently uses GitHub-hosted Ubuntu runners.
 
+## Checkpoint 025 - Private Repository Release Recovery
+
+Status: complete
+
+Branch:
+
+- Edge repo: `codex/private-release-attestation`
+
+Incident and decision:
+
+- The first `v0.2.0` tag passed its exact-commit release gate and built the
+  archive, but GitHub rejected provenance persistence because artifact
+  attestations are unavailable for user-owned private repositories.
+- Publication stopped before `gh release create`, so `v0.2.0` has no release
+  page or downloadable assets. The published annotated tag was not deleted,
+  moved, or rewritten.
+- The patch release advances to `0.2.1` with the repository remaining private;
+  making product source public is a founder decision, not an automated release
+  workaround.
+
+Completed changes:
+
+- Made provenance attestation mandatory when the repository is public and
+  replaced it with an explicit workflow notice plus SHA-256 manifests when the
+  GitHub feature is unavailable to a private repository.
+- Kept the release gate, default-branch ancestry requirement, committed-content
+  archive, HTTPS bootstrap, exact checksum verification, and protected upgrade
+  rollback unchanged.
+- Removed the hard-coded package version from CI; archive validation now derives
+  the shared API/agent/dashboard version.
+- Advanced API, agent, dashboard, docs, and regression fixtures to `0.2.1`.
+
+Validation:
+
+- Both push and pull-request instances of the full Edge CI workflow passed for
+  the private-release patch.
+- Workflow YAML, shell syntax, focused worker/distribution tests, frontend test,
+  TypeScript, and static production build passed locally.
+- The release workflow's private/public condition is exercised by the actual
+  private `v0.2.1` tag only after this checkpoint reaches verified `main`.
+
+Known risks:
+
+- A private release has checksum integrity and a GitHub-authenticated delivery
+  channel, but not a persisted Sigstore/GitHub provenance attestation. Operators
+  requiring signed provenance should use a public repository or a separately
+  managed organizational signing service.
+- `v0.2.0` remains an unreleased historical tag documenting the failed provider
+  capability check. The first downloadable pilot package is intended to be
+  `v0.2.1`.
+
 ## Completion Rules
 
 A checkpoint is complete only when:
