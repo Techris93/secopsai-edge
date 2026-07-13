@@ -49,6 +49,20 @@ Use the dashboard Reports page or run:
 ./scripts/edge report
 ```
 
+After generation, open Reports in the dashboard and select the report. Use
+`Download PDF` for the server-rendered A4 artifact, `Download HTML` for the
+browser fallback, or `Copy Brief` for a text handoff. The PDF endpoint is
+authenticated and workspace scoped:
+
+```text
+GET /api/v1/reports/{report_id}/export.pdf
+```
+
+Report period and metrics are frozen at generation time. Generate a fresh
+report after an important scan instead of expecting an existing export to
+change. The artifact includes normalized finding summaries, never evidence
+objects, raw Nmap output, packet captures, or full scan logs.
+
 ## Test Everything
 
 ```bash

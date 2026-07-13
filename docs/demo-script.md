@@ -40,8 +40,14 @@ Open Reports, choose a site, and generate a report. Open the report detail page,
 
 - Copy Summary
 - Copy Brief
-- Download Report
+- Download PDF
+- Download HTML
 - Print
+
+Open the PDF and point out the reporting period, executive metrics, severity
+summary, ordered actions, normalized findings, page numbers, and privacy
+boundary. Do not use an older report to represent the latest scan because
+report metrics are intentionally frozen when the report is generated.
 
 ## 6. Show Core Integration
 

@@ -1,16 +1,16 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Literal
 
 import httpx
 from pydantic import BaseModel, ConfigDict
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from secopsai_api.config import Settings, get_settings
-from secopsai_api.models import Finding, Report
+from secopsai_api.models import Asset, Finding, Report, ScanRun
 
 
 SENSITIVE_EVIDENCE_KEYS = {"mac", "mac_address", "bssid", "raw", "hostname"}
@@ -28,6 +28,8 @@ class OpenAiReportOutput(BaseModel):
 
 def build_report(db: Session, site_id: str, settings: Settings | None = None) -> Report:
     settings = settings or get_settings()
+    period_end = datetime.now(timezone.utc)
+    period_start = period_end - timedelta(days=7)
     findings = db.scalars(
         select(Finding)
         .where(Finding.site_id == site_id, Finding.status.in_(["open", "acknowledged"]))
@@ -40,11 +42,16 @@ def build_report(db: Session, site_id: str, settings: Settings | None = None) ->
         "findings": [finding_to_ai_payload(finding) for finding in findings],
     }
     content = AiReportProvider(settings).generate(payload)
+    content["period"] = {
+        "start": period_start.isoformat(),
+        "end": period_end.isoformat(),
+    }
+    content["metrics"] = report_metrics(db, site_id, period_start)
     report = Report(
         site_id=site_id,
         title=content["title"],
-        period_start=None,
-        period_end=datetime.now(timezone.utc),
+        period_start=period_start,
+        period_end=period_end,
         summary=content["summary"],
         risk_level=content["risk_level"],
         content=content,
@@ -52,6 +59,69 @@ def build_report(db: Session, site_id: str, settings: Settings | None = None) ->
     db.add(report)
     db.flush()
     return report
+
+
+def report_metrics(db: Session, site_id: str, period_start: datetime) -> dict[str, Any]:
+    status_counts = {
+        str(status): int(count)
+        for status, count in db.execute(
+            select(Finding.status, func.count(Finding.id))
+            .where(Finding.site_id == site_id)
+            .group_by(Finding.status)
+        ).all()
+    }
+    severity_counts = {
+        "critical": 0,
+        "high": 0,
+        "medium": 0,
+        "low": 0,
+        "info": 0,
+    }
+    for severity, count in db.execute(
+        select(Finding.severity, func.count(Finding.id))
+        .where(Finding.site_id == site_id, Finding.status.in_(["open", "acknowledged"]))
+        .group_by(Finding.severity)
+    ).all():
+        severity_counts[str(severity)] = int(count)
+
+    def count_findings(*conditions: object) -> int:
+        return int(
+            db.scalar(select(func.count(Finding.id)).where(Finding.site_id == site_id, *conditions))
+            or 0
+        )
+
+    return {
+        "assets_total": int(db.scalar(select(func.count(Asset.id)).where(Asset.site_id == site_id)) or 0),
+        "assets_active": int(
+            db.scalar(select(func.count(Asset.id)).where(Asset.site_id == site_id, Asset.status == "active")) or 0
+        ),
+        "new_devices": count_findings(Finding.type == "new_device", Finding.created_at >= period_start),
+        "risky_services": count_findings(
+            Finding.type == "risky_open_port",
+            Finding.status.in_(["open", "acknowledged"]),
+        ),
+        "wifi_security_findings": count_findings(
+            Finding.type.in_(["weak_wifi", "duplicate_ssid"]),
+            Finding.status.in_(["open", "acknowledged"]),
+        ),
+        "open_findings": status_counts.get("open", 0),
+        "acknowledged_findings": status_counts.get("acknowledged", 0),
+        "resolved_findings": count_findings(
+            Finding.status.in_(["resolved", "false_positive"]),
+            Finding.updated_at >= period_start,
+        ),
+        "scans_completed": int(
+            db.scalar(
+                select(func.count(ScanRun.id)).where(
+                    ScanRun.site_id == site_id,
+                    ScanRun.status == "completed",
+                    ScanRun.completed_at >= period_start,
+                )
+            )
+            or 0
+        ),
+        "severity": severity_counts,
+    }
 
 
 def finding_to_ai_payload(finding: Finding) -> dict[str, Any]:

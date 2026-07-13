@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import unicodedata
 from contextlib import asynccontextmanager
 from html import escape
 from ipaddress import ip_address, ip_network
@@ -7,7 +8,7 @@ from datetime import datetime, timedelta
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
@@ -50,6 +51,7 @@ from secopsai_api.models import (
     utcnow,
 )
 from secopsai_api.notifications import attempt_delivery, notify_event, process_due_deliveries, test_notification
+from secopsai_api.report_pdf import render_report_pdf
 from secopsai_api.scheduling import compute_next_run_at, enqueue_due_schedules, normalize_frequency, pick_site_and_sensor
 from secopsai_api.schemas import (
     AssetDetailOut,
@@ -502,10 +504,11 @@ def get_report_or_404(db: Session, report_id: str, organization_id: str | None =
     return report
 
 
-def report_export_filename(report: Report) -> str:
-    slug = "".join(char.lower() if char.isalnum() else "-" for char in report.title)
+def report_export_filename(report: Report, extension: str = "html") -> str:
+    ascii_title = unicodedata.normalize("NFKD", report.title).encode("ascii", "ignore").decode("ascii")
+    slug = "".join(char.lower() if char.isalnum() else "-" for char in ascii_title)
     slug = "-".join(part for part in slug.split("-") if part)
-    return f"{slug or 'secopsai-edge-report'}.html"
+    return f"{slug or 'secopsai-edge-report'}.{extension}"
 
 
 def render_report_html(report: Report, site: Site | None) -> str:
@@ -2759,6 +2762,22 @@ def export_report_html(
     return HTMLResponse(
         content=render_report_html(report, site),
         headers={"Content-Disposition": f'attachment; filename="{report_export_filename(report)}"'},
+    )
+
+
+@app.get("/api/v1/reports/{report_id}/export.pdf")
+def export_report_pdf(
+    report_id: str,
+    auth_context: dict = Depends(require_operator),
+    db: Session = Depends(get_db),
+) -> Response:
+    report = get_report_or_404(db, report_id, organization_id_from_context(auth_context))
+    site = db.get(Site, report.site_id)
+    pdf = render_report_pdf(report, site.name if site else "Unknown site")
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{report_export_filename(report, "pdf")}"'},
     )
 
 

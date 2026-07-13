@@ -37,7 +37,7 @@ def test_worker_sends_heartbeat_before_single_idle_poll(monkeypatch) -> None:
     assert (sensor_id, status) == ("sensor-1", "online")
     assert details["mode"] == "worker"
     assert details["state"] == "waiting"
-    assert details["version"] == "0.2.4"
+    assert details["version"] == "0.2.5"
     assert details["os"]
     assert details["hostname"]
 

@@ -228,12 +228,20 @@ export async function getReport(reportId: string): Promise<Report> {
 }
 
 export async function downloadReportHtml(reportId: string): Promise<Blob> {
+  return downloadReportFile(reportId, "html");
+}
+
+export async function downloadReportPdf(reportId: string): Promise<Blob> {
+  return downloadReportFile(reportId, "pdf");
+}
+
+async function downloadReportFile(reportId: string, format: "html" | "pdf"): Promise<Blob> {
   const sessionToken = getDashboardSessionToken();
   if (!sessionToken) {
     throw new Error("Dashboard session required");
   }
 
-  const response = await fetch(`${API_BASE_URL}/api/v1/reports/${reportId}/export.html`, {
+  const response = await fetch(`${API_BASE_URL}/api/v1/reports/${reportId}/export.${format}`, {
     headers: {
       Authorization: `Bearer ${sessionToken}`
     },
