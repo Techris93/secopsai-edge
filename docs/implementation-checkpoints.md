@@ -2599,3 +2599,57 @@ Next checkpoint:
 
 - Continue the product audit with approval-gated Edge actions or the next
   highest-impact pilot gap, while preserving the research safety boundary.
+
+## Checkpoint 046 - Approval-Gated Edge Scan Actions
+
+Status: implementation complete; external pilot acceptance remains pending
+
+Scope:
+
+- Give OpenClaw a useful Edge write path without allowing an AI tool to run
+  Nmap, start services, or receive sensor credentials directly.
+- Reuse Core's existing session and approval model as the audit boundary.
+- Queue remote work for the local Edge worker rather than moving LAN access to
+  Core or the hosted API.
+
+Completed changes:
+
+- Added Core `secopsai.edge_actions` validation for RFC1918 IPv4 `/24` or
+  narrower targets and a bounded structured subprocess wrapper for the Edge
+  queue helper.
+- Added `edge_scan` custom approval payload handling to `session request-approval`
+  and `session resolve-approval --apply`, with normalized session events and
+  blocked-step diagnostics on queue failure.
+- Added `./scripts/edge queue <cidr> --cloud [--wifi] [--sensor-id ID]`, which
+  validates the target again, uses the saved scoped cloud credential, and
+  creates an authenticated remote job without running discovery in Core.
+- Added OpenClaw `secopsai_edge_request_scan` and passed the configured Edge
+  root into the existing approval resolver.
+- Documented the approval flow and the strict raw-telemetry/credential
+  boundary across Core, Edge, and the plugin.
+
+Validation:
+
+- Core focused session/action tests: `9` passed, including rejection of public
+  and broad CIDRs, structured helper arguments, approval application, and raw
+  output exclusion.
+- OpenClaw `npm test`: TypeScript build and plugin contract tests passed.
+- Edge shell syntax validation: `bash -n scripts/edge` passed.
+- Full Edge API scan-job regression tests: `7` passed.
+
+Safety boundary:
+
+- OpenClaw only requests approval; it cannot execute Nmap directly.
+- Core accepts only normalized private IPv4 targets and never persists helper
+  stdout/stderr.
+- The Edge helper performs the same target restriction and reads its own local
+  credential files; no token is placed in Core arguments or session records.
+- Worker start/stop, token rotation, and report generation remain separate
+  approval-gated work items.
+
+Next checkpoint:
+
+- Complete full cross-repository validation and merge this checkpoint, then
+  continue the external pilot acceptance matrix and remaining commercial
+  operations rather than treating approval-gated automation as customer
+  readiness.

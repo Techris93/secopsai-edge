@@ -284,6 +284,16 @@ then resume workers. Do not run blind Alembic downgrades on live customer data.
 
 The hosted dashboard can queue a scan job, but the scan still runs locally.
 
+An approved Core/OpenClaw request or an operator can queue a job from the Edge
+helper:
+
+```bash
+./scripts/edge queue 192.168.1.0/24 --cloud
+```
+
+This creates the remote job only; the local worker performs the authorized
+scan. Core and Edge both validate the private `/24` boundary.
+
 Start the local worker:
 
 ```bash

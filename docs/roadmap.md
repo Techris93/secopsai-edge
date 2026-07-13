@@ -33,6 +33,9 @@ The controlled-pilot baseline includes:
   stale, and never-synced states.
 - OpenClaw read-only Edge operator checks for local worker status and safe
   private-CIDR scan previews, with no direct scan or service mutation.
+- OpenClaw approval-gated Edge scan requests that create a Core approval,
+  validate the target in Core and Edge, and queue work for the local worker
+  without exposing credentials or raw scanner output.
 - OpenClaw research tools aligned with all twelve ecosystems supported by Core,
   including NuGet, Maven, Go, crates.io, Open VSX, and RubyGems.
 - Workspace retention policies, normalized customer export, owner-confirmed
@@ -68,7 +71,7 @@ without founder supervision:
 
 ## Controlled Pilot Completion Sequence
 
-Implementation checkpoints are complete through `045`. The remaining work is
+Implementation checkpoints are complete through `046`. The remaining work is
 external operator acceptance, not untracked feature development:
 
 1. **Checkpoint 040 - External pilot acceptance.** Complete fresh-machine
@@ -89,6 +92,10 @@ external operator acceptance, not untracked feature development:
 6. **Checkpoint 045 - Research ecosystem contract alignment.** OpenClaw's
    package-research schemas now expose the same twelve ecosystem choices as
    Core, including NuGet-style package investigations.
+7. **Checkpoint 046 - Approval-gated Edge scan actions.** OpenClaw can create
+   a Core session and pending approval for an authorized scan. Applying the
+   approval invokes only the structured Edge queue helper; direct Nmap and
+   worker-service mutation remain outside the plugin.
 
 Commercial SaaS/MSP, billing, broad fleet automation, appliance imaging, and
 multi-ecosystem research automation remain subsequent product horizons rather
@@ -119,9 +126,9 @@ than hidden requirements of the controlled-pilot release.
 - Add bidirectional workflow acknowledgements only after one-way ingestion and
   conflict ownership are operationally proven.
 - Expose approved Core/Edge actions through OpenClaw with explicit approval for
-  state-changing operations. The current read-only worker-status and scan-
-  preview tools are the first control-plane surface; direct scan/service
-  mutations remain approval-gated follow-up work.
+  state-changing operations. Worker status, scan preview, and approval-gated
+  scan queueing are implemented; direct worker-service mutation and report
+  generation remain separately gated follow-up work.
 
 ## Wireless Intelligence
 

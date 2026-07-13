@@ -93,6 +93,15 @@ Submit a scan:
 ./scripts/edge scan 192.168.1.0/24
 ```
 
+Queue a hosted job for the local worker:
+
+```bash
+./scripts/edge queue 192.168.1.0/24 --cloud
+```
+
+Queueing does not run Nmap in Core or on Render. The helper and Edge API both
+restrict the target to an authorized RFC1918 `/24` or narrower network.
+
 Generate a report:
 
 ```bash

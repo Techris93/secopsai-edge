@@ -2,10 +2,10 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-ENV_FILE="$ROOT_DIR/.env"
-SENSOR_ENV_FILE="$ROOT_DIR/.sensor.env"
-CLOUD_ENV_FILE="$ROOT_DIR/.cloud.env"
-CLOUD_SENSOR_ENV_FILE="$ROOT_DIR/.cloud-sensor.env"
+ENV_FILE="${SECOPSAI_EDGE_ENV_FILE:-$ROOT_DIR/.env}"
+SENSOR_ENV_FILE="${SECOPSAI_EDGE_SENSOR_ENV_FILE:-$ROOT_DIR/.sensor.env}"
+CLOUD_ENV_FILE="${SECOPSAI_EDGE_CLOUD_ENV_FILE:-$ROOT_DIR/.cloud.env}"
+CLOUD_SENSOR_ENV_FILE="${SECOPSAI_EDGE_CLOUD_SENSOR_ENV_FILE:-$ROOT_DIR/.cloud-sensor.env}"
 PYTHON_BIN="$ROOT_DIR/.venv/bin/python"
 PIP_BIN="$ROOT_DIR/.venv/bin/pip"
 ALEMBIC_BIN="$ROOT_DIR/.venv/bin/alembic"
@@ -48,6 +48,8 @@ Usage:
                                       Check Wi-Fi collection support without scanning
   ./scripts/edge scan <cidr> [--wifi]  Submit a scan using saved local sensor credentials
   ./scripts/edge scan <cidr> --cloud   Submit a scan to the configured hosted API
+  ./scripts/edge queue <cidr> --cloud [--wifi]
+                                      Queue an approved scan for the local worker
   ./scripts/edge worker [--cloud]      Poll for remote scan jobs and execute them locally
   ./scripts/edge worker install-service --cloud
                                       Install background worker service
@@ -597,6 +599,87 @@ submit_scan() {
     command_args+=("${agent_args[@]}")
   fi
   PYTHONPATH="$ROOT_DIR/agent" "$PYTHON_BIN" "${command_args[@]}"
+}
+
+queue_scan() {
+  target="${1:-}"
+  [ -n "$target" ] || fail "Usage: ./scripts/edge queue <cidr> --cloud [--wifi] [--sensor-id ID]"
+  shift || true
+  profile="local"
+  include_wifi="false"
+  requested_sensor_id=""
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --cloud) profile="cloud" ;;
+      --wifi) include_wifi="true" ;;
+      --sensor-id)
+        shift || true
+        requested_sensor_id="${1:-}"
+        [ -n "$requested_sensor_id" ] || fail "--sensor-id requires a value"
+        ;;
+      *) fail "Unknown queue option: $1" ;;
+    esac
+    shift || true
+  done
+
+  if ! target="$(python3 - "$target" <<'PY'
+import ipaddress
+import sys
+
+try:
+    network = ipaddress.ip_network(sys.argv[1], strict=False)
+except ValueError:
+    raise SystemExit(1)
+if network.version != 4 or network.prefixlen < 24 or network.num_addresses > 256:
+    raise SystemExit(1)
+private = (
+    ipaddress.ip_network("10.0.0.0/8"),
+    ipaddress.ip_network("172.16.0.0/12"),
+    ipaddress.ip_network("192.168.0.0/16"),
+)
+if not any(network.subnet_of(allowed) for allowed in private):
+    raise SystemExit(1)
+print(network)
+PY
+)"; then
+    fail "Queue target must be an RFC1918 private IPv4 CIDR of /24 or narrower"
+  fi
+
+  if [ "$profile" = "cloud" ]; then
+    load_cloud_env
+    target_api_url="$(cloud_api_url)"
+    target_admin_token="$(cloud_admin_token)"
+    if [ -z "$requested_sensor_id" ]; then
+      requested_sensor_id="${SECOPSAI_CLOUD_SENSOR_ID:-}"
+    fi
+  else
+    load_env
+    target_api_url="$(api_url)"
+    target_admin_token="$(admin_token)"
+    if [ -z "$requested_sensor_id" ]; then
+      requested_sensor_id="${SECOPSAI_SENSOR_ID:-}"
+    fi
+  fi
+
+  body="$(TARGET_CIDR="$target" INCLUDE_WIFI="$include_wifi" SENSOR_ID="$requested_sensor_id" python3 - <<'PY'
+import json
+import os
+
+payload = {
+    "target_cidr": os.environ["TARGET_CIDR"],
+    "include_wifi": os.environ["INCLUDE_WIFI"] == "true",
+}
+if os.environ.get("SENSOR_ID"):
+    payload["sensor_id"] = os.environ["SENSOR_ID"]
+print(json.dumps(payload, separators=(",", ":")))
+PY
+)"
+  curl -fsS --retry 2 --connect-timeout 10 --max-time 30 \
+    -X POST "${target_api_url%/}/api/v1/scan-jobs" \
+    -H "Authorization: Bearer $target_admin_token" \
+    -H "Content-Type: application/json" \
+    --data "$body"
+  printf "\n"
 }
 
 run_worker() {
@@ -1761,6 +1844,7 @@ main() {
     preview) preview_scan "$@" ;;
     wifi) wifi_command "$@" ;;
     scan) submit_scan "$@" ;;
+    queue) queue_scan "$@" ;;
     worker) worker "$@" ;;
     report) generate_report "$@" ;;
     schedules) schedules "$@" ;;

@@ -116,6 +116,23 @@ The equivalent OpenClaw read-only action is `secopsai_edge_sync_status`. Both
 surfaces report the source identity, contract version, bundle timestamp, local
 sync timestamp, and cursor; neither exposes raw scan telemetry.
 
+## Approval-Gated Scan Requests
+
+The OpenClaw plugin can request a hosted scan without executing Nmap itself:
+
+```text
+secopsai_edge_request_scan targetCidr=192.168.1.0/24 includeWifi=false
+secopsai_session_show sessionId=SES-...
+secopsai_session_resolve_approval sessionId=SES-... approvalId=APR-... decision=approved apply=true
+```
+
+The request is recorded in Core as a session approval. On approval, Core
+invokes the configured Edge installation's `scripts/edge queue` helper with
+structured arguments. Edge performs the final RFC1918 `/24`-or-narrower
+validation and queues the job for the local worker. Core keeps only normalized
+approval and queue metadata; credentials, helper output, and raw scan logs
+remain local.
+
 Use two separate helper-host credentials:
 
 - `SECOPSAI_EDGE_ACCESS_TOKEN` has `core:export` and can read only the
