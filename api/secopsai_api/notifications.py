@@ -228,12 +228,18 @@ def _send_email(target: str, event_type: str, payload: dict[str, Any], settings:
             ]
         )
     )
+    send_email_message(message, settings)
+    return True, "Email delivered"
+
+
+def send_email_message(message: EmailMessage, settings: Settings) -> None:
+    if not settings.smtp_host:
+        raise RuntimeError("SMTP_HOST is not configured")
     with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=20) as smtp:
         smtp.starttls()
         if settings.smtp_username and settings.smtp_password:
             smtp.login(settings.smtp_username, settings.smtp_password)
         smtp.send_message(message)
-    return True, "Email delivered"
 
 
 def _send_telegram(target: str, event_type: str, payload: dict[str, Any], settings: Settings) -> tuple[bool, str]:

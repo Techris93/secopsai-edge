@@ -18,7 +18,7 @@ python3 -m py_compile scripts/render-run-due-schedules scripts/render_drift_chec
 [ -x "$ALEMBIC_BIN" ] || { echo "Alembic is not installed in .venv" >&2; exit 1; }
 
 heads="$(PYTHONPATH=api "$ALEMBIC_BIN" -c api/alembic.ini heads | awk '{print $1}')"
-[ "$heads" = "0012_integration_tokens" ] || {
+[ "$heads" = "0013_account_recovery" ] || {
   echo "Unexpected Alembic head: $heads" >&2
   exit 1
 }

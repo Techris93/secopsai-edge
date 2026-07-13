@@ -1,12 +1,14 @@
 {
   "name": "secopsai-edge-web",
-  "version": "0.2.8",
+  "version": "0.2.9",
   "private": true,
   "scripts": {
     "dev": "next dev -H 127.0.0.1 -p 3000",
     "build": "next build",
     "start": "next start -H 127.0.0.1 -p 3000",
-    "test": "vitest"
+    "test": "vitest",
+    "test:e2e": "npm run build && playwright test",
+    "test:e2e:built": "playwright test"
   },
   "dependencies": {
     "lucide-react": "^0.468.0",
@@ -15,8 +17,9 @@
     "react-dom": "^19.0.0"
   },
   "devDependencies": {
-    "@testing-library/react": "^16.0.0",
+    "@playwright/test": "^1.61.1",
     "@testing-library/jest-dom": "^6.4.0",
+    "@testing-library/react": "^16.0.0",
     "@types/node": "^22.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",

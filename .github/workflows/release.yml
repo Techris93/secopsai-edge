@@ -36,6 +36,7 @@ jobs:
           python -m venv .venv
           .venv/bin/pip install -r requirements.lock pip-audit
           npm ci --prefix web
+          (cd web && npx playwright install --with-deps chromium)
 
       - name: Verify exact release commit
         run: |

@@ -1851,6 +1851,59 @@ Known activation boundary:
   requires a paid Render persistent disk. The dashboard route and tests are
   ready for that service when the cost is approved.
 
+## Checkpoint 035 - Durable Account Recovery And Browser Workflows
+
+Status: implementation complete; merge and hosted activation pending
+
+Branch:
+
+- Edge: `codex/account-recovery`
+
+Completed changes:
+
+- Added durable one-time password-reset records with keyed token hashes,
+  expiry, cooldown, retry/backoff, terminal delivery state, and no raw token at
+  rest. Successful resets clear lockout state and revoke existing sessions.
+- Added deliberately non-enumerating request and confirmation endpoints plus
+  owner/admin delivery history, manual retry, and audit events.
+- Added Settings recovery controls. Reset tokens arrive in the URL fragment,
+  are removed immediately after capture, and are never exposed by delivery
+  history APIs.
+- Added operator-visible account-email delivery diagnostics and extended the
+  five-minute scheduler to process due account-access deliveries.
+- Added SMTP/reset URL deployment settings and production validation that
+  requires a clean HTTPS reset URL whenever SMTP is enabled.
+- Added migration `0013_account_recovery` and advanced the API, agent,
+  dashboard, installer, release, and documentation baseline to `0.2.9`.
+- Added Playwright desktop/mobile workflow coverage for dashboard login,
+  password recovery, remote scan queueing, finding triage, schedule creation,
+  and report generation. Browser tests use a disposable API contract and never
+  scan a network or access production data.
+- Added browser prerequisites to developer setup, CI, the release gate path,
+  and generated-artifact release hygiene.
+
+Validation before PR:
+
+- Focused account recovery, auth, and production configuration tests passed:
+  `19 passed`.
+- Real PostgreSQL upgrade from `0012` to `0013` passed with no schema drift.
+  A disposable PostgreSQL database also passed clean install, downgrade, and
+  re-upgrade through `0013`.
+- Full pre-browser suite passed with `99` backend/agent tests, `27` frontend
+  component tests, a successful static production build, and zero npm audit
+  vulnerabilities.
+- Playwright passed all `8` workflow executions across desktop and mobile
+  Chromium.
+
+Activation boundary:
+
+- Hosted password-reset email requires approved SMTP credentials and the
+  deployed Cloudflare Settings URL. The application safely records retrying or
+  failed delivery state when those values are absent; no email provider or paid
+  service is provisioned automatically.
+- Optional MFA, invitation acceptance, recovery codes, enrollment/PDF browser
+  workflows, and automated accessibility checks remain subsequent checkpoints.
+
 ## Completion Rules
 
 A checkpoint is complete only when:

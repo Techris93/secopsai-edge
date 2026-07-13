@@ -209,6 +209,38 @@ class PasswordChangeRequest(BaseModel):
     new_password: str = Field(min_length=12, max_length=512)
 
 
+class PasswordResetRequest(BaseModel):
+    email: str = Field(min_length=3, max_length=255)
+
+
+class PasswordResetConfirmRequest(BaseModel):
+    token: str = Field(min_length=32, max_length=512)
+    new_password: str = Field(min_length=12, max_length=512)
+
+
+class AccountAccessRunResponse(BaseModel):
+    processed: int
+    delivered: int
+    retrying: int
+    failed: int
+
+
+class AccountAccessDeliveryOut(BaseModel):
+    id: str
+    user_id: str
+    email: str
+    purpose: str
+    status: str
+    attempts: int
+    max_attempts: int
+    expires_at: datetime
+    next_attempt_at: datetime
+    last_attempt_at: datetime | None = None
+    delivered_at: datetime | None = None
+    detail: str | None = None
+    created_at: datetime
+
+
 class DashboardSessionResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"

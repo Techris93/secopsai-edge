@@ -40,6 +40,7 @@ def main() -> int:
         payload = {
             "schedules": post(api_url, token, "/api/v1/scan-schedules/run-due"),
             "notifications": post(api_url, token, "/api/v1/notification-deliveries/run-due"),
+            "account_access": post(api_url, token, "/api/v1/account-access/run-due"),
         }
     except urllib.error.HTTPError as exc:
         print(f"Scheduler request failed with HTTP {exc.code}: {exc.read().decode('utf-8')}", file=sys.stderr)

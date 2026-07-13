@@ -42,3 +42,29 @@ def test_production_configuration_accepts_explicit_hardened_values() -> None:
     )
 
     hardened.validate()
+
+
+def test_production_smtp_requires_a_secure_reset_url() -> None:
+    base = replace(
+        Settings(),
+        environment="production",
+        admin_token="a" * 48,
+        token_secret="b" * 48,
+        webhook_signing_secret="c" * 48,
+        auto_create_tables=False,
+        cors_origins=["https://edge.secopsai.dev"],
+    )
+    with pytest.raises(RuntimeError, match="DASHBOARD_RESET_URL is required"):
+        replace(base, smtp_host="smtp.example.test", dashboard_reset_url=None)
+    with pytest.raises(RuntimeError, match="must be an HTTPS URL"):
+        replace(
+            base,
+            smtp_host="smtp.example.test",
+            dashboard_reset_url="http://edge.secopsai.dev/settings",
+        )
+
+    replace(
+        base,
+        smtp_host="smtp.example.test",
+        dashboard_reset_url="https://edge.secopsai.dev/settings",
+    ).validate()

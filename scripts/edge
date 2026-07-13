@@ -305,6 +305,8 @@ setup() {
   if [ "$sensor_only" = "no" ]; then
     info "Installing web dependencies"
     (cd "$ROOT_DIR/web" && npm install)
+    info "Installing Chromium for browser workflow tests"
+    (cd "$ROOT_DIR/web" && npx playwright install chromium)
   fi
   info "Setup complete"
 }
@@ -857,6 +859,9 @@ run_tests() {
 
   info "Building dashboard"
   (cd "$ROOT_DIR/web" && npm run build)
+
+  info "Running browser workflows"
+  (cd "$ROOT_DIR/web" && npm run test:e2e:built)
 
   info "Checking frontend audit"
   (cd "$ROOT_DIR/web" && npm audit --audit-level=moderate)

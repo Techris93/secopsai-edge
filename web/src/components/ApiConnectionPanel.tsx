@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckCircle2, KeyRound, LogOut, PlugZap } from "lucide-react";
+import { CheckCircle2, KeyRound, LogOut, Mail, PlugZap, ShieldCheck } from "lucide-react";
 import { FormEvent, useEffect, useState } from "react";
 import {
   apiBaseUrl,
@@ -9,7 +9,9 @@ import {
   hasDashboardSession,
   loginDashboard,
   loginDashboardUser,
-  logoutDashboard
+  logoutDashboard,
+  requestDashboardPasswordReset,
+  confirmDashboardPasswordReset
 } from "@/lib/api";
 
 export function ApiConnectionPanel() {
@@ -20,8 +22,16 @@ export function ApiConnectionPanel() {
   const [identity, setIdentity] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [recoveryToken, setRecoveryToken] = useState("");
+  const [recoveryPasswords, setRecoveryPasswords] = useState({ next: "", confirm: "" });
 
   useEffect(() => {
+    const fragment = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+    const token = fragment.get("reset_token") ?? "";
+    if (token) {
+      setRecoveryToken(token);
+      window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}`);
+    }
     const session = hasDashboardSession();
     setConnected(session);
     if (session) {
@@ -30,6 +40,49 @@ export function ApiConnectionPanel() {
         .catch(() => setIdentity(null));
     }
   }, []);
+
+  async function requestReset() {
+    if (!email.trim()) {
+      setStatus("Enter your operator email before requesting a reset link.");
+      return;
+    }
+    setBusy(true);
+    setStatus(null);
+    try {
+      await requestDashboardPasswordReset(email.trim());
+      setStatus("If the account exists, a one-time reset link will arrive after the next delivery run.");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Unable to request password reset");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function confirmReset(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (recoveryPasswords.next.length < 12) {
+      setStatus("Use at least 12 characters for the new password.");
+      return;
+    }
+    if (recoveryPasswords.next !== recoveryPasswords.confirm) {
+      setStatus("The password confirmation does not match.");
+      return;
+    }
+    setBusy(true);
+    setStatus(null);
+    try {
+      await confirmDashboardPasswordReset(recoveryToken, recoveryPasswords.next);
+      setRecoveryToken("");
+      setRecoveryPasswords({ next: "", confirm: "" });
+      setConnected(false);
+      setIdentity(null);
+      setStatus("Password reset complete. Connect with your email and new password.");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Unable to reset password");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -99,6 +152,40 @@ export function ApiConnectionPanel() {
         </dd>
       </dl>
 
+      {recoveryToken ? (
+        <form className="mt-4 rounded-md border border-sea/30 bg-sea/5 p-3" onSubmit={confirmReset}>
+          <div className="flex items-center gap-2 text-sm font-semibold text-ink">
+            <ShieldCheck size={17} className="text-sea" aria-hidden="true" />
+            Complete password reset
+          </div>
+          <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <input
+              className="focus-ring min-w-0 rounded-md border border-line bg-white px-3 py-2 text-sm"
+              type="password"
+              autoComplete="new-password"
+              minLength={12}
+              placeholder="New password (12+ characters)"
+              value={recoveryPasswords.next}
+              onChange={(event) => setRecoveryPasswords({ ...recoveryPasswords, next: event.target.value })}
+              required
+            />
+            <input
+              className="focus-ring min-w-0 rounded-md border border-line bg-white px-3 py-2 text-sm"
+              type="password"
+              autoComplete="new-password"
+              minLength={12}
+              placeholder="Confirm new password"
+              value={recoveryPasswords.confirm}
+              onChange={(event) => setRecoveryPasswords({ ...recoveryPasswords, confirm: event.target.value })}
+              required
+            />
+          </div>
+          <button className="ButtonSecondary mt-3" disabled={busy} type="submit">
+            <KeyRound size={16} aria-hidden="true" />Reset password
+          </button>
+        </form>
+      ) : null}
+
       <form className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_auto]" onSubmit={onSubmit}>
         <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
           <input
@@ -134,6 +221,16 @@ export function ApiConnectionPanel() {
           {busy ? "Connecting" : "Connect"}
         </button>
       </form>
+
+      <button
+        className="focus-ring mt-3 inline-flex items-center gap-2 text-sm font-medium text-sea disabled:cursor-not-allowed disabled:text-zinc-400"
+        disabled={busy || email.trim().length === 0}
+        onClick={() => void requestReset()}
+        type="button"
+      >
+        <Mail size={16} aria-hidden="true" />
+        Send password reset
+      </button>
 
       <details className="mt-4 rounded-md border border-line bg-paper p-3">
         <summary className="cursor-pointer text-sm font-semibold text-ink">Legacy admin token recovery</summary>
@@ -177,7 +274,7 @@ export function ApiConnectionPanel() {
         Disconnect
       </button>
 
-      {status ? <p className="mt-3 text-sm text-zinc-600">{status}</p> : null}
+      {status ? <p className="mt-3 text-sm text-zinc-600" role="status">{status}</p> : null}
     </section>
   );
 }

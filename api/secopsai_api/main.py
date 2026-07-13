@@ -14,6 +14,12 @@ from sqlalchemy.orm import Session
 
 from secopsai_api.ai import build_report
 from secopsai_api import __version__
+from secopsai_api.account_recovery import (
+    attempt_account_access_delivery,
+    consume_password_reset,
+    process_due_account_access_deliveries,
+    queue_password_reset,
+)
 from secopsai_api.audit import write_audit
 from secopsai_api.baselines import (
     ALLOWED_FINDING_TYPES,
@@ -27,6 +33,7 @@ from secopsai_api.database import engine, get_db
 from secopsai_api.detection import ingest_scan
 from secopsai_api.models import (
     Asset,
+    AccountAccessToken,
     AssetObservation,
     AuditLog,
     Base,
@@ -80,6 +87,8 @@ from secopsai_api.schemas import (
     NotificationRunResponse,
     NotificationEndpointUpdateRequest,
     NotificationTestResponse,
+    AccountAccessDeliveryOut,
+    AccountAccessRunResponse,
     OrganizationCreateRequest,
     OrganizationOut,
     OrganizationUpdateRequest,
@@ -109,6 +118,8 @@ from secopsai_api.schemas import (
     SiteUpdateRequest,
     AuthMeOut,
     PasswordChangeRequest,
+    PasswordResetConfirmRequest,
+    PasswordResetRequest,
     UserCreateRequest,
     UserOut,
     UserUpdateRequest,
@@ -847,6 +858,57 @@ def login_dashboard_user(payload: DashboardUserLoginRequest, db: Session = Depen
         expires_in=settings.dashboard_session_ttl_seconds,
         user=user_out(user, membership.role, membership.active),
     )
+
+
+@app.post("/api/v1/auth/password-reset/request", status_code=status.HTTP_202_ACCEPTED)
+def request_dashboard_password_reset(
+    payload: PasswordResetRequest,
+    db: Session = Depends(get_db),
+) -> dict[str, str]:
+    email = payload.email.strip().lower()
+    user = db.scalar(select(User).where(func.lower(User.email) == email, User.active.is_(True)))
+    if user is not None:
+        reset = queue_password_reset(db, user, settings)
+        membership = membership_for_user(db, user.id)
+        write_audit(
+            db,
+            "auth.password_reset_requested" if reset is not None else "auth.password_reset_throttled",
+            user_id=user.id,
+            organization_id=membership.organization_id if membership else None,
+            resource_type="user",
+            resource_id=user.id,
+        )
+        db.commit()
+    else:
+        # Keep the response and cryptographic work independent of account
+        # existence; public callers never learn whether an email is registered.
+        hash_secret(f"password-reset:{email}")
+    return {"status": "accepted"}
+
+
+@app.post("/api/v1/auth/password-reset/confirm")
+def confirm_dashboard_password_reset(
+    payload: PasswordResetConfirmRequest,
+    db: Session = Depends(get_db),
+) -> dict[str, str]:
+    user = consume_password_reset(db, payload.token, payload.new_password, settings=settings)
+    if user is None:
+        db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Password reset link is invalid or expired",
+        )
+    membership = membership_for_user(db, user.id)
+    write_audit(
+        db,
+        "auth.password_reset_completed",
+        user_id=user.id,
+        organization_id=membership.organization_id if membership else None,
+        resource_type="user",
+        resource_id=user.id,
+    )
+    db.commit()
+    return {"status": "password_reset"}
 
 
 def account_is_locked(user: User) -> bool:
@@ -2946,6 +3008,109 @@ def run_due_notification_deliveries(
     )
     db.commit()
     return NotificationRunResponse(**result)
+
+
+@app.post(
+    "/api/v1/account-access/run-due",
+    response_model=AccountAccessRunResponse,
+)
+def run_due_account_access_deliveries(
+    auth_context: dict = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> AccountAccessRunResponse:
+    result = process_due_account_access_deliveries(db, settings=settings)
+    write_audit(
+        db,
+        "account_access_delivery.run_due",
+        organization_id=organization_id_from_context(auth_context),
+        resource_type="account_access_token",
+        details=result,
+    )
+    db.commit()
+    return AccountAccessRunResponse(**result)
+
+
+def account_access_delivery_out(row: AccountAccessToken, email: str) -> AccountAccessDeliveryOut:
+    return AccountAccessDeliveryOut(
+        id=row.id,
+        user_id=row.user_id,
+        email=email,
+        purpose=row.purpose,
+        status=row.delivery_status,
+        attempts=row.delivery_attempts,
+        max_attempts=row.max_delivery_attempts,
+        expires_at=row.expires_at,
+        next_attempt_at=row.next_attempt_at,
+        last_attempt_at=row.last_attempt_at,
+        delivered_at=row.delivered_at,
+        detail=row.delivery_detail,
+        created_at=row.created_at,
+    )
+
+
+@app.get(
+    "/api/v1/account-access/deliveries",
+    response_model=list[AccountAccessDeliveryOut],
+)
+def list_account_access_deliveries(
+    limit: int = Query(default=25, ge=1, le=100),
+    auth_context: dict = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> list[AccountAccessDeliveryOut]:
+    organization_id = organization_id_from_context(auth_context)
+    rows = db.execute(
+        select(AccountAccessToken, User.email)
+        .join(User, User.id == AccountAccessToken.user_id)
+        .join(OrganizationMembership, OrganizationMembership.user_id == User.id)
+        .where(OrganizationMembership.organization_id == organization_id)
+        .order_by(AccountAccessToken.created_at.desc())
+        .limit(limit)
+    ).all()
+    return [account_access_delivery_out(row, email) for row, email in rows]
+
+
+@app.post(
+    "/api/v1/account-access/deliveries/{delivery_id}/retry",
+    response_model=AccountAccessDeliveryOut,
+)
+def retry_account_access_delivery(
+    delivery_id: str,
+    auth_context: dict = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> AccountAccessDeliveryOut:
+    organization_id = organization_id_from_context(auth_context)
+    result = db.execute(
+        select(AccountAccessToken, User.email)
+        .join(User, User.id == AccountAccessToken.user_id)
+        .join(OrganizationMembership, OrganizationMembership.user_id == User.id)
+        .where(
+            AccountAccessToken.id == delivery_id,
+            OrganizationMembership.organization_id == organization_id,
+        )
+    ).first()
+    if result is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Account access delivery not found")
+    row, email = result
+    now = utcnow()
+    comparison_now = now if row.expires_at.tzinfo else now.replace(tzinfo=None)
+    if row.used_at is not None or row.expires_at <= comparison_now:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Account access link is expired or already used")
+    row.delivery_status = "queued"
+    row.delivery_attempts = 0
+    row.next_attempt_at = now
+    row.delivery_detail = None
+    attempt_account_access_delivery(db, row, settings=settings)
+    write_audit(
+        db,
+        "account_access_delivery.retried",
+        organization_id=organization_id,
+        user_id=str(auth_context.get("uid")) if auth_context.get("uid") else None,
+        resource_type="account_access_token",
+        resource_id=row.id,
+        details={"status": row.delivery_status},
+    )
+    db.commit()
+    return account_access_delivery_out(row, email)
 
 
 @app.post(

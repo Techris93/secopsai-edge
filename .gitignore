@@ -11,6 +11,8 @@ work/
 outputs/
 output/
 .playwright-cli/
+playwright-report/
+test-results/
 .venv/
 __pycache__/
 .pytest_cache/
