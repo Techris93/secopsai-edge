@@ -83,8 +83,7 @@ Wi-Fi collection is optional and often needs a reviewed `CAP_NET_ADMIN`
 configuration. The installer does not grant it or run the worker as root. See
 [Wireless Inventory Support](wireless-support.md) before enabling Wi-Fi jobs.
 
-Use [`v0.3.6`](https://github.com/Techris93/secopsai-edge/releases/tag/v0.3.6)
-with `--version 0.3.6` to pin this pilot release. Use `--upgrade` for an existing
+Use `--version 0.3.7` to pin this pilot build. Use `--upgrade` for an existing
 installation; the bootstrap preserves credential files, keeps the previous
 installation as `.previous`, and restores it automatically if the new
 installer fails.

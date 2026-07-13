@@ -1,10 +1,16 @@
 from __future__ import annotations
 
 import json
+import socket
 import subprocess
+import sys
 import threading
+import urllib.error
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
+import hosted_health_check  # noqa: E402
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -86,3 +92,36 @@ def test_hosted_health_check_fails_when_readiness_is_degraded(tmp_path: Path) ->
     result = run_check(tmp_path, ready=False)
     assert result.returncode == 1
     assert json.loads(result.stdout)["ok"] is False
+
+
+def test_hosted_health_check_classifies_dns_failures_without_exposing_reason(monkeypatch) -> None:
+    def raise_dns_error(*_args, **_kwargs):
+        raise urllib.error.URLError(socket.gaierror(-2, "name or service not known"))
+
+    monkeypatch.setattr(hosted_health_check.urllib.request, "urlopen", raise_dns_error)
+    result = hosted_health_check.check("https://dashboard.example.test")
+
+    assert result["ok"] is False
+    assert result["error_code"] == "dns_resolution_failed"
+    assert "reason" not in result
+
+
+def test_hosted_health_check_classifies_http_errors_without_reading_body(monkeypatch) -> None:
+    error = urllib.error.HTTPError(
+        "https://dashboard.example.test",
+        503,
+        "unavailable",
+        hdrs=None,
+        fp=None,
+    )
+
+    def raise_http_error(*_args, **_kwargs):
+        raise error
+
+    monkeypatch.setattr(hosted_health_check.urllib.request, "urlopen", raise_http_error)
+    result = hosted_health_check.check("https://dashboard.example.test")
+
+    assert result["ok"] is False
+    assert result["error_code"] == "http_error"
+    assert result["status_code"] == 503
+    assert "body" not in result
