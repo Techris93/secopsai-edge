@@ -2501,3 +2501,58 @@ Next checkpoint:
 - Continue the code-completable pilot-hardening audit with the highest-impact
   remaining gap, while keeping the external acceptance matrix separate from
   implementation claims.
+
+## Checkpoint 044 - Safe OpenClaw Edge Operator Tools
+
+Status: complete
+
+Scope:
+
+- Give the OpenClaw local automation bridge useful Edge control-plane
+  visibility without bypassing scan authorization or service safeguards.
+- Keep direct Edge mutations outside this read-only checkpoint.
+- Record the configuration, safety boundary, and contract evidence.
+
+Completed changes:
+
+- Added configurable `edgePath` support to the OpenClaw plugin, defaulting to
+  `~/secopsai-edge`.
+- Added `secopsai_edge_worker_status`, which reads local launchd/systemd worker
+  state without starting or stopping the service.
+- Added `secopsai_edge_scan_preview`, which accepts a private IPv4 CIDR and
+  prints Edge's safe Nmap plan without running a scan or uploading telemetry.
+- Added structured `execFileSync` execution with a bounded timeout and output
+  buffer for the Edge helper, plus contract tests using a fake Edge install.
+- Updated the platform roadmap and plugin operator documentation.
+
+Evidence:
+
+- OpenClaw PR #3 merged to `master` as `4135856`; `npm test` passed with the
+  TypeScript build and both plugin contract tests.
+- The Edge worker status command was exercised on this host and reported the
+  expected non-running service state without mutating it.
+- The Edge repository post-merge CI for checkpoint 043 passed all `28` checks;
+  this checkpoint changes documentation only in Edge and will use the same
+  repository gate before merge.
+
+Safety boundary:
+
+- The plugin does not expose Edge scan execution, service start/stop, token
+  rotation, or credential output in this checkpoint.
+- The CIDR schema narrows inputs to RFC1918 private IPv4 ranges, while the Edge
+  agent remains the final authority for prefix and host-count limits.
+- The Edge helper is invoked with structured argv, a 30-second timeout, and a
+  1 MiB output cap; no shell command string is constructed.
+
+Acceptance boundary:
+
+- This checkpoint improves local automation ergonomics but does not close the
+  external paid-infrastructure, notification, second-owner recovery,
+  fresh-host soak, wireless hardware, or independent dashboard-availability
+  gates from checkpoint 040.
+
+Next checkpoint:
+
+- Reassess whether approval-gated Edge scan/report actions are required for the
+  pilot, then continue the external operator acceptance matrix rather than
+  treating read-only automation as customer readiness.
