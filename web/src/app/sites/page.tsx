@@ -1,22 +1,31 @@
 "use client";
 
-import { KeyRound, MapPinned, Pencil, Plus, PowerOff, RotateCw, Save } from "lucide-react";
+import { Copy, KeyRound, MapPinned, Pencil, Plus, PowerOff, Save, UserPlus, X } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { DataStatePanel } from "@/components/DataStatePanel";
 import { LiveState } from "@/components/LiveState";
 import { PageHeader } from "@/components/PageHeader";
 import {
+  apiBaseUrl,
   createSite,
+  createSensorEnrollment,
   disableSensor,
   enableSensor,
   fetchDashboardData,
   rotateSensorToken,
+  revokeSensorEnrollment,
   updateSensor,
   updateSite
 } from "@/lib/api";
 import { timeAgo } from "@/lib/format";
 import type { DashboardDataMode } from "@/lib/api";
-import type { DashboardData, Sensor, Site } from "@/lib/types";
+import type {
+  DashboardData,
+  Sensor,
+  SensorEnrollment,
+  SensorEnrollmentSecret,
+  Site
+} from "@/lib/types";
 
 export default function SitesPage() {
   const [data, setData] = useState<DashboardData | null>(null);
@@ -26,6 +35,7 @@ export default function SitesPage() {
   const [siteName, setSiteName] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [rotatedToken, setRotatedToken] = useState<{ sensorId: string; token: string } | null>(null);
+  const [enrollment, setEnrollment] = useState<SensorEnrollmentSecret | null>(null);
 
   async function load() {
     const result = await fetchDashboardData();
@@ -53,6 +63,13 @@ export default function SitesPage() {
   }
 
   const sites = data?.sites ?? [];
+  const enrollmentsBySite = useMemo(() => {
+    const grouped = new Map<string, SensorEnrollment[]>();
+    for (const item of data?.sensorEnrollments ?? []) {
+      grouped.set(item.site_id, [...(grouped.get(item.site_id) ?? []), item]);
+    }
+    return grouped;
+  }, [data]);
   const sensorsBySite = useMemo(() => {
     const grouped = new Map<string, Sensor[]>();
     for (const sensor of data?.sensors ?? []) {
@@ -102,6 +119,10 @@ export default function SitesPage() {
               <p className="mt-2 text-xs text-amber-800">Update the local sensor credentials before restarting the worker.</p>
             </div>
           ) : null}
+
+          {enrollment ? (
+            <EnrollmentSecretPanel enrollment={enrollment} onClose={() => setEnrollment(null)} />
+          ) : null}
         </section>
 
         <section className="rounded-lg border border-line bg-white shadow-panel">
@@ -115,9 +136,11 @@ export default function SitesPage() {
                 live={live}
                 site={site}
                 sensors={sensorsBySite.get(site.id) ?? []}
+                enrollments={enrollmentsBySite.get(site.id) ?? []}
                 onChanged={load}
                 onMessage={setMessage}
                 onToken={setRotatedToken}
+                onEnrollment={setEnrollment}
               />
             ))}
           </div>
@@ -130,17 +153,21 @@ export default function SitesPage() {
 function SiteRow({
   site,
   sensors,
+  enrollments,
   live,
   onChanged,
   onMessage,
-  onToken
+  onToken,
+  onEnrollment
 }: {
   site: Site;
   sensors: Sensor[];
+  enrollments: SensorEnrollment[];
   live: boolean;
   onChanged: () => Promise<void>;
   onMessage: (value: string) => void;
   onToken: (value: { sensorId: string; token: string } | null) => void;
+  onEnrollment: (value: SensorEnrollmentSecret | null) => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(site.name);
@@ -153,6 +180,27 @@ function SiteRow({
       await onChanged();
     } catch (error) {
       onMessage(error instanceof Error ? error.message : "Unable to update site");
+    }
+  }
+
+  async function enrollSensor() {
+    try {
+      const created = await createSensorEnrollment(site.id, `${site.name} sensor`);
+      onEnrollment(created);
+      onMessage("One-time sensor enrollment created. It expires in 30 minutes.");
+      await onChanged();
+    } catch (error) {
+      onMessage(error instanceof Error ? error.message : "Unable to create sensor enrollment");
+    }
+  }
+
+  async function revokeEnrollment(enrollmentId: string) {
+    try {
+      await revokeSensorEnrollment(enrollmentId);
+      onMessage("Sensor enrollment revoked");
+      await onChanged();
+    } catch (error) {
+      onMessage(error instanceof Error ? error.message : "Unable to revoke sensor enrollment");
     }
   }
 
@@ -175,6 +223,10 @@ function SiteRow({
           <p className="mt-1 text-sm text-zinc-500">Created {timeAgo(site.created_at)}</p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <button className="ButtonSecondary" disabled={!live} onClick={() => void enrollSensor()} type="button">
+            <UserPlus size={16} aria-hidden="true" />
+            Enroll sensor
+          </button>
           {editing ? (
             <button className="ButtonSecondary" disabled={!live} onClick={saveSite} type="button">
               <Save size={16} aria-hidden="true" />
@@ -188,6 +240,22 @@ function SiteRow({
           )}
         </div>
       </div>
+      {enrollments.some((item) => item.state === "active") ? (
+        <div className="mt-4 rounded-md border border-line bg-white p-3">
+          <p className="text-xs font-semibold uppercase text-zinc-500">Pending enrollment</p>
+          {enrollments.filter((item) => item.state === "active").map((item) => (
+            <div key={item.id} className="mt-2 flex flex-col gap-2 text-sm sm:flex-row sm:items-center sm:justify-between">
+              <span>
+                <strong className="text-ink">{item.label}</strong>{" "}
+                <span className="text-zinc-500">expires {timeAgo(item.expires_at)}</span>
+              </span>
+              <button className="ButtonSecondary" type="button" disabled={!live} onClick={() => void revokeEnrollment(item.id)}>
+                <X size={15} aria-hidden="true" />Revoke
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : null}
       <div className="mt-4 grid gap-3">
         {sensors.map((sensor) => (
           <SensorRow
@@ -300,6 +368,55 @@ function SensorRow({
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+function shellQuote(value: string): string {
+  return `'${value.replaceAll("'", `'"'"'`)}'`;
+}
+
+function EnrollmentSecretPanel({
+  enrollment,
+  onClose
+}: {
+  enrollment: SensorEnrollmentSecret;
+  onClose: () => void;
+}) {
+  const sensorName = `${enrollment.site_name} Edge Sensor`;
+  const command = `./scripts/install-secopsai-edge.sh --cloud --api-url ${shellQuote(apiBaseUrl())} --enrollment-token ${shellQuote(enrollment.enrollment_token)} --sensor-name ${shellQuote(sensorName)}`;
+  const [copied, setCopied] = useState(false);
+
+  async function copyCommand() {
+    await navigator.clipboard.writeText(command);
+    setCopied(true);
+  }
+
+  return (
+    <div className="mt-4 rounded-md border border-teal-200 bg-teal-50 p-3">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-ink">One-time installer</p>
+          <p className="mt-1 text-xs text-zinc-600">
+            Expires {new Date(enrollment.expires_at).toLocaleString()}. The secret is shown only now.
+          </p>
+        </div>
+        <button
+          className="focus-ring grid h-8 w-8 place-items-center rounded-md border border-line bg-white"
+          type="button"
+          aria-label="Dismiss enrollment secret"
+          onClick={onClose}
+        >
+          <X size={15} aria-hidden="true" />
+        </button>
+      </div>
+      <code className="mt-3 block max-h-36 overflow-auto whitespace-pre-wrap break-all rounded-md bg-zinc-950 p-3 font-mono text-xs leading-5 text-zinc-100">
+        {command}
+      </code>
+      <button className="ButtonSecondary mt-3" type="button" onClick={() => void copyCommand()}>
+        <Copy size={16} aria-hidden="true" />
+        {copied ? "Copied" : "Copy install command"}
+      </button>
     </div>
   );
 }

@@ -128,6 +128,7 @@ export const sampleData: DashboardData = {
     }
   ],
   scanJobs: [],
+  sensorEnrollments: [],
   schedules: [],
   notifications: [],
   onboarding: {

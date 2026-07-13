@@ -37,6 +37,7 @@ Core tables:
 - `organization_memberships`
 - `sites`
 - `sensors`
+- `sensor_enrollments`
 - `scan_runs`
 - `assets`
 - `asset_observations`

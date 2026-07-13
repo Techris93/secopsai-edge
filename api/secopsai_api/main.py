@@ -40,6 +40,7 @@ from secopsai_api.models import (
     ScanRun,
     ScanSchedule,
     Sensor,
+    SensorEnrollment,
     Service,
     Site,
     User,
@@ -91,6 +92,10 @@ from secopsai_api.schemas import (
     SensorOut,
     SensorRegisterRequest,
     SensorRegisterResponse,
+    SensorEnrollRequest,
+    SensorEnrollmentCreateRequest,
+    SensorEnrollmentCreateResponse,
+    SensorEnrollmentOut,
     SiteCreateRequest,
     SiteOut,
     SiteUpdateRequest,
@@ -652,6 +657,34 @@ def sensor_out(db: Session, sensor: Sensor) -> SensorOut:
         created_at=sensor.created_at,
         last_seen_at=sensor.last_seen_at,
         current_job=current_sensor_job(db, sensor),
+    )
+
+
+def sensor_enrollment_out(db: Session, enrollment: SensorEnrollment) -> SensorEnrollmentOut:
+    site = db.get(Site, enrollment.site_id)
+    now = utcnow()
+    expires_at = enrollment.expires_at
+    if expires_at.tzinfo is None:
+        now = now.replace(tzinfo=None)
+    if enrollment.revoked_at is not None:
+        state = "revoked"
+    elif enrollment.used_at is not None:
+        state = "used"
+    elif expires_at <= now:
+        state = "expired"
+    else:
+        state = "active"
+    return SensorEnrollmentOut(
+        id=enrollment.id,
+        organization_id=enrollment.organization_id,
+        site_id=enrollment.site_id,
+        site_name=site.name if site else "Unknown site",
+        label=enrollment.label,
+        state=state,
+        expires_at=enrollment.expires_at,
+        used_at=enrollment.used_at,
+        revoked_at=enrollment.revoked_at,
+        created_at=enrollment.created_at,
     )
 
 
@@ -1242,6 +1275,137 @@ def register_sensor(
     )
     db.commit()
     return SensorRegisterResponse(sensor_id=sensor.id, sensor_token=token, site_id=site.id)
+
+
+@app.get("/api/v1/sensor-enrollments", response_model=list[SensorEnrollmentOut])
+def list_sensor_enrollments(
+    site_id: str | None = None,
+    auth_context: dict = Depends(require_operator),
+    db: Session = Depends(get_db),
+) -> list[SensorEnrollmentOut]:
+    organization_id = organization_id_from_context(auth_context)
+    query = (
+        select(SensorEnrollment)
+        .where(SensorEnrollment.organization_id == organization_id)
+        .order_by(SensorEnrollment.created_at.desc())
+        .limit(100)
+    )
+    if site_id:
+        get_site_or_404(db, site_id, organization_id)
+        query = query.where(SensorEnrollment.site_id == site_id)
+    return [sensor_enrollment_out(db, row) for row in db.scalars(query).all()]
+
+
+@app.post("/api/v1/sensor-enrollments", response_model=SensorEnrollmentCreateResponse)
+def create_sensor_enrollment(
+    payload: SensorEnrollmentCreateRequest,
+    auth_context: dict = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> SensorEnrollmentCreateResponse:
+    organization_id = organization_id_from_context(auth_context)
+    get_site_or_404(db, payload.site_id, organization_id)
+    token = generate_sensor_token()
+    enrollment = SensorEnrollment(
+        organization_id=organization_id,
+        site_id=payload.site_id,
+        label=payload.label.strip(),
+        token_hash=hash_secret(token),
+        created_by=str(auth_context.get("uid")) if auth_context.get("uid") else None,
+        expires_at=utcnow() + timedelta(minutes=payload.expires_in_minutes),
+    )
+    db.add(enrollment)
+    db.flush()
+    write_audit(
+        db,
+        "sensor_enrollment.created",
+        user_id=enrollment.created_by,
+        organization_id=organization_id,
+        resource_type="sensor_enrollment",
+        resource_id=enrollment.id,
+        details={"site_id": enrollment.site_id, "expires_at": enrollment.expires_at.isoformat()},
+    )
+    db.commit()
+    db.refresh(enrollment)
+    base = sensor_enrollment_out(db, enrollment)
+    return SensorEnrollmentCreateResponse(**base.model_dump(), enrollment_token=token)
+
+
+@app.delete("/api/v1/sensor-enrollments/{enrollment_id}", response_model=SensorEnrollmentOut)
+def revoke_sensor_enrollment(
+    enrollment_id: str,
+    auth_context: dict = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> SensorEnrollmentOut:
+    organization_id = organization_id_from_context(auth_context)
+    enrollment = db.scalar(
+        select(SensorEnrollment).where(
+            SensorEnrollment.id == enrollment_id,
+            SensorEnrollment.organization_id == organization_id,
+        )
+    )
+    if enrollment is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sensor enrollment not found")
+    if enrollment.used_at is not None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Used enrollment cannot be revoked")
+    enrollment.revoked_at = enrollment.revoked_at or utcnow()
+    write_audit(
+        db,
+        "sensor_enrollment.revoked",
+        user_id=str(auth_context.get("uid")) if auth_context.get("uid") else None,
+        organization_id=organization_id,
+        resource_type="sensor_enrollment",
+        resource_id=enrollment.id,
+    )
+    db.commit()
+    db.refresh(enrollment)
+    return sensor_enrollment_out(db, enrollment)
+
+
+@app.post("/api/v1/sensors/enroll", response_model=SensorRegisterResponse)
+def enroll_sensor(payload: SensorEnrollRequest, db: Session = Depends(get_db)) -> SensorRegisterResponse:
+    enrollment = db.scalar(
+        select(SensorEnrollment)
+        .where(SensorEnrollment.token_hash == hash_secret(payload.enrollment_token))
+        .with_for_update()
+    )
+    now = utcnow()
+    unavailable = enrollment is None
+    if enrollment is not None:
+        expires_at = enrollment.expires_at
+        comparable_now = now.replace(tzinfo=None) if expires_at.tzinfo is None else now
+        unavailable = bool(
+            enrollment.used_at is not None
+            or enrollment.revoked_at is not None
+            or expires_at <= comparable_now
+        )
+    if unavailable or enrollment is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Enrollment token is invalid or unavailable",
+        )
+    site = get_site_or_404(db, enrollment.site_id, enrollment.organization_id)
+    sensor_token = generate_sensor_token()
+    sensor = Sensor(
+        site_id=site.id,
+        name=payload.name.strip(),
+        hostname=payload.hostname.strip() if payload.hostname else None,
+        status="registered",
+        token_hash=hash_secret(sensor_token),
+    )
+    enrollment.used_at = now
+    db.add(sensor)
+    db.flush()
+    write_audit(
+        db,
+        "sensor.enrolled",
+        sensor_id=sensor.id,
+        organization_id=enrollment.organization_id,
+        resource_type="sensor",
+        resource_id=sensor.id,
+        details={"site_id": site.id, "enrollment_id": enrollment.id, "name": sensor.name},
+    )
+    db.commit()
+    return SensorRegisterResponse(sensor_id=sensor.id, sensor_token=sensor_token, site_id=site.id)
 
 
 @app.post("/api/v1/sensors/{sensor_id}/heartbeat")

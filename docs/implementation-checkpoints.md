@@ -945,6 +945,52 @@ Known risks:
 - Billing, plan enforcement, and fleet release rings remain separate commercial
   milestones; they are not implied by workspace isolation.
 
+## Checkpoint 020 - One-Time Sensor Enrollment
+
+Status: complete
+
+Branch:
+
+- Edge repo: `codex/pilot-hardening-foundation`
+
+Completed changes:
+
+- Added workspace/site-scoped sensor enrollments with short expiry, HMAC-only
+  secret storage, single-use consumption under a database row lock, explicit
+  revocation, immutable used/revoked timestamps, and audit events.
+- Added authenticated create/list/revoke enrollment APIs and a public token
+  exchange endpoint that returns only the new sensor credential. List APIs
+  never return the enrollment secret.
+- Added Alembic revision `0010_sensor_enrollments` with organization/site/user
+  ownership and lookup indexes.
+- Added `./scripts/edge cloud enroll <token>` and
+  `./scripts/edge onboard --cloud --enrollment-token <token>`. Cloud installers
+  now accept the one-time token and do not persist it or require a customer to
+  receive the platform administrator token.
+- Added a real `Enroll sensor` action to each site, pending-enrollment state,
+  revoke control, one-time secret panel, and copyable exact installer command.
+- Replaced hand-built registration JSON in the shell helper with structured
+  Python JSON encoding so host/site/sensor names cannot break request syntax.
+
+Validation:
+
+- API tests cover one-time use, HMAC storage, replay denial, foreign-site
+  denial, revocation, expiry state, and sensor-to-site ownership.
+- A frontend interaction test clicks `Enroll sensor` and verifies the
+  generated installer action; shell syntax, frontend suite, TypeScript, and the
+  static Next.js build pass.
+- The full Alembic chain upgraded to `0010_sensor_enrollments`, downgraded to
+  `0009_organizations`, and upgraded again against an isolated PostgreSQL 14
+  cluster with complete cleanup.
+
+Known risks:
+
+- Distribution still assumes the sensor package/repository is already present
+  on the target. A signed downloadable release artifact and update channel are
+  required before broad self-service deployment.
+- Enrollment is deliberately an installation credential, not a general API
+  token; it cannot be refreshed or used for dashboard access.
+
 ## Completion Rules
 
 A checkpoint is complete only when:

@@ -33,12 +33,14 @@ usage() {
 Install SecOpsAI Edge sensor
 
 Usage:
-  bash scripts/install-secopsai-edge.sh --cloud --api-url https://... --admin-token TOKEN
+  bash scripts/install-secopsai-edge.sh --cloud --api-url https://... --enrollment-token TOKEN
 
 Options:
   --cloud              Configure hosted API mode
   --api-url URL        Render/FastAPI URL
   --admin-token TOKEN  API admin token
+  --enrollment-token TOKEN
+                       Short-lived, single-use customer enrollment token (recommended)
   --site-name NAME     Site name for this sensor
   --sensor-name NAME   Sensor display name
   --cidr CIDR          Optional first preview target

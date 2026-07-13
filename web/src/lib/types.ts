@@ -226,6 +226,23 @@ export type Sensor = {
   current_job?: ScanJob | null;
 };
 
+export type SensorEnrollment = {
+  id: string;
+  organization_id: string;
+  site_id: string;
+  site_name: string;
+  label: string;
+  state: "active" | "used" | "expired" | "revoked" | string;
+  expires_at: string;
+  used_at?: string | null;
+  revoked_at?: string | null;
+  created_at: string;
+};
+
+export type SensorEnrollmentSecret = SensorEnrollment & {
+  enrollment_token: string;
+};
+
 export type NotificationEndpoint = {
   id: string;
   site_id?: string | null;
@@ -276,6 +293,7 @@ export type DashboardData = {
   reports: Report[];
   scanJobs: ScanJob[];
   sensors: Sensor[];
+  sensorEnrollments: SensorEnrollment[];
   schedules: ScanSchedule[];
   notifications: NotificationEndpoint[];
   onboarding: OnboardingStatus | null;

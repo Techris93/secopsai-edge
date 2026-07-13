@@ -32,7 +32,7 @@ The easiest hosted pilot path is:
 Or use the installer wrapper:
 
 ```bash
-./scripts/install-secopsai-edge.sh --cloud --api-url https://<your-api>.onrender.com --admin-token <admin-token>
+./scripts/install-secopsai-edge.sh --cloud --api-url https://<your-api>.onrender.com --enrollment-token <one-time-token>
 ```
 
 The local development path is:

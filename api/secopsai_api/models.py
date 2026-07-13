@@ -72,6 +72,25 @@ class Sensor(Base):
     site: Mapped[Site] = relationship(back_populates="sensors")
 
 
+class SensorEnrollment(Base):
+    __tablename__ = "sensor_enrollments"
+    __table_args__ = (
+        Index("ix_sensor_enrollments_org_created", "organization_id", "created_at"),
+        Index("ix_sensor_enrollments_token_hash", "token_hash", unique=True),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), nullable=False)
+    site_id: Mapped[str] = mapped_column(ForeignKey("sites.id"), nullable=False)
+    label: Mapped[str] = mapped_column(String(160), nullable=False)
+    token_hash: Mapped[str] = mapped_column(String(128), nullable=False)
+    created_by: Mapped[str | None] = mapped_column(ForeignKey("users.id"))
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
 class ScanRun(Base):
     __tablename__ = "scan_runs"
 

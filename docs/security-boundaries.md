@@ -32,6 +32,13 @@ Dashboard auth should use a short-lived browser session created from a dashboard
 server-side admin token remains available for automation, cron, Core sync, and emergency recovery.
 Sensor tokens are separate from dashboard auth and can be rotated from the Sites page.
 
+Customer installs use random, HMAC-stored sensor enrollment tokens scoped to
+one organization and one site. Enrollments expire after 30 minutes by default,
+are consumed under a database row lock, and may be revoked before use. The
+plaintext enrollment token appears only in the creation response and is never
+stored in the dashboard or returned by list APIs. The installer persists only
+the exchanged sensor token.
+
 Dashboard bootstrap passwords must contain at least 12 characters. Repeated failures are stored on the user record and lock the account temporarily after five attempts by default. Lockouts and blocked attempts are audit logged. Mutation endpoints explicitly require an `owner` or `admin` role; viewers can inspect their assigned workspace but cannot change it. User sessions carry a server-validated generation number and active workspace claim. The API rechecks membership on every request, so logout, password reset/change, role change, membership disablement, or workspace removal immediately invalidates old access. Owner membership changes require an owner. The API prevents disabling or demoting the final active administrator in each workspace.
 
 Every site belongs to one organization. Lists, guessed resource IDs, filters, report downloads,

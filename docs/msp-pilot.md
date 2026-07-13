@@ -13,7 +13,9 @@
 
 ## Dashboard Workflow
 
-- Sites page: create one site per customer location.
+- Global workspace selector: switch customer context before operating.
+- Sites page: create locations inside that customer workspace and use
+  `Enroll sensor` to issue a short-lived, single-use installer.
 - Schedules page: set per-site daily or weekly scans.
 - Findings page: filter by site, severity, and status.
 - Reports page: generate per-site reports.

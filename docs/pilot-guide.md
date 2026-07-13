@@ -15,7 +15,8 @@ SecOpsAI Edge discovers internal network assets, records service exposure, monit
 
 1. Connect the dashboard to the API from Settings and confirm it shows `Live API data`.
 2. Create or select a site in the dashboard.
-3. Install and onboard the local sensor.
+3. Click `Enroll sensor` for the target site, copy the one-time installer, and
+   run it on the authorized MacBook/Raspberry Pi.
 4. Confirm the worker is online.
 5. Queue a scan or configure a schedule.
 6. Review Assets, Wi-Fi, and Findings.
@@ -71,5 +72,10 @@ Sensitive evidence fields such as MAC address, BSSID, and hostnames are redacted
 Rotate a sensor token from the Sites page when credentials are lost or leaked. After rotating, update `.cloud-sensor.env` on the sensor and restart the worker.
 
 Disable retired sensors from the Sites page. Queued jobs for disabled sensors are canceled.
+
+New sensor installs use 30-minute, single-use enrollment tokens created in the
+active workspace. Revoke an unused enrollment from Sites if the command was
+sent to the wrong person. Enrollment secrets are never recoverable from the API
+after the creation response; create a replacement instead.
 
 For a support-safe operational snapshot, run `./scripts/edge support-bundle --cloud` or copy the command from Settings. Review the generated file before sharing because local paths and authorized network ranges can remain visible.

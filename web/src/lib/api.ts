@@ -16,6 +16,8 @@ import type {
   ScanJob,
   ScanSchedule,
   Sensor,
+  SensorEnrollment,
+  SensorEnrollmentSecret,
   Site,
   User,
   WifiNetwork
@@ -165,7 +167,7 @@ export function apiBaseUrl(): string {
 
 export async function fetchDashboardData(): Promise<ApiResult<DashboardData>> {
   try {
-    const [sites, assets, wifiNetworks, baselines, findings, reports, scanJobs, sensors, schedules, notifications, onboarding] =
+    const [sites, assets, wifiNetworks, baselines, findings, reports, scanJobs, sensors, sensorEnrollments, schedules, notifications, onboarding] =
       await Promise.all([
         requestJson<Site[]>("/api/v1/sites"),
         requestJson<Asset[]>("/api/v1/assets"),
@@ -175,12 +177,13 @@ export async function fetchDashboardData(): Promise<ApiResult<DashboardData>> {
         requestJson<Report[]>("/api/v1/reports"),
         requestJson<ScanJob[]>("/api/v1/scan-jobs"),
         requestJson<Sensor[]>("/api/v1/sensors"),
+        requestJson<SensorEnrollment[]>("/api/v1/sensor-enrollments"),
         requestJson<ScanSchedule[]>("/api/v1/scan-schedules"),
         requestJson<NotificationEndpoint[]>("/api/v1/notification-endpoints"),
         requestJson<OnboardingStatus>("/api/v1/onboarding/status")
       ]);
     return {
-      data: { sites, assets, wifiNetworks, baselines, findings, reports, scanJobs, sensors, schedules, notifications, onboarding },
+      data: { sites, assets, wifiNetworks, baselines, findings, reports, scanJobs, sensors, sensorEnrollments, schedules, notifications, onboarding },
       live: true,
       mode: "live"
     };
@@ -401,6 +404,19 @@ export async function updateSensor(sensorId: string, payload: { name?: string; h
   return requestJson<Sensor>(`/api/v1/sensors/${sensorId}`, {
     method: "PATCH",
     body: JSON.stringify(payload)
+  });
+}
+
+export async function createSensorEnrollment(siteId: string, label: string): Promise<SensorEnrollmentSecret> {
+  return requestJson<SensorEnrollmentSecret>("/api/v1/sensor-enrollments", {
+    method: "POST",
+    body: JSON.stringify({ site_id: siteId, label, expires_in_minutes: 30 })
+  });
+}
+
+export async function revokeSensorEnrollment(enrollmentId: string): Promise<SensorEnrollment> {
+  return requestJson<SensorEnrollment>(`/api/v1/sensor-enrollments/${enrollmentId}`, {
+    method: "DELETE"
   });
 }
 

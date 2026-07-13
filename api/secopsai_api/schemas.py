@@ -74,6 +74,35 @@ class SensorRegisterResponse(BaseModel):
     site_id: str
 
 
+class SensorEnrollRequest(BaseModel):
+    enrollment_token: str = Field(min_length=32, max_length=512)
+    name: str = Field(min_length=1, max_length=160)
+    hostname: str | None = Field(default=None, max_length=255)
+
+
+class SensorEnrollmentCreateRequest(BaseModel):
+    site_id: str
+    label: str = Field(default="New sensor", min_length=1, max_length=160)
+    expires_in_minutes: int = Field(default=30, ge=5, le=1440)
+
+
+class SensorEnrollmentOut(BaseModel):
+    id: str
+    organization_id: str
+    site_id: str
+    site_name: str
+    label: str
+    state: str
+    expires_at: datetime
+    used_at: datetime | None = None
+    revoked_at: datetime | None = None
+    created_at: datetime
+
+
+class SensorEnrollmentCreateResponse(SensorEnrollmentOut):
+    enrollment_token: str
+
+
 class SiteCreateRequest(BaseModel):
     name: str = Field(min_length=1, max_length=160)
 

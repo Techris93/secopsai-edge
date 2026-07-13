@@ -36,7 +36,7 @@ SecOpsAI Edge helper
 
 Usage:
   ./scripts/edge setup                 Install local Python and web dependencies
-  ./scripts/edge onboard --cloud       Guided cloud setup, sensor registration, and worker setup
+  ./scripts/edge onboard --cloud       Guided cloud setup, sensor enrollment, and worker setup
   ./scripts/edge dev                   Start Postgres, migrate DB, API, and dashboard
   ./scripts/edge db                    Start Postgres only
   ./scripts/edge api                   Start the FastAPI backend only
@@ -63,6 +63,7 @@ Usage:
                                       Manage automatic Edge-to-Core synchronization
   ./scripts/edge cloud configure <url> Save hosted Render API URL
   ./scripts/edge cloud register        Register this sensor against the hosted API
+  ./scripts/edge cloud enroll <token>  Use a one-time workspace enrollment token
   ./scripts/edge test                  Run backend, frontend, build, and audit checks
   ./scripts/edge support-bundle [--cloud]
                                       Create a redacted diagnostics bundle for support
@@ -292,6 +293,7 @@ onboard() {
   profile="local"
   target_api_url=""
   target_admin_token=""
+  enrollment_token=""
   site_name="Default Site"
   sensor_name="$(hostname) Edge Sensor"
   preview_cidr=""
@@ -310,6 +312,10 @@ onboard() {
       --admin-token)
         shift || true
         target_admin_token="${1:-}"
+        ;;
+      --enrollment-token)
+        shift || true
+        enrollment_token="${1:-}"
         ;;
       --site-name)
         shift || true
@@ -345,7 +351,7 @@ onboard() {
     if [ -z "$target_api_url" ]; then
       target_api_url="$(prompt_default "Cloud API URL" "${SECOPSAI_CLOUD_API_URL:-https://secopsai-edge-api.onrender.com}")"
     fi
-    if [ -z "$target_admin_token" ]; then
+    if [ -z "$enrollment_token" ] && [ -z "$target_admin_token" ]; then
       saved="no"
       [ -n "${SECOPSAI_CLOUD_ADMIN_TOKEN:-}" ] && saved="yes"
       entered_token="$(prompt_secret_default "Cloud API admin token" "$saved")"
@@ -355,11 +361,13 @@ onboard() {
         target_admin_token="${SECOPSAI_CLOUD_ADMIN_TOKEN:-}"
       fi
     fi
-    [ -n "$target_admin_token" ] || fail "Cloud API admin token is required."
+    if [ -z "$enrollment_token" ]; then
+      [ -n "$target_admin_token" ] || fail "Cloud API admin token or enrollment token is required."
+    fi
     save_cloud_env "$target_api_url" "$target_admin_token"
     info "Checking cloud API health"
     curl -fsS "${target_api_url%/}/healthz" >/dev/null
-    SECOPSAI_REGISTER_SITE_NAME="$site_name" SECOPSAI_REGISTER_SENSOR_NAME="$sensor_name" register_sensor cloud
+    SECOPSAI_REGISTER_SITE_NAME="$site_name" SECOPSAI_REGISTER_SENSOR_NAME="$sensor_name" register_sensor cloud "$enrollment_token"
   else
     load_env
     target_api_url="${target_api_url:-$(api_url)}"
@@ -446,10 +454,15 @@ dev() {
 
 register_sensor() {
   profile="${1:-local}"
+  enrollment_token="${2:-}"
   ensure_python_env
   if [ "$profile" = "cloud" ]; then
     target_api_url="$(cloud_api_url)"
-    target_admin_token="$(cloud_admin_token)"
+    if [ -z "$enrollment_token" ]; then
+      target_admin_token="$(cloud_admin_token)"
+    else
+      target_admin_token=""
+    fi
     output_file="$CLOUD_SENSOR_ENV_FILE"
   else
     load_env
@@ -461,13 +474,24 @@ register_sensor() {
   hostname_value="$(hostname)"
   sensor_name="${SECOPSAI_REGISTER_SENSOR_NAME:-MacBook Sensor}"
   site_name="${SECOPSAI_REGISTER_SITE_NAME:-Default Site}"
-  info "Registering sensor with API at $target_api_url"
-  response="$(
-    curl -sS -X POST "$target_api_url/api/v1/sensors/register" \
-      -H "Authorization: Bearer $target_admin_token" \
-      -H "Content-Type: application/json" \
-      -d "{\"name\":\"$sensor_name\",\"hostname\":\"$hostname_value\",\"site_name\":\"$site_name\"}"
-  )"
+  if [ -n "$enrollment_token" ]; then
+    info "Enrolling sensor with API at $target_api_url"
+    request_body="$("$PYTHON_BIN" -c 'import json,sys; print(json.dumps({"enrollment_token":sys.argv[1],"name":sys.argv[2],"hostname":sys.argv[3]}))' "$enrollment_token" "$sensor_name" "$hostname_value")"
+    response="$(
+      curl -fsS -X POST "$target_api_url/api/v1/sensors/enroll" \
+        -H "Content-Type: application/json" \
+        --data-binary "$request_body"
+    )"
+  else
+    info "Registering sensor with API at $target_api_url"
+    request_body="$("$PYTHON_BIN" -c 'import json,sys; print(json.dumps({"name":sys.argv[1],"hostname":sys.argv[2],"site_name":sys.argv[3]}))' "$sensor_name" "$hostname_value" "$site_name")"
+    response="$(
+      curl -fsS -X POST "$target_api_url/api/v1/sensors/register" \
+        -H "Authorization: Bearer $target_admin_token" \
+        -H "Content-Type: application/json" \
+        --data-binary "$request_body"
+    )"
+  fi
 
   sensor_id="$(printf "%s" "$response" | "$PYTHON_BIN" -c 'import json,sys; print(json.load(sys.stdin)["sensor_id"])')"
   sensor_token="$(printf "%s" "$response" | "$PYTHON_BIN" -c 'import json,sys; print(json.load(sys.stdin)["sensor_token"])')"
@@ -1356,6 +1380,11 @@ cloud() {
       ;;
     register)
       register_sensor cloud
+      ;;
+    enroll)
+      enrollment_token="${1:-}"
+      [ -n "$enrollment_token" ] || fail "Usage: ./scripts/edge cloud enroll <one-time-token>"
+      register_sensor cloud "$enrollment_token"
       ;;
     status)
       status --cloud
