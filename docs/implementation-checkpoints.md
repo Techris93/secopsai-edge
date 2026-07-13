@@ -1450,6 +1450,83 @@ Known risks:
   visual regression verification remains queued for the next available browser
   session.
 
+## Checkpoint 029 - Client-Ready PDF Reports
+
+Status: complete
+
+Branches, merge, and release:
+
+- Edge implementation PR: `#10` (`codex/pdf-report-export`)
+- Edge merge commit: `ee5b21d7d3684f7627ffad0b996f28be69a375e7`
+- Published Edge release: `v0.2.5`
+- Release workflow: `29230621669`
+
+Completed changes:
+
+- Added authenticated, workspace-scoped A4 PDF export at
+  `GET /api/v1/reports/{report_id}/export.pdf` while retaining HTML and browser
+  print fallbacks.
+- Added a frozen seven-day reporting period and operational metrics covering
+  assets, new devices, risky services, Wi-Fi risks, finding state, completed
+  scans, and open severity.
+- Added a professional multi-page report layout with site/build metadata,
+  executive metrics, severity summary, ordered remediation actions, normalized
+  findings, technical notes, page numbers, and an explicit privacy boundary.
+- Embedded Unicode-capable fonts, escaped report content, excluded evidence
+  objects, and normalized attachment filenames to ASCII-safe slugs.
+- Added the dashboard PDF action, visible report period/metrics, user feedback,
+  and interaction tests for PDF and HTML downloads.
+- Updated the README, pilot guide, demo script, runbook, installer/deployment
+  examples, Core contract example, and roadmap to match the current product.
+- Advanced API, agent, dashboard, bootstrap, deployment examples, and release
+  tests to `0.2.5`.
+
+Validation:
+
+- The clean-commit release gate passed with 84 backend/agent tests, 21 frontend
+  tests, TypeScript, static Next.js export, Python/shell checks, PostgreSQL
+  migration/restore coverage, Python dependency audit, zero npm vulnerabilities,
+  and a verified `0.2.5` sensor archive.
+- A stress fixture with Unicode site text and 12 findings rendered to three A4
+  pages. Every page was inspected as a PNG; headings/findings stayed together,
+  text did not clip or overlap, page numbers were present, and the final privacy
+  boundary rendered correctly.
+- PR checks and post-merge `main` workflow `29230483463` passed before the tag
+  was created.
+- Release checksums passed, latest/versioned archives were byte-identical, the
+  standalone bootstrap matched the archive, and API/agent/web versions all
+  reported `0.2.5`.
+- Cloudflare production deployment `bd86fc83-0541-4649-a950-cbdad6d69374`
+  serves Edge source `ee5b21d`.
+- The first Render rollout failed safely while `0.2.4` remained live because
+  the service configuration had drifted from `render.yaml` and still installed
+  the old split requirements. The API and scheduler were reconciled to
+  `pip install -r requirements.lock`, API health routing was reconciled to
+  `/readyz`, and auto-deploy remained enabled.
+- Corrected Render deployment `dep-d9a90o77f7vs739cbr10` is live on exact
+  commit `ee5b21d`; `/healthz` reports `0.2.5` and `/readyz` reports schema
+  `0012_integration_tokens`.
+- A hosted report was generated and downloaded through the production PDF
+  endpoint. It returned HTTP 200, `application/pdf`, an attachment header, and
+  a parseable two-page 78,082-byte document containing the report title and
+  privacy boundary.
+
+Known risks:
+
+- The current Render Postgres resource is a free database and reports expiry on
+  2026-07-20. It must be upgraded or replaced after a verified export before
+  relying on it for pilot data; no paid plan was selected without founder
+  authorization.
+- The PDF is visually validated but is not yet a tagged PDF/UA accessibility
+  artifact. Keep HTML as the accessible fallback until tagged output is added.
+- The current machine could not resolve `pages.dev` during the final HTTP fetch,
+  and the independent web fetch rejected the preview URL. Wrangler confirmed
+  the production deployment and exact source, but an external desktop/mobile
+  browser smoke pass remains required when DNS/browser access is available.
+- The live Render service can drift from the checked-in Blueprint. A future
+  operations checkpoint should automate drift detection for build command,
+  health path, branch, and auto-deploy state.
+
 ## Completion Rules
 
 A checkpoint is complete only when:
