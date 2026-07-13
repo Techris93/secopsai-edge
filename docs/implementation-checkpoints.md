@@ -2340,3 +2340,65 @@ Next checkpoint:
 
 - Complete the external operator matrix and produce a signed pilot go/no-go
   record, then perform checkpoint 041 release closeout.
+
+## Checkpoint 041 - Controlled Pilot Release Closeout
+
+Status: implementation and release complete; external operator acceptance remains pending
+
+Scope:
+
+- Close the controlled-pilot implementation sequence against an exact verified
+  main-branch build.
+- Publish the installable release artifact and record hosted release identity.
+- Align the operator README, pilot acceptance guide, roadmap, and release
+  evidence with the actual deployed version.
+
+Completed evidence:
+
+- Edge main is clean at merge commit `3d04757edd54e2244eec34d6bfce68bad9cf106d`.
+- Tag `v0.3.4` is published from that exact main commit.
+- Post-merge main CI run `29274537014` passed all `28` checks, including
+  migrations, `121` backend/agent tests, release inspection, backup/restore,
+  dashboard install/build, and generated-state hygiene.
+- Release workflow `29274806138` published the GitHub release and versioned
+  bootstrap/archive assets. Private-repository artifact attestations are not
+  available for this repository, so the verified workflow publishes SHA-256
+  manifests instead.
+- The downloaded `secopsai-edge-0.3.4.tar.gz` matched its published SHA-256
+  manifest.
+- Hosted Render `/healthz` reports version `0.3.4` and commit `3d04757edd54`.
+  Hosted `/readyz` reports version `0.3.4` and schema revision
+  `0016_wifi_provenance`.
+- README, install, pilot acceptance, roadmap, architecture, runbook, and
+  dashboard Settings guidance now point at the current pilot workflow and
+  release version.
+
+Acceptance boundary:
+
+- The current host's direct acceptance record passed Nmap, Python, hosted
+  liveness, and hosted readiness. Its dashboard check was inconclusive because
+  this host timed out resolving the Pages hostname; no dashboard availability
+  claim is made from that result.
+- Checkpoint 040 remains implementation-complete but operator-pending. Before
+  external customer data is accepted, the owner must still complete paid
+  Render API/PostgreSQL activation with an isolated PITR drill, exercise a real
+  notification destination, enroll a second owner and complete MFA/recovery,
+  run the fresh-host seven-day soak, and validate Linux/Raspberry Pi wireless
+  hardware if Wi-Fi is in scope.
+- These are external activation and evidence gates, not unimplemented product
+  code. They must be recorded in a signed pilot go/no-go record rather than
+  inferred from local tests.
+
+Validation:
+
+- Edge local release gate passed before merge; post-merge CI passed again on the
+  exact release commit.
+- Release archive download and checksum verification passed.
+- Hosted health/readiness verification passed after deployment.
+
+Next checkpoint:
+
+- Complete the external operator acceptance matrix and record a signed pilot
+  go/no-go decision. Do not claim the controlled pilot is customer-ready until
+  the paid infrastructure, second-owner recovery, notification, fresh-host soak,
+  and any in-scope wireless evidence are attached.

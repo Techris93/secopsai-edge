@@ -1,5 +1,7 @@
 # SecOpsAI Edge Sensor
 
+Current pilot release: `v0.3.4` ([release artifacts](https://github.com/Techris93/secopsai-edge/releases/tag/v0.3.4)).
+
 Standalone MacBook-first MVP for an AI-assisted asset discovery and wireless intelligence sensor.
 
 ## What Is Included
@@ -168,6 +170,19 @@ execute on your MacBook/Raspberry Pi, where the LAN is actually reachable. The d
 sensor online/offline status from worker heartbeats and provides cancel/retry controls for remote jobs.
 
 See [docs/architecture.md](docs/architecture.md) and [docs/runbook.md](docs/runbook.md) for implementation details.
+
+Before inviting an external operator, run the non-destructive acceptance check
+and attach its JSON output to the pilot record:
+
+```bash
+./scripts/edge pilot check --cloud --output pilot-acceptance.json
+```
+
+This verifies the local runtime and hosted liveness/readiness without scanning
+the network. Paid hosting/PITR, a real notification exercise, second-owner
+MFA/recovery, fresh-host soak, and any in-scope Wi-Fi hardware validation still
+require operator evidence; a green local test suite does not replace those
+checks. See [docs/pilot-acceptance.md](docs/pilot-acceptance.md).
 
 Pilot docs:
 

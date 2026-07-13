@@ -62,16 +62,17 @@ without founder supervision:
 
 ## Controlled Pilot Completion Sequence
 
-The checkpoint ledger is complete through `039`. The remaining controlled-pilot
-sequence is deliberately bounded and should be completed in this order:
+Implementation checkpoints are complete through `041`. The remaining work is
+external operator acceptance, not untracked feature development:
 
-1. **Checkpoint 040 - External pilot acceptance.** Fresh-machine installation,
-   seven-day soak, schedule/notification/offline-sensor exercises, support SLO,
-   paid Render/PITR activation, two-owner recovery, uninstall, and pilot exit
-   checklist.
-2. **Checkpoint 041 - Controlled-pilot release closeout.** Exact-build deploy,
-   release artifacts, public docs alignment, final security review, known-risk
-   register, and a signed pilot go/no-go record.
+1. **Checkpoint 040 - External pilot acceptance.** Complete fresh-machine
+   installation, seven-day soak, schedule/notification/offline-sensor
+   exercises, support SLO, paid Render/PITR activation, two-owner recovery,
+   uninstall, and the pilot exit checklist.
+2. **Checkpoint 041 - Release closeout.** The exact verified `v0.3.4` build is
+   published, hosted identity is verified, and public operator docs are aligned.
+   Attach the external evidence and signed pilot go/no-go record before calling
+   the controlled pilot customer-ready.
 
 Commercial SaaS/MSP, billing, broad fleet automation, appliance imaging, and
 multi-ecosystem research automation remain subsequent product horizons rather
