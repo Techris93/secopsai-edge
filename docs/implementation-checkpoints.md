@@ -1378,6 +1378,78 @@ Known risks:
   They are intentionally excluded from product merges pending an independent
   evaluation of their threshold changes.
 
+## Checkpoint 028 - Integration Credential Rotation
+
+Status: complete
+
+Branches, merges, and release:
+
+- Edge implementation PR: `#8` (`codex/integration-token-rotation`)
+- Edge merge commit: `76d8184e80714e8ec6903f3b74dff72cf7d3cc85`
+- Canonical dashboard implementation PR: `#6` (`codex/edge-token-expiry`)
+- Canonical dashboard merge commit: `a2aeaf26c8848e3eab54e308ef62df28ad6597dd`
+- Published Edge release: `v0.2.4`
+
+Completed changes:
+
+- Added scoped credential self-inspection that returns only identifier, scope,
+  state, expiry, last-use, and creation metadata. Plaintext secrets are never
+  persisted or returned after creation.
+- Added a 14-day rotation recommendation to the API, Edge Settings, and the
+  canonical dashboard's live Edge health view.
+- Added audited one-click rotation that creates a second credential with the
+  same workspace and scopes. The previous credential remains active until the
+  operator updates and verifies the consumer, then revokes it.
+- Added visible short IDs and creation timestamps so overlapping old and new
+  credentials cannot be confused. Every rotate/revoke action has a unique
+  accessible name.
+- Made canonical dashboard self-status enrichment tolerant of rolling upgrades:
+  unavailable lifecycle metadata produces a warning without hiding otherwise
+  healthy live sites, sensors, schedules, or jobs.
+- Replaced stale canonical-dashboard documentation that still presented the
+  platform administrator token as the primary Edge helper credential.
+- Advanced API, agent, dashboard, bootstrap, deployment examples, and release
+  tests to `0.2.4`.
+
+Validation:
+
+- Edge full suite passed with 81 backend/agent tests and 19 frontend tests;
+  TypeScript, static Next.js production export, Python/shell checks, and npm
+  audit passed with zero vulnerabilities.
+- The clean-commit release gate rebuilt and inspected the sensor archive at
+  implementation commit `af10478`.
+- Canonical dashboard validation passed with 38 Python helper tests, Worker
+  contract tests, and JavaScript syntax checks.
+- API tests cover self-only metadata, administrator-token denial on self-status,
+  foreign/revoked rotation denial, both-token overlap, HMAC-only replacement
+  storage, and rotation audit evidence.
+- Both PR gates and Edge main CI passed. Release workflow `29228489146`
+  published `v0.2.4` from the exact merge commit.
+- Both release checksum manifests passed, latest/versioned archives were
+  byte-identical, the standalone bootstrap matched the archive, and API, agent,
+  and dashboard versions all reported `0.2.4`.
+- Render served API version `0.2.4` at commit `76d8184e8071`; readiness reported
+  schema `0012_integration_tokens`.
+- Live self-inspection of the configured `operations:read` credential returned
+  active state, 90 days remaining, and no secret. The canonical helper then
+  loaded one site, one sensor, four scan jobs, and matching lifecycle status.
+- Cloudflare production deployments serve Edge source `76d8184` as deployment
+  `759e0eb3-f9ab-4f3b-8570-763b34600778` and canonical dashboard source
+  `a2aeaf2` as deployment `799a6d57-d988-40b5-b522-136f85048c60`.
+
+Known risks:
+
+- Rotation is operator-confirmed by design. Automatic revocation could cause an
+  outage when a helper or Core service has not actually reloaded its secret.
+- The canonical dashboard helper's live token is owner-readable local config.
+  A hosted helper must use its platform's server-side secret manager and repeat
+  the verify-before-revoke workflow.
+- The in-app visual browser could not attach after two retries during deployed
+  QA. Rendered component interactions, TypeScript/static production build,
+  deployed-source identity, and live helper/API checks passed; desktop/mobile
+  visual regression verification remains queued for the next available browser
+  session.
+
 ## Completion Rules
 
 A checkpoint is complete only when:
