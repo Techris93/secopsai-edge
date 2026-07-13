@@ -33,6 +33,8 @@ The controlled-pilot baseline includes:
   stale, and never-synced states.
 - OpenClaw read-only Edge operator checks for local worker status and safe
   private-CIDR scan previews, with no direct scan or service mutation.
+- OpenClaw research tools aligned with all twelve ecosystems supported by Core,
+  including NuGet, Maven, Go, crates.io, Open VSX, and RubyGems.
 - Workspace retention policies, normalized customer export, owner-confirmed
   site deletion, and non-secret hosted availability evidence.
 
@@ -66,7 +68,7 @@ without founder supervision:
 
 ## Controlled Pilot Completion Sequence
 
-Implementation checkpoints are complete through `044`. The remaining work is
+Implementation checkpoints are complete through `045`. The remaining work is
 external operator acceptance, not untracked feature development:
 
 1. **Checkpoint 040 - External pilot acceptance.** Complete fresh-machine
@@ -84,6 +86,9 @@ external operator acceptance, not untracked feature development:
 5. **Checkpoint 044 - Safe OpenClaw Edge operator tools.** OpenClaw can check
    the local worker and preview an authorized private CIDR without executing or
    uploading a scan.
+6. **Checkpoint 045 - Research ecosystem contract alignment.** OpenClaw's
+   package-research schemas now expose the same twelve ecosystem choices as
+   Core, including NuGet-style package investigations.
 
 Commercial SaaS/MSP, billing, broad fleet automation, appliance imaging, and
 multi-ecosystem research automation remain subsequent product horizons rather

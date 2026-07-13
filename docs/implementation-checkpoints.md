@@ -2556,3 +2556,46 @@ Next checkpoint:
 - Reassess whether approval-gated Edge scan/report actions are required for the
   pilot, then continue the external operator acceptance matrix rather than
   treating read-only automation as customer readiness.
+
+## Checkpoint 045 - Research Ecosystem Contract Alignment
+
+Status: complete
+
+Scope:
+
+- Remove the mismatch between the Core research engine and its OpenClaw
+  surface.
+- Make NuGet-style and other supported package investigations available through
+  the same documented plugin contract.
+- Add regression coverage so a future Core ecosystem addition is visible in
+  the plugin review rather than silently rejected by its schema.
+
+Completed changes:
+
+- OpenClaw `secopsai_research_package` and
+  `secopsai_review_release_with_sources` now advertise all twelve Core
+  ecosystems: Chrome Web Store, crates.io, GitHub, Go, Hugging Face, Maven,
+  npm, NuGet, Open VSX, Packagist, PyPI, and RubyGems.
+- Added a contract test that invokes NuGet package research with the exact
+  structured Core CLI arguments.
+- Added the Braintree-style NuGet example to plugin documentation.
+
+Evidence:
+
+- OpenClaw PR #4 merged to `master` as `35983bf`.
+- `npm test` passed after the schema and contract changes.
+- Core's authoritative ecosystem registry currently contains the same twelve
+  names used by the plugin.
+
+Acceptance boundary:
+
+- This aligns the research interface; it does not claim that every ecosystem
+  has identical live metadata or artifact availability. Core's per-ecosystem
+  capability and limitation metadata remains authoritative, and static
+  analysis stays non-executing by default.
+- The external pilot gates from checkpoint 040 remain open.
+
+Next checkpoint:
+
+- Continue the product audit with approval-gated Edge actions or the next
+  highest-impact pilot gap, while preserving the research safety boundary.
