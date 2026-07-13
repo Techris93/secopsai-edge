@@ -69,10 +69,11 @@ jobs:
 
       - name: Build and inspect sensor release
         run: |
-          ./scripts/build-release 0.2.0 /tmp/secopsai-release
-          (cd /tmp/secopsai-release && shasum -a 256 -c secopsai-edge-0.2.0.tar.gz.sha256)
-          tar -tzf /tmp/secopsai-release/secopsai-edge-0.2.0.tar.gz | grep -q '/scripts/edge$'
-          ! tar -tzf /tmp/secopsai-release/secopsai-edge-0.2.0.tar.gz | grep -Eq '/(\.env|\.cloud\.env|\.cloud-sensor\.env|\.sensor\.env|node_modules|\.venv)(/|$)'
+          release_version="$(PYTHONPATH=api python -c 'from secopsai_api import __version__; print(__version__)')"
+          ./scripts/build-release "$release_version" /tmp/secopsai-release
+          (cd /tmp/secopsai-release && shasum -a 256 -c "secopsai-edge-$release_version.tar.gz.sha256")
+          tar -tzf "/tmp/secopsai-release/secopsai-edge-$release_version.tar.gz" | grep -q '/scripts/edge$'
+          ! tar -tzf "/tmp/secopsai-release/secopsai-edge-$release_version.tar.gz" | grep -Eq '/(\.env|\.cloud\.env|\.cloud-sensor\.env|\.sensor\.env|node_modules|\.venv)(/|$)'
 
       - name: Drill PostgreSQL backup and restore
         env:

@@ -89,7 +89,7 @@ The bundle uses:
   "source_instance": {
     "product": "secopsai_edge",
     "api": "secopsai-edge-api",
-    "version": "0.2.0"
+    "version": "0.2.1"
   },
   "cursor": {
     "mode": "full",
