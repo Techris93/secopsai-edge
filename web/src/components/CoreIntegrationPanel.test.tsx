@@ -24,20 +24,24 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-test("renders Core integration action buttons", () => {
+test("renders Core integration action buttons", async () => {
   render(React.createElement(CoreIntegrationPanel));
+  await waitFor(() => expect(api.listIntegrationTokens).toHaveBeenCalled());
 
   expect(screen.getByText("SecOpsAI Core Integration")).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: /Download Bundle/ })).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: /Copy Export/ })).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: /Copy Import/ })).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: /Copy Assets/ })).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: /Copy Triage/ })).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: /Copy API Sync/ })).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: /Copy One-Step Sync/ })).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: /Install Auto Sync/ })).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: /Check Sync Status/ })).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: /Copy Support Bundle/ })).toBeInTheDocument();
+  const buttonText = screen.getAllByRole("button").map((button) => button.textContent);
+  expect(buttonText).toEqual(expect.arrayContaining([
+    expect.stringContaining("Download Bundle"),
+    expect.stringContaining("Copy Export"),
+    expect.stringContaining("Copy Import"),
+    expect.stringContaining("Copy Assets"),
+    expect.stringContaining("Copy Triage"),
+    expect.stringContaining("Copy API Sync"),
+    expect.stringContaining("Copy One-Step Sync"),
+    expect.stringContaining("Install Auto Sync"),
+    expect.stringContaining("Check Sync Status"),
+    expect.stringContaining("Copy Support Bundle")
+  ]));
   expect(screen.getByLabelText("Edge install path")).toHaveValue("$HOME/secopsai-edge");
   expect(screen.queryByDisplayValue(/chrixchange/)).not.toBeInTheDocument();
 });
@@ -54,6 +58,25 @@ test("copies Core import command", async () => {
 
   expect(writeText).toHaveBeenCalledWith(expect.stringContaining("secopsai.cli edge import"));
   expect(await screen.findByText("Copy Import copied")).toBeInTheDocument();
+});
+
+test("falls back when Core command clipboard permission is denied", async () => {
+  const writeText = vi.fn().mockRejectedValue(new DOMException("Denied", "NotAllowedError"));
+  const execCommand = vi.fn().mockReturnValue(true);
+  Object.defineProperty(navigator, "clipboard", {
+    configurable: true,
+    value: { writeText }
+  });
+  Object.defineProperty(document, "execCommand", {
+    configurable: true,
+    value: execCommand
+  });
+
+  render(React.createElement(CoreIntegrationPanel));
+  fireEvent.click(screen.getByRole("button", { name: /Copy Import/ }));
+
+  expect(await screen.findByText("Copy Import copied")).toBeInTheDocument();
+  expect(execCommand).toHaveBeenCalledWith("copy");
 });
 
 test("copies API sync with a silent scoped-token prompt", async () => {

@@ -1529,12 +1529,14 @@ Known risks:
 
 ## Checkpoint 030 - Hosted Data Recovery And Render Drift Guard
 
-Status: in progress
+Status: complete
 
 Branch and release target:
 
-- Edge implementation branch: `codex/render-operations-checkpoint-030`
-- Target release: `v0.2.6`
+- Edge implementation PR: `#12` (`codex/render-operations-checkpoint-030`)
+- Edge merge commit: `2a1119363a03eb9212af1ef0760a3fc0e20cd235`
+- Published release: `v0.2.6`
+- Release workflow: `29234298216`
 
 Completed changes:
 
@@ -1580,8 +1582,48 @@ Known risks and next actions:
 - Render PostgreSQL remains on the free plan and expires on 2026-07-20. The
   archive now protects the demo data, but provider-managed backups and
   point-in-time recovery still require an explicitly authorized paid plan.
-- Full release-gate, PR, merge, post-merge CI, Render deploy, and `v0.2.6`
-  release evidence remain before this checkpoint can be marked complete.
+- Render deployment `dep-d9a9o4c2m8qs73deveig` serves exact merge
+  `2a11193`; `/healthz` reports `0.2.6` and `/readyz` reports schema
+  `0012_integration_tokens`.
+- Post-merge `main` workflow `29234147799` passed migrations, 92
+  backend/agent tests, Python/Node audits, package inspection, PostgreSQL 16
+  backup/restore, 21 frontend tests, static build, and generated-state checks.
+- Release checksums passed, latest/versioned archives were byte-identical, the
+  standalone bootstrap matched the archive, and API/agent/web versions all
+  reported `0.2.6`.
+- Cloudflare production deployment `a27b25b5` serves exact merge `2a11193`
+  with the hosted API URL and demo mode disabled.
+
+## Checkpoint 031 - Clipboard Resilience And Deployed Browser QA
+
+Status: in progress
+
+Branch and release target:
+
+- Edge implementation branch: `codex/copy-command-resilience`
+- Target release: `v0.2.7`
+
+Completed changes to date:
+
+- Ran the deployed Edge console through the in-app browser on desktop and at
+  `390x844`. Overview and Settings rendered meaningful content with no console
+  warnings/errors, no framework overlay, and no mobile horizontal overflow.
+- Confirmed the new Render drift-check and hosted-backup controls are visible
+  in Settings. The browser interaction exposed a real permission edge case:
+  Clipboard API rejection left the copy button in its idle state without
+  telling the operator that copying failed.
+- Added a synchronous copy fallback for browsers that expose but deny the
+  asynchronous Clipboard API, an accessible success/failure state, cleanup of
+  temporary DOM state and timers, and focused tests for success, fallback, and
+  terminal failure.
+- Advanced the package to `0.2.7` so the deployed UI and private sensor archive
+  retain one traceable version identity.
+
+Remaining before completion:
+
+- Run the full release gate, merge the PR after CI, publish `v0.2.7`, deploy
+  Render/Cloudflare at the exact merge, and repeat the copy interaction and
+  desktop/mobile browser smoke checks.
 
 ## Completion Rules
 
