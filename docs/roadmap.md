@@ -55,27 +55,25 @@ without founder supervision:
    failure state, and operator-visible diagnostics are implemented for email,
    Telegram, webhooks, invitation, and password-reset email. Exercise the
    selected real provider and alert destinations.
-5. **Pilot support and data lifecycle.** Define retention/deletion controls,
+5. **Pilot support and data lifecycle.** Retention/deletion controls,
    uptime/support targets, escalation ownership, and a customer-facing pilot
-   exit/export procedure.
+   exit/export procedure are implemented and documented. Exercise them with a
+   second real operator during checkpoint `040`.
 
 ## Controlled Pilot Completion Sequence
 
-The checkpoint ledger is complete through `037`. The remaining controlled-pilot
+The checkpoint ledger is complete through `038`. The remaining controlled-pilot
 sequence is deliberately bounded and should be completed in this order:
 
-1. **Checkpoint 038 - Durable pilot operations activation.** Retention,
-   customer export/deletion, uptime evidence, and recovery procedures are
-   implemented. Paid Render activation, PITR evidence, and the real two-owner
-   recovery exercise remain external account actions.
-2. **Checkpoint 039 - Research and wireless operational boundary.** First
+1. **Checkpoint 039 - Research and wireless operational boundary.** First
    narrowly scoped package-research workflow, reproducible evidence export,
    Linux/Raspberry Pi wireless validation, and explicit unsupported-platform
    messaging.
-3. **Checkpoint 040 - External pilot acceptance.** Fresh-machine installation,
+2. **Checkpoint 040 - External pilot acceptance.** Fresh-machine installation,
    seven-day soak, schedule/notification/offline-sensor exercises, support SLO,
-   uninstall, and pilot exit checklist.
-4. **Checkpoint 041 - Controlled-pilot release closeout.** Exact-build deploy,
+   paid Render/PITR activation, two-owner recovery, uninstall, and pilot exit
+   checklist.
+3. **Checkpoint 041 - Controlled-pilot release closeout.** Exact-build deploy,
    release artifacts, public docs alignment, final security review, known-risk
    register, and a signed pilot go/no-go record.
 
