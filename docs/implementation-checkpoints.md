@@ -839,6 +839,59 @@ Known risks:
   happens in Core, while scan/sensor administration remains in the Edge
   dashboard until a scoped command API is introduced.
 
+## Checkpoint 018 - Independent Research Case Lifecycle
+
+Status: complete
+
+Branches:
+
+- Core repo: `codex/core-edge-hygiene`
+- Canonical dashboard: `codex/edge-unified-console`
+
+Completed changes:
+
+- Added Core-owned research cases, subjects, evidence, IOCs, linked findings,
+  immutable events, disclosure state, and deterministic publication readiness
+  to the local SQLite SOC store.
+- Added complete `secopsai research case` CLI workflows for create, list, show,
+  update, subject/evidence/IOC intake, finding links, notes, retraction, export,
+  and readiness-gated review-draft creation.
+- Added evidence-preserving retraction with required rationale; retracted data
+  remains auditable but is excluded from readiness, reports, and publication.
+- Added a general Original Research Blog Ops template. Drafts remain
+  `needs_review`; explicitly structured hash IOCs survive redaction while
+  unstructured secret-like values remain redacted.
+- Added a canonical dashboard Research workspace with queue, readiness,
+  disclosure, evidence, IOC, finding, timeline, Markdown download, and
+  review-only blog handoff workflows.
+- Added Worker/helper double authorization for every research mutation, a
+  strict CLI argument allowlist, bounded report downloads, and no browser-side
+  shell or embedded administrator credential.
+- Added responsible-research and case-lifecycle documentation and repaired the
+  published OpenClaw plugin reference for its existing Edge graph tools.
+
+Validation:
+
+- Core full suite: 228 tests passed; strict MkDocs build and docs/plugin
+  contract verification passed.
+- Dashboard: 34 Python tests, Worker/UI tests, JavaScript syntax checks, and
+  diff checks passed.
+- Isolated real browser verification passed on desktop and mobile with no
+  warnings/errors: case creation, ready/blocked states, protected Markdown
+  download, retraction modal, required reason, persisted retraction event, and
+  publication blocker recalculation.
+
+Known risks:
+
+- Research storage is local-first and single-workspace. Organization/tenant
+  ownership and remote researcher collaboration belong to the SaaS/MSP
+  checkpoint.
+- Dynamic malware execution is intentionally not built into the operator
+  dashboard. It requires a separate disposable, network-controlled sandbox
+  service and legal/ethical operating procedure.
+- Blog drafts still require human editorial approval and deployment through
+  Blog Ops; cases never auto-publish.
+
 ## Completion Rules
 
 A checkpoint is complete only when:
