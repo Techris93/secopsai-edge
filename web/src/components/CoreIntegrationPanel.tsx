@@ -1,9 +1,9 @@
 "use client";
 
-import { CheckCircle2, Clipboard, Download, GitBranch, KeyRound, LifeBuoy, ListTree, ShieldCheck, Terminal, Trash2 } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Clipboard, Download, GitBranch, KeyRound, LifeBuoy, ListTree, RefreshCw, ShieldCheck, Terminal, Trash2 } from "lucide-react";
 import type { ComponentType } from "react";
 import { useEffect, useMemo, useState } from "react";
-import { apiBaseUrl, createIntegrationToken, downloadCoreBundle, fetchAuthIdentity, listIntegrationTokens, revokeIntegrationToken } from "@/lib/api";
+import { apiBaseUrl, createIntegrationToken, downloadCoreBundle, fetchAuthIdentity, listIntegrationTokens, revokeIntegrationToken, rotateIntegrationToken } from "@/lib/api";
 import type { IntegrationToken, IntegrationTokenSecret } from "@/lib/types";
 
 const DEFAULT_EDGE_ROOT = process.env.NEXT_PUBLIC_EDGE_ROOT ?? "$HOME/secopsai-edge";
@@ -190,6 +190,20 @@ export function CoreIntegrationPanel() {
     }
   }
 
+  async function rotateToken(tokenId: string) {
+    setBusyAction(`rotate:${tokenId}`);
+    try {
+      const replacement = await rotateIntegrationToken(tokenId);
+      setNewToken(replacement);
+      setTokens((current) => [replacement, ...current.filter((item) => item.id !== replacement.id)]);
+      setMessage("Replacement created. Update the downstream service, verify it, then revoke the previous token.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to rotate integration token");
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
   return (
     <section className="min-w-0 rounded-lg border border-line bg-white p-4 shadow-panel xl:col-span-2">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -218,7 +232,7 @@ export function CoreIntegrationPanel() {
               <KeyRound size={16} className="text-sea" aria-hidden={true} />
               Workspace integration tokens
             </h3>
-            <p className="mt-1 text-xs leading-5 text-zinc-600">Revocable, 90-day credentials with separate Core export and read-only operations scopes.</p>
+            <p className="mt-1 text-xs leading-5 text-zinc-600">Revocable, 90-day credentials with separate Core export and read-only operations scopes. Rotate when 14 days remain.</p>
           </div>
           {canManageTokens ? <div className="flex flex-wrap gap-2">
             <button
@@ -263,24 +277,43 @@ export function CoreIntegrationPanel() {
           ) : tokens.map((token) => (
             <div key={token.id} className="grid gap-2 py-3 text-sm sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
               <div className="min-w-0">
-              <p className="truncate font-semibold text-ink">{token.name}</p>
-              <p className="mt-1 font-mono text-xs text-zinc-600">{token.scopes.join(", ")}</p>
-                <p className="mt-1 text-xs text-zinc-600">
+                <p className="truncate font-semibold text-ink">{token.name}</p>
+                <p className="mt-1 font-mono text-xs text-zinc-600">{token.scopes.join(", ")} · {token.id.slice(0, 8)}</p>
+                <p className={`mt-1 text-xs ${token.rotation_recommended ? "font-semibold text-amber-800" : "text-zinc-600"}`}>
                   {token.state} · expires {new Date(token.expires_at).toLocaleDateString()}
+                  {token.state === "active" ? ` · ${token.expires_in_days} day${token.expires_in_days === 1 ? "" : "s"} left` : ""}
                   {token.last_used_at ? ` · last used ${new Date(token.last_used_at).toLocaleString()}` : " · never used"}
                 </p>
+                <p className="mt-1 text-xs text-zinc-500">Created {new Date(token.created_at).toLocaleString()}</p>
+                {token.rotation_recommended ? (
+                  <p className="mt-1 flex items-center gap-1 text-xs font-semibold text-amber-800">
+                    <AlertTriangle size={13} aria-hidden={true} /> Rotation recommended
+                  </p>
+                ) : null}
               </div>
               {token.state === "active" ? (
-                <button
-                  type="button"
-                  aria-label={`Revoke ${token.name}`}
-                  title={`Revoke ${token.name}`}
-                  onClick={() => revokeToken(token.id)}
-                  disabled={busyAction !== null}
-                  className="focus-ring inline-flex h-9 w-9 items-center justify-center rounded-md border border-line text-red-700 hover:border-red-300 hover:bg-red-50 disabled:cursor-wait disabled:opacity-60"
-                >
-                  <Trash2 size={16} aria-hidden={true} />
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    aria-label={`Rotate ${token.name} (${token.id.slice(0, 8)})`}
+                    title={`Rotate ${token.name}`}
+                    onClick={() => void rotateToken(token.id)}
+                    disabled={busyAction !== null}
+                    className="focus-ring inline-flex h-9 w-9 items-center justify-center rounded-md border border-line text-amber-800 hover:border-amber-300 hover:bg-amber-50 disabled:cursor-wait disabled:opacity-60"
+                  >
+                    <RefreshCw size={16} aria-hidden={true} />
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={`Revoke ${token.name} (${token.id.slice(0, 8)})`}
+                    title={`Revoke ${token.name}`}
+                    onClick={() => revokeToken(token.id)}
+                    disabled={busyAction !== null}
+                    className="focus-ring inline-flex h-9 w-9 items-center justify-center rounded-md border border-line text-red-700 hover:border-red-300 hover:bg-red-50 disabled:cursor-wait disabled:opacity-60"
+                  >
+                    <Trash2 size={16} aria-hidden={true} />
+                  </button>
+                </div>
               ) : null}
             </div>
           ))}

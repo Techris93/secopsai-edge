@@ -8,6 +8,7 @@ Standalone MacBook-first MVP for an AI-assisted asset discovery and wireless int
 - FastAPI backend with PostgreSQL, workspace isolation, role-based auth, audit logs, approved baselines, findings, reports, and Splunk HEC export hooks.
 - Next.js/Tailwind dashboard for onboarding, sites, assets, Wi-Fi networks, findings, schedules, reports, notifications, and sensor settings.
 - Guided onboarding, launchd/systemd worker service installation, scheduled scans, sensor token rotation, and report export.
+- Scoped Core/dashboard credentials with advance expiry warnings and overlap-safe rotation.
 - Docker Compose for local PostgreSQL.
 - Tests for scan safety, Nmap parsing, detection rules, and AI payload redaction.
 

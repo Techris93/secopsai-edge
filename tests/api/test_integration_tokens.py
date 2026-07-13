@@ -10,6 +10,7 @@ from secopsai_api.database import get_db
 from secopsai_api.main import app
 from secopsai_api.models import (
     Asset,
+    AuditLog,
     Base,
     IntegrationToken,
     Organization,
@@ -243,6 +244,117 @@ def test_operations_read_token_is_workspace_scoped_and_read_only() -> None:
     assert mutation.status_code == 403
     db.refresh(stale_job)
     assert stale_job.status == "running"
+
+
+def test_integration_token_can_inspect_only_its_own_lifecycle() -> None:
+    db = make_session()
+    organization, user, _, _ = seed(db, "Alpha")
+    client = make_client(db)
+    owner_headers = headers(organization, user)
+
+    try:
+        created = client.post(
+            "/api/v1/integration-tokens",
+            headers=owner_headers,
+            json={"name": "Operator dashboard", "scopes": ["operations:read"], "expires_in_days": 7},
+        )
+        secret = created.json()["access_token"]
+        inspected = client.get(
+            "/api/v1/integration-tokens/self",
+            headers={"Authorization": f"Bearer {secret}"},
+        )
+        denied_admin = client.get("/api/v1/integration-tokens/self", headers=owner_headers)
+    finally:
+        app.dependency_overrides.clear()
+
+    assert inspected.status_code == 200
+    assert inspected.json()["id"] == created.json()["id"]
+    assert inspected.json()["scopes"] == ["operations:read"]
+    assert inspected.json()["expires_in_days"] == 7
+    assert inspected.json()["rotation_recommended"] is True
+    assert "access_token" not in inspected.json()
+    assert denied_admin.status_code == 403
+
+
+def test_rotation_creates_overlap_and_preserves_previous_token_until_revoked() -> None:
+    db = make_session()
+    organization, user, _, _ = seed(db, "Alpha")
+    client = make_client(db)
+    owner_headers = headers(organization, user)
+
+    try:
+        created = client.post(
+            "/api/v1/integration-tokens",
+            headers=owner_headers,
+            json={"name": "Core sync", "scopes": ["core:export"], "expires_in_days": 30},
+        )
+        previous_secret = created.json()["access_token"]
+        rotated = client.post(
+            f"/api/v1/integration-tokens/{created.json()['id']}/rotate",
+            headers=owner_headers,
+            json={"expires_in_days": 90},
+        )
+        replacement_secret = rotated.json()["access_token"]
+        previous_access = client.get(
+            "/api/v1/core/export",
+            headers={"Authorization": f"Bearer {previous_secret}"},
+        )
+        replacement_access = client.get(
+            "/api/v1/core/export",
+            headers={"Authorization": f"Bearer {replacement_secret}"},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert rotated.status_code == 200
+    assert rotated.json()["id"] != created.json()["id"]
+    assert rotated.json()["name"] == "Core sync"
+    assert rotated.json()["scopes"] == ["core:export"]
+    assert rotated.json()["expires_in_days"] == 90
+    assert previous_secret != replacement_secret
+    assert previous_access.status_code == 200
+    assert replacement_access.status_code == 200
+    previous = db.get(IntegrationToken, created.json()["id"])
+    replacement = db.get(IntegrationToken, rotated.json()["id"])
+    assert previous is not None and previous.revoked_at is None
+    assert replacement is not None and replacement.token_hash != replacement_secret
+    audit = db.query(AuditLog).filter(AuditLog.action == "integration_token.rotated").one()
+    assert audit.resource_id == previous.id
+    assert audit.details["replacement_id"] == replacement.id
+    assert audit.details["previous_remains_active"] is True
+
+
+def test_revoked_or_foreign_integration_token_cannot_be_rotated() -> None:
+    db = make_session()
+    org_a, user_a, _, _ = seed(db, "Alpha")
+    org_b, user_b, _, _ = seed(db, "Bravo")
+    client = make_client(db)
+    headers_a = headers(org_a, user_a)
+    headers_b = headers(org_b, user_b)
+
+    try:
+        created = client.post(
+            "/api/v1/integration-tokens",
+            headers=headers_a,
+            json={"name": "Core sync", "scopes": ["core:export"], "expires_in_days": 30},
+        )
+        token_id = created.json()["id"]
+        foreign = client.post(
+            f"/api/v1/integration-tokens/{token_id}/rotate",
+            headers=headers_b,
+            json={"expires_in_days": 90},
+        )
+        client.delete(f"/api/v1/integration-tokens/{token_id}", headers=headers_a)
+        revoked = client.post(
+            f"/api/v1/integration-tokens/{token_id}/rotate",
+            headers=headers_a,
+            json={"expires_in_days": 90},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert foreign.status_code == 404
+    assert revoked.status_code == 409
 
 
 def test_viewer_cannot_manage_integration_tokens() -> None:

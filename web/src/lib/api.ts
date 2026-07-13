@@ -447,6 +447,13 @@ export async function revokeIntegrationToken(tokenId: string): Promise<Integrati
   });
 }
 
+export async function rotateIntegrationToken(tokenId: string): Promise<IntegrationTokenSecret> {
+  return requestJson<IntegrationTokenSecret>(`/api/v1/integration-tokens/${tokenId}/rotate`, {
+    method: "POST",
+    body: JSON.stringify({ expires_in_days: 90 })
+  });
+}
+
 export async function rotateSensorToken(sensorId: string): Promise<{ sensor_id: string; sensor_token: string }> {
   return requestJson<{ sensor_id: string; sensor_token: string }>(`/api/v1/sensors/${sensorId}/rotate-token`, {
     method: "POST"

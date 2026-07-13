@@ -149,6 +149,12 @@ platform administrator token; the operations credential is read-only,
 workspace-scoped, revocable, and limited to sites, sensors, schedules, and scan
 jobs.
 
+Settings recommends rotation when a scoped credential has 14 days remaining.
+Choose **Rotate** to create an overlapping replacement, update the consumer,
+verify one successful Core sync or dashboard refresh, and only then revoke the
+previous short-ID credential. The replacement secret is shown once. The
+canonical dashboard reads non-secret self-status and surfaces the same warning.
+
 ## Release And Rollback
 
 1. Run `./scripts/edge release-check` and require green CI.
