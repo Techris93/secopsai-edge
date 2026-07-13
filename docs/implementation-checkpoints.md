@@ -2408,7 +2408,7 @@ Next checkpoint:
 
 ## Checkpoint 042 - AI Report Cost Guardrail
 
-Status: implementation complete; release and hosted verification pending
+Status: complete
 
 Scope:
 
@@ -2430,12 +2430,27 @@ Validation:
 
 - Focused API/config tests passed, including invalid guardrail values and the
   repeated-report 429 contract.
-- Frontend tests passed with the new system-health fields.
+- Full Edge validation passed: `123` backend/agent tests, `32` frontend tests,
+  `28` desktop/mobile browser workflows, production build, accessibility
+  checks, and zero npm audit vulnerabilities.
+- Release gate passed on merge commit `7fcd9eafee780340d0ddc6b5540b4254b230a1e1`.
+- Tag `v0.3.5` and release workflow `29278453261` published the verified
+  archive and SHA-256 manifest; the downloaded archive checksum matched.
+- Render `/healthz` reports version `0.3.5` and commit `7fcd9eafee78`.
+  Render `/readyz` reports version `0.3.5` and schema revision
+  `0016_wifi_provenance`.
+- Cloudflare Pages production deployment
+  `bd4c726f-7d2f-4d24-811e-b4ee75d5cd7b` is attached to Edge main commit
+  `7fcd9ea`.
 
-Release follow-up:
+Acceptance boundary:
 
-- Run the full Edge release gate, publish `v0.3.5`, deploy the matching
-  dashboard build, and verify hosted health/readiness plus system status.
 - Keep the external pilot acceptance gates from Checkpoint 040 open until
   paid infrastructure, notification, account recovery, fresh-host soak,
   wireless scope, and independent dashboard availability evidence are complete.
+
+Next checkpoint:
+
+- Re-audit the main Core, unified Dashboard, and OpenClaw integration surfaces
+  for the next code-completable product gap. Do not infer customer readiness
+  from hosted health alone.
