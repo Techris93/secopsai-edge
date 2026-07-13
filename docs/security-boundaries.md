@@ -31,6 +31,12 @@ diagnostics. The token is placed in the URL fragment so it is not sent in the
 initial HTTP request, then removed from the address bar by the dashboard. A
 successful reset clears lockout state and revokes all existing user sessions.
 
+Operator invitations use the same durable, one-time, keyed-hash token store.
+New operators choose their own password; SecOpsAI never emails a temporary
+password. Existing operators must prove their current password before an
+invitation can add or reactivate workspace membership. Repeated invitation
+password failures share the account lockout boundary and are audit logged.
+
 Email requires `SMTP_HOST`. Telegram requires `TELEGRAM_BOT_TOKEN`.
 
 ## Credential Boundary
@@ -53,7 +59,30 @@ dashboard, asset, scan, sensor, or administration endpoints. Revocation and
 expiry are checked on every export, and last use is recorded for operator
 review.
 
-Dashboard bootstrap passwords must contain at least 12 characters. Repeated failures are stored on the user record and lock the account temporarily after five attempts by default. Lockouts and blocked attempts are audit logged. Mutation endpoints explicitly require an `owner` or `admin` role; viewers can inspect their assigned workspace but cannot change it. User sessions carry a server-validated generation number and active workspace claim. The API rechecks membership on every request, so logout, password reset/change, role change, membership disablement, or workspace removal immediately invalidates old access. Owner membership changes require an owner. The API prevents disabling or demoting the final active administrator in each workspace.
+Dashboard passwords must contain at least 12 characters; a configured pilot or
+production bootstrap password must contain at least 16. Repeated failures are
+stored on the user record and lock the account temporarily after five attempts
+by default. Lockouts and blocked attempts are audit logged. Mutation endpoints explicitly require an `owner` or `admin` role; viewers can inspect their assigned workspace but cannot change it. User sessions carry a server-validated generation number and active workspace claim. The API rechecks membership on every request, so logout, password reset/change, role change, membership disablement, or workspace removal immediately invalidates old access. Owner membership changes require an owner. The API prevents disabling or demoting the final active administrator in each workspace.
+
+Dashboard bootstrap credentials create the configured first account only when
+that email does not already exist. Application restarts never replace an
+existing password, promote the account, or reactivate disabled membership.
+After two owner recovery paths are confirmed, remove the bootstrap password
+from hosted configuration.
+
+Optional operator MFA uses RFC 6238 TOTP with a one-step clock window and
+counter replay protection. TOTP secrets are encrypted with AES-GCM using the
+operator ID as authenticated context and a dedicated
+`SECOPSAI_MFA_ENCRYPTION_KEY`; recovery codes are stored only as keyed hashes
+and consumed once. The dedicated key must be preserved across deploys and
+backups. It must not silently inherit or rotate with the dashboard session
+token secret.
+
+Replacing an enrolled authenticator requires disabling the existing factor
+with both the current password and a valid TOTP/recovery code. When both factor
+and recovery codes are lost, a different workspace owner may perform an
+audited MFA reset for that operator. Self-reset is rejected, and the reset
+revokes all existing sessions.
 
 Every site belongs to one organization. Lists, guessed resource IDs, filters, report downloads,
 notification history, audit history, and Core export are all server-filtered to the authenticated
@@ -66,9 +95,10 @@ Approved baselines are scoped to one site and a stable entity identifier. The AP
 
 ## Production Configuration Boundary
 
-`SECOPSAI_ENVIRONMENT=production` fails startup when administrator/session or
-webhook secrets are short/default, automatic schema creation is enabled, or
-localhost CORS origins remain. Database schema is managed only by Alembic.
+`SECOPSAI_ENVIRONMENT=pilot` and `SECOPSAI_ENVIRONMENT=production` fail startup
+when administrator/session/MFA or webhook secrets are short/default, automatic
+schema creation is enabled, or localhost CORS origins remain. Database schema
+is managed only by Alembic.
 Backups are PostgreSQL custom archives created with owner-only permissions;
 restore requires an exact database-name confirmation and refuses remote targets
 unless the operator explicitly opts in. A matching PostgreSQL Docker client is

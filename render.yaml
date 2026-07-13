@@ -25,6 +25,8 @@ services:
         sync: false
       - key: SECOPSAI_TOKEN_SECRET
         generateValue: true
+      - key: SECOPSAI_MFA_ENCRYPTION_KEY
+        generateValue: true
       - key: SECOPSAI_DASHBOARD_SESSION_TTL_SECONDS
         value: "28800"
       - key: SECOPSAI_LOGIN_MAX_ATTEMPTS
@@ -33,12 +35,20 @@ services:
         value: "900"
       - key: SECOPSAI_DASHBOARD_RESET_URL
         sync: false
+      - key: SECOPSAI_DASHBOARD_INVITE_URL
+        sync: false
       - key: SECOPSAI_PASSWORD_RESET_TTL_SECONDS
         value: "1800"
       - key: SECOPSAI_PASSWORD_RESET_COOLDOWN_SECONDS
         value: "60"
       - key: SECOPSAI_PASSWORD_RESET_MAX_DELIVERY_ATTEMPTS
         value: "4"
+      - key: SECOPSAI_INVITATION_TTL_SECONDS
+        value: "86400"
+      - key: SECOPSAI_MFA_CHALLENGE_TTL_SECONDS
+        value: "300"
+      - key: SECOPSAI_MFA_SETUP_TTL_SECONDS
+        value: "600"
       - key: SECOPSAI_WEBHOOK_SIGNING_SECRET
         generateValue: true
       - key: SECOPSAI_NOTIFICATION_MAX_ATTEMPTS

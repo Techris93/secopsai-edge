@@ -184,7 +184,10 @@ After deploying the API to Render and the dashboard to Cloudflare Pages:
 ```
 
 Use the dashboard Settings page to connect to the hosted API with the dashboard admin email and
-password. The admin token remains available only for scheduler automation and recovery. Create a
+password. Invite additional operators from Users & Sessions; they choose their
+own password from a one-time link. Enable authenticator-app MFA for privileged
+operators and store the one-use recovery codes outside SecOpsAI. The admin token
+remains available only for scheduler automation and emergency recovery. Create a
 workspace-scoped Core export token from Settings for Edge-to-Core synchronization.
 Create a separate **dashboard token** there for the canonical dashboard helper
 and configure it as `SECOPSAI_EDGE_OPERATIONS_TOKEN`. Do not give the helper the

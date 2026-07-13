@@ -120,6 +120,36 @@ def test_bootstrap_dashboard_admin_creates_user(monkeypatch) -> None:
     assert verify_password("pilot-password", user.password_hash)
 
 
+def test_bootstrap_does_not_overwrite_or_reactivate_an_existing_user(monkeypatch) -> None:
+    db = make_session()
+    user = User(
+        email="pilot@example.com",
+        password_hash=hash_password("existing-password"),
+        role="viewer",
+        active=False,
+    )
+    db.add(user)
+    db.commit()
+    monkeypatch.setattr(
+        main_module,
+        "settings",
+        replace(
+            main_module.settings,
+            dashboard_admin_email="pilot@example.com",
+            dashboard_admin_password="replacement-password",
+        ),
+    )
+
+    bootstrap_dashboard_admin(db)
+
+    db.refresh(user)
+    assert db.query(User).count() == 1
+    assert user.active is False
+    assert user.role == "viewer"
+    assert verify_password("existing-password", user.password_hash)
+    assert not verify_password("replacement-password", user.password_hash)
+
+
 def test_dashboard_login_locks_after_repeated_failures_and_recovers(monkeypatch) -> None:
     db = make_session()
     user = User(email="admin@example.com", password_hash=hash_password("secret-password"), role="admin")

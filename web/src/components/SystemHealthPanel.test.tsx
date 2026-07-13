@@ -8,10 +8,10 @@ vi.mock("@/lib/api", () => ({
   fetchSystemStatus: vi.fn(async () => ({
     status: "ready",
     environment: "pilot",
-    version: "0.2.9",
+    version: "0.3.0",
     commit: "abc123def456789",
-    schema_revision: "0013_account_recovery",
-    expected_schema_revision: "0013_account_recovery",
+    schema_revision: "0014_operator_access",
+    expected_schema_revision: "0014_operator_access",
     ai_provider: "mock",
     organization_id: "org-alpha",
     server_time: "2026-07-13T00:00:00Z"
@@ -23,7 +23,7 @@ describe("SystemHealthPanel", () => {
     render(React.createElement(SystemHealthPanel));
 
     expect(await screen.findByText("API and database ready")).toBeInTheDocument();
-    expect(screen.getByText("0013_account_recovery (current)")).toBeInTheDocument();
+    expect(screen.getByText("0014_operator_access (current)")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
     await waitFor(() => expect(api.fetchSystemStatus).toHaveBeenCalledTimes(2));
   });

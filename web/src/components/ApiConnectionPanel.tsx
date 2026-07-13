@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckCircle2, KeyRound, LogOut, Mail, PlugZap, ShieldCheck } from "lucide-react";
+import { CheckCircle2, KeyRound, LogOut, Mail, PlugZap, ShieldCheck, UserCheck } from "lucide-react";
 import { FormEvent, useEffect, useState } from "react";
 import {
   apiBaseUrl,
@@ -11,7 +11,9 @@ import {
   loginDashboardUser,
   logoutDashboard,
   requestDashboardPasswordReset,
-  confirmDashboardPasswordReset
+  confirmDashboardPasswordReset,
+  acceptUserInvitation,
+  verifyDashboardMfa
 } from "@/lib/api";
 
 export function ApiConnectionPanel() {
@@ -24,21 +26,36 @@ export function ApiConnectionPanel() {
   const [busy, setBusy] = useState(false);
   const [recoveryToken, setRecoveryToken] = useState("");
   const [recoveryPasswords, setRecoveryPasswords] = useState({ next: "", confirm: "" });
+  const [invitationToken, setInvitationToken] = useState("");
+  const [invitationPasswords, setInvitationPasswords] = useState({ next: "", confirm: "" });
+  const [mfaChallenge, setMfaChallenge] = useState("");
+  const [mfaCode, setMfaCode] = useState("");
 
   useEffect(() => {
     const fragment = new URLSearchParams(window.location.hash.replace(/^#/, ""));
     const token = fragment.get("reset_token") ?? "";
     if (token) {
       setRecoveryToken(token);
+    }
+    const invitation = fragment.get("invitation_token") ?? "";
+    if (invitation) setInvitationToken(invitation);
+    if (token || invitation) {
       window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}`);
     }
-    const session = hasDashboardSession();
-    setConnected(session);
-    if (session) {
-      fetchAuthIdentity()
-        .then((payload) => setIdentity(payload.user?.email ?? payload.subject))
-        .catch(() => setIdentity(null));
-    }
+    const syncSession = () => {
+      const session = hasDashboardSession();
+      setConnected(session);
+      if (session) {
+        fetchAuthIdentity()
+          .then((payload) => setIdentity(payload.user?.email ?? payload.subject))
+          .catch(() => setIdentity(null));
+      } else {
+        setIdentity(null);
+      }
+    };
+    syncSession();
+    window.addEventListener("secopsai-session-changed", syncSession);
+    return () => window.removeEventListener("secopsai-session-changed", syncSession);
   }, []);
 
   async function requestReset() {
@@ -84,18 +101,66 @@ export function ApiConnectionPanel() {
     }
   }
 
+  async function confirmInvitation(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (invitationPasswords.next.length < 12) {
+      setStatus("Use at least 12 characters for the account password.");
+      return;
+    }
+    if (invitationPasswords.next !== invitationPasswords.confirm) {
+      setStatus("The password confirmation does not match.");
+      return;
+    }
+    setBusy(true);
+    setStatus(null);
+    try {
+      await acceptUserInvitation(invitationToken, invitationPasswords.next);
+      setInvitationToken("");
+      setInvitationPasswords({ next: "", confirm: "" });
+      setStatus("Invitation accepted. Connect with your email and password.");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Unable to accept invitation");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setBusy(true);
     setStatus(null);
     try {
-      const user = await loginDashboardUser(email, password);
+      const result = await loginDashboardUser(email, password);
       setPassword("");
+      if (result.mfaRequired && result.mfaChallenge) {
+        setMfaChallenge(result.mfaChallenge);
+        setIdentity(result.user?.email ?? email);
+        setStatus("Enter the code from your authenticator app or a recovery code.");
+        return;
+      }
       setConnected(true);
-      setIdentity(user?.email ?? email);
+      setIdentity(result.user?.email ?? email);
       setStatus("Connected. Refresh dashboard pages to load live API data.");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Unable to connect");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function confirmMfa(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setBusy(true);
+    setStatus(null);
+    try {
+      const user = await verifyDashboardMfa(mfaChallenge, mfaCode);
+      setMfaChallenge("");
+      setMfaCode("");
+      setConnected(true);
+      setIdentity(user?.email ?? identity ?? email);
+      setStatus("Multi-factor authentication verified. Live API access is connected.");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Unable to verify authentication code");
     } finally {
       setBusy(false);
     }
@@ -128,6 +193,8 @@ export function ApiConnectionPanel() {
       setBusy(false);
       setConnected(false);
       setIdentity(null);
+      setMfaChallenge("");
+      setMfaCode("");
       setStatus("Disconnected from the API session.");
     }
   }
@@ -183,6 +250,65 @@ export function ApiConnectionPanel() {
           <button className="ButtonSecondary mt-3" disabled={busy} type="submit">
             <KeyRound size={16} aria-hidden="true" />Reset password
           </button>
+        </form>
+      ) : null}
+
+      {invitationToken ? (
+        <form className="mt-4 rounded-md border border-sea/30 bg-sea/5 p-3" onSubmit={confirmInvitation}>
+          <div className="flex items-center gap-2 text-sm font-semibold text-ink">
+            <UserCheck size={17} className="text-sea" aria-hidden="true" />
+            Accept workspace invitation
+          </div>
+          <p className="mt-2 text-sm text-zinc-600">
+            New operators choose a password. Existing operators confirm their current password.
+          </p>
+          <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <input
+              className="focus-ring min-w-0 rounded-md border border-line bg-white px-3 py-2 text-sm"
+              type="password"
+              autoComplete="new-password"
+              minLength={12}
+              placeholder="Account password (12+ characters)"
+              value={invitationPasswords.next}
+              onChange={(event) => setInvitationPasswords({ ...invitationPasswords, next: event.target.value })}
+              required
+            />
+            <input
+              className="focus-ring min-w-0 rounded-md border border-line bg-white px-3 py-2 text-sm"
+              type="password"
+              autoComplete="new-password"
+              minLength={12}
+              placeholder="Confirm account password"
+              value={invitationPasswords.confirm}
+              onChange={(event) => setInvitationPasswords({ ...invitationPasswords, confirm: event.target.value })}
+              required
+            />
+          </div>
+          <button className="ButtonSecondary mt-3" disabled={busy} type="submit">
+            <UserCheck size={16} aria-hidden="true" />Accept invitation
+          </button>
+        </form>
+      ) : null}
+
+      {mfaChallenge ? (
+        <form className="mt-4 rounded-md border border-sea/30 bg-sea/5 p-3" onSubmit={confirmMfa}>
+          <div className="flex items-center gap-2 text-sm font-semibold text-ink">
+            <ShieldCheck size={17} className="text-sea" aria-hidden="true" />
+            Verify multi-factor authentication
+          </div>
+          <div className="mt-3 flex flex-col gap-3 sm:flex-row">
+            <input
+              className="focus-ring min-w-0 flex-1 rounded-md border border-line bg-white px-3 py-2 font-mono text-sm"
+              value={mfaCode}
+              onChange={(event) => setMfaCode(event.target.value)}
+              placeholder="6-digit code or recovery code"
+              autoComplete="one-time-code"
+              required
+            />
+            <button className="ButtonSecondary" disabled={busy || mfaCode.trim().length < 6} type="submit">
+              <ShieldCheck size={16} aria-hidden="true" />Verify
+            </button>
+          </div>
         </form>
       ) : null}
 

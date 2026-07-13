@@ -312,6 +312,7 @@ class User(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    password_ready: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     role: Mapped[str] = mapped_column(String(32), default="admin")
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     session_version: Mapped[int] = mapped_column(Integer, default=1)
@@ -320,6 +321,11 @@ class User(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     password_changed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    mfa_secret_ciphertext: Mapped[str | None] = mapped_column(Text)
+    mfa_pending_secret_ciphertext: Mapped[str | None] = mapped_column(Text)
+    mfa_pending_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    mfa_enabled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    mfa_last_counter: Mapped[int | None] = mapped_column(Integer)
 
     memberships: Mapped[list["OrganizationMembership"]] = relationship(back_populates="user")
 
@@ -334,7 +340,9 @@ class AccountAccessToken(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    organization_id: Mapped[str | None] = mapped_column(ForeignKey("organizations.id"))
     purpose: Mapped[str] = mapped_column(String(32), nullable=False)
+    context: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     token_hash: Mapped[str] = mapped_column(String(128), nullable=False)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -348,6 +356,20 @@ class AccountAccessToken(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
     user: Mapped[User] = relationship()
+
+
+class MfaRecoveryCode(Base):
+    __tablename__ = "mfa_recovery_codes"
+    __table_args__ = (
+        Index("ix_mfa_recovery_codes_user", "user_id"),
+        Index("ix_mfa_recovery_codes_hash", "code_hash", unique=True),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    code_hash: Mapped[str] = mapped_column(String(128), nullable=False)
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
 class OrganizationMembership(Base):

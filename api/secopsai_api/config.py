@@ -42,7 +42,7 @@ class Settings:
         or os.getenv("RENDER_GIT_COMMIT")
         or "local"
     )
-    expected_schema_revision: str = "0013_account_recovery"
+    expected_schema_revision: str = "0014_operator_access"
     admin_token: str = os.getenv("SECOPSAI_ADMIN_TOKEN", "dev-admin-token")
     token_secret: str = os.getenv("SECOPSAI_TOKEN_SECRET", "dev-token-secret")
     dashboard_admin_email: str | None = os.getenv("SECOPSAI_DASHBOARD_ADMIN_EMAIL") or None
@@ -53,10 +53,18 @@ class Settings:
     login_max_attempts: int = int(os.getenv("SECOPSAI_LOGIN_MAX_ATTEMPTS", "5"))
     login_lockout_seconds: int = int(os.getenv("SECOPSAI_LOGIN_LOCKOUT_SECONDS", "900"))
     dashboard_reset_url: str | None = os.getenv("SECOPSAI_DASHBOARD_RESET_URL") or None
+    dashboard_invite_url: str | None = os.getenv("SECOPSAI_DASHBOARD_INVITE_URL") or None
     password_reset_ttl_seconds: int = int(os.getenv("SECOPSAI_PASSWORD_RESET_TTL_SECONDS", "1800"))
     password_reset_cooldown_seconds: int = int(os.getenv("SECOPSAI_PASSWORD_RESET_COOLDOWN_SECONDS", "60"))
     password_reset_max_delivery_attempts: int = int(os.getenv("SECOPSAI_PASSWORD_RESET_MAX_DELIVERY_ATTEMPTS", "4"))
     password_reset_batch_size: int = int(os.getenv("SECOPSAI_PASSWORD_RESET_BATCH_SIZE", "25"))
+    invitation_ttl_seconds: int = int(os.getenv("SECOPSAI_INVITATION_TTL_SECONDS", "86400"))
+    mfa_challenge_ttl_seconds: int = int(os.getenv("SECOPSAI_MFA_CHALLENGE_TTL_SECONDS", "300"))
+    mfa_setup_ttl_seconds: int = int(os.getenv("SECOPSAI_MFA_SETUP_TTL_SECONDS", "600"))
+    # MFA material has an independent rotation boundary from session tokens.
+    mfa_encryption_key: str = os.getenv(
+        "SECOPSAI_MFA_ENCRYPTION_KEY", "dev-mfa-encryption-key"
+    )
     auto_create_tables: bool = _bool_env("SECOPSAI_AUTO_CREATE_TABLES", True)
     cors_origins: list[str] = None  # type: ignore[assignment]
     ai_provider: str = os.getenv("AI_PROVIDER", "mock")
@@ -89,13 +97,15 @@ class Settings:
         self.validate()
 
     def validate(self) -> None:
-        if self.environment != "production":
+        if self.environment not in {"pilot", "production"}:
             return
         problems: list[str] = []
         if self.admin_token == "dev-admin-token" or len(self.admin_token) < 32:
             problems.append("SECOPSAI_ADMIN_TOKEN must be a random 32+ character value")
         if self.token_secret == "dev-token-secret" or len(self.token_secret) < 32:
             problems.append("SECOPSAI_TOKEN_SECRET must be a random 32+ character value")
+        if len(self.mfa_encryption_key) < 32:
+            problems.append("SECOPSAI_MFA_ENCRYPTION_KEY must be a random 32+ character value")
         if len(self.webhook_signing_secret) < 32:
             problems.append("SECOPSAI_WEBHOOK_SIGNING_SECRET must contain at least 32 characters")
         if self.auto_create_tables:
@@ -107,18 +117,23 @@ class Settings:
             problems.append("SECOPSAI_CORS_ORIGINS must contain only deployed origins")
         if self.dashboard_admin_password and len(self.dashboard_admin_password) < 16:
             problems.append("SECOPSAI_DASHBOARD_ADMIN_PASSWORD must contain at least 16 characters")
-        if self.dashboard_reset_url:
-            parsed_reset_url = urlparse(self.dashboard_reset_url)
+        for name, value in (
+            ("SECOPSAI_DASHBOARD_RESET_URL", self.dashboard_reset_url),
+            ("SECOPSAI_DASHBOARD_INVITE_URL", self.dashboard_invite_url),
+        ):
+            if not value:
+                continue
+            parsed_url = urlparse(value)
             if (
-                parsed_reset_url.scheme != "https"
-                or not parsed_reset_url.netloc
-                or parsed_reset_url.username
-                or parsed_reset_url.password
-                or parsed_reset_url.query
-                or parsed_reset_url.fragment
+                parsed_url.scheme != "https"
+                or not parsed_url.netloc
+                or parsed_url.username
+                or parsed_url.password
+                or parsed_url.query
+                or parsed_url.fragment
             ):
                 problems.append(
-                    "SECOPSAI_DASHBOARD_RESET_URL must be an HTTPS URL without credentials, query, or fragment"
+                    f"{name} must be an HTTPS URL without credentials, query, or fragment"
                 )
         if self.smtp_host and not self.dashboard_reset_url:
             problems.append("SECOPSAI_DASHBOARD_RESET_URL is required when SMTP_HOST is configured")

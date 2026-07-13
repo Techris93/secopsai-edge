@@ -198,6 +198,19 @@ export type User = {
   created_at: string;
   last_login_at?: string | null;
   password_changed_at?: string | null;
+  mfa_enabled: boolean;
+};
+
+export type UserInvitation = {
+  id: string;
+  user_id: string;
+  organization_id: string;
+  email: string;
+  role: string;
+  state: "pending" | "accepted" | "revoked" | "expired" | "closed" | string;
+  delivery_status: string;
+  expires_at: string;
+  created_at: string;
 };
 
 export type AccountAccessDelivery = {

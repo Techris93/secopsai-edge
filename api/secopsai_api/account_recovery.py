@@ -17,6 +17,7 @@ from secopsai_api.security import constant_time_equals
 
 
 PASSWORD_RESET_PURPOSE = "password_reset"
+USER_INVITATION_PURPOSE = "user_invitation"
 DELIVERABLE_STATUSES = {"queued", "retrying"}
 
 
@@ -94,38 +95,114 @@ def queue_password_reset(db: Session, user: User, settings: Settings | None = No
     return row
 
 
-def _reset_url(token: str, settings: Settings) -> str:
-    raw = str(settings.dashboard_reset_url or "").strip()
+def queue_user_invitation(
+    db: Session,
+    user: User,
+    organization_id: str,
+    role: str,
+    *,
+    new_user: bool,
+    settings: Settings | None = None,
+) -> AccountAccessToken:
+    settings = settings or get_settings()
+    now = utcnow()
+    for existing in db.scalars(
+        select(AccountAccessToken).where(
+            AccountAccessToken.user_id == user.id,
+            AccountAccessToken.organization_id == organization_id,
+            AccountAccessToken.purpose == USER_INVITATION_PURPOSE,
+            AccountAccessToken.used_at.is_(None),
+        )
+    ).all():
+        existing.used_at = now
+        if existing.delivery_status in DELIVERABLE_STATUSES:
+            existing.delivery_status = "failed"
+            existing.delivery_detail = "Superseded by a newer invitation"
+
+    row = AccountAccessToken(
+        id=new_id(),
+        user_id=user.id,
+        organization_id=organization_id,
+        purpose=USER_INVITATION_PURPOSE,
+        context={"role": role, "new_user": new_user},
+        token_hash="pending",
+        expires_at=now + timedelta(seconds=max(900, settings.invitation_ttl_seconds)),
+        max_delivery_attempts=max(1, settings.password_reset_max_delivery_attempts),
+        next_attempt_at=now,
+    )
+    row.token_hash = _token_hash(materialize_access_token(row, settings), settings)
+    db.add(row)
+    db.flush()
+    return row
+
+
+def _access_url(raw_url: str | None, fragment_name: str, token: str, setting_name: str) -> str:
+    raw = str(raw_url or "").strip()
     parsed = urlparse(raw)
     is_loopback = parsed.hostname in {"127.0.0.1", "localhost"}
     if parsed.scheme not in ({"http", "https"} if is_loopback else {"https"}) or not parsed.netloc:
-        raise RuntimeError("SECOPSAI_DASHBOARD_RESET_URL must be an HTTPS URL")
+        raise RuntimeError(f"{setting_name} must be an HTTPS URL")
     if parsed.username or parsed.password or parsed.query or parsed.fragment:
-        raise RuntimeError("SECOPSAI_DASHBOARD_RESET_URL must not contain credentials, query, or fragment")
-    return f"{raw}#reset_token={token}"
+        raise RuntimeError(f"{setting_name} must not contain credentials, query, or fragment")
+    return f"{raw}#{fragment_name}={token}"
 
 
-def _send_password_reset(row: AccountAccessToken, user: User, settings: Settings) -> tuple[bool, str]:
+def _reset_url(token: str, settings: Settings) -> str:
+    return _access_url(
+        settings.dashboard_reset_url,
+        "reset_token",
+        token,
+        "SECOPSAI_DASHBOARD_RESET_URL",
+    )
+
+
+def _invitation_url(token: str, settings: Settings) -> str:
+    return _access_url(
+        settings.dashboard_invite_url or settings.dashboard_reset_url,
+        "invitation_token",
+        token,
+        "SECOPSAI_DASHBOARD_INVITE_URL",
+    )
+
+
+def _send_account_access(row: AccountAccessToken, user: User, settings: Settings) -> tuple[bool, str]:
     try:
         token = materialize_access_token(row, settings)
         message = EmailMessage()
-        message["Subject"] = "Reset your SecOpsAI Edge password"
         message["From"] = settings.smtp_from
         message["To"] = user.email
-        message.set_content(
-            "\n".join(
-                [
-                    "A password reset was requested for your SecOpsAI Edge operator account.",
-                    "",
-                    _reset_url(token, settings),
-                    "",
-                    f"This link expires in {max(5, settings.password_reset_ttl_seconds // 60)} minutes and can be used once.",
-                    "If you did not request this, no action is required.",
-                ]
+        if row.purpose == USER_INVITATION_PURPOSE:
+            message["Subject"] = "Join your SecOpsAI Edge workspace"
+            message.set_content(
+                "\n".join(
+                    [
+                        "You were invited to a SecOpsAI Edge workspace.",
+                        "",
+                        _invitation_url(token, settings),
+                        "",
+                        f"This link expires in {max(15, settings.invitation_ttl_seconds // 3600)} hours and can be used once.",
+                        "If you were not expecting this invitation, do not use the link.",
+                    ]
+                )
             )
-        )
+            delivered_detail = "Invitation email delivered"
+        else:
+            message["Subject"] = "Reset your SecOpsAI Edge password"
+            message.set_content(
+                "\n".join(
+                    [
+                        "A password reset was requested for your SecOpsAI Edge operator account.",
+                        "",
+                        _reset_url(token, settings),
+                        "",
+                        f"This link expires in {max(5, settings.password_reset_ttl_seconds // 60)} minutes and can be used once.",
+                        "If you did not request this, no action is required.",
+                    ]
+                )
+            )
+            delivered_detail = "Password reset email delivered"
         send_email_message(message, settings)
-        return True, "Password reset email delivered"
+        return True, delivered_detail
     except Exception as exc:  # pragma: no cover - external service boundary
         return False, str(exc)
 
@@ -146,13 +223,13 @@ def attempt_account_access_delivery(
         row.delivery_detail = "Access link expired or was already used"
         return
     user = db.get(User, row.user_id)
-    if user is None or not user.active:
+    if user is None or (not user.active and row.purpose != USER_INVITATION_PURPOSE):
         row.delivery_status = "failed"
         row.delivery_detail = "Account is unavailable"
         return
     row.delivery_attempts += 1
     row.last_attempt_at = now
-    ok, detail = _send_password_reset(row, user, settings)
+    ok, detail = _send_account_access(row, user, settings)
     row.delivery_detail = detail[:2000]
     if ok:
         row.delivery_status = "delivered"
@@ -180,6 +257,7 @@ def process_due_account_access_deliveries(
             AccountAccessToken.next_attempt_at <= utcnow(),
         )
         .order_by(AccountAccessToken.next_attempt_at, AccountAccessToken.created_at)
+        .with_for_update(skip_locked=True)
         .limit(batch_size)
     ).all()
     totals = {"processed": 0, "delivered": 0, "retrying": 0, "failed": 0}
@@ -203,7 +281,7 @@ def consume_password_reset(
         select(AccountAccessToken).where(
             AccountAccessToken.token_hash == _token_hash(token, settings),
             AccountAccessToken.purpose == PASSWORD_RESET_PURPOSE,
-        )
+        ).with_for_update()
     )
     if row is None or row.used_at is not None:
         return None
@@ -215,7 +293,7 @@ def consume_password_reset(
     expected = materialize_access_token(row, settings)
     if not constant_time_equals(token, expected):
         return None
-    user = db.get(User, row.user_id)
+    user = db.scalar(select(User).where(User.id == row.user_id).with_for_update())
     if user is None or not user.active:
         return None
 
@@ -236,3 +314,31 @@ def consume_password_reset(
         active.used_at = now
     db.flush()
     return user
+
+
+def validate_user_invitation(
+    db: Session,
+    token: str,
+    *,
+    settings: Settings | None = None,
+) -> tuple[AccountAccessToken, User] | None:
+    settings = settings or get_settings()
+    row = db.scalar(
+        select(AccountAccessToken).where(
+            AccountAccessToken.token_hash == _token_hash(token, settings),
+            AccountAccessToken.purpose == USER_INVITATION_PURPOSE,
+        ).with_for_update()
+    )
+    if row is None or row.used_at is not None or not row.organization_id:
+        return None
+    now = utcnow()
+    comparison_now = now if row.expires_at.tzinfo else now.replace(tzinfo=None)
+    if row.expires_at <= comparison_now:
+        row.used_at = now
+        return None
+    if not constant_time_equals(token, materialize_access_token(row, settings)):
+        return None
+    user = db.scalar(select(User).where(User.id == row.user_id).with_for_update())
+    if user is None:
+        return None
+    return row, user

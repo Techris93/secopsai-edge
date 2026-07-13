@@ -9,7 +9,9 @@ vi.mock("@/lib/api", () => ({
   fetchAuthIdentity: vi.fn(),
   hasDashboardSession: vi.fn(() => false),
   loginDashboard: vi.fn(async () => undefined),
-  loginDashboardUser: vi.fn(async () => ({ email: "admin@example.com" })),
+  loginDashboardUser: vi.fn(async () => ({ user: { email: "admin@example.com" }, mfaRequired: false, mfaChallenge: null })),
+  verifyDashboardMfa: vi.fn(async () => ({ email: "admin@example.com" })),
+  acceptUserInvitation: vi.fn(async () => undefined),
   logoutDashboard: vi.fn(async () => undefined),
   requestDashboardPasswordReset: vi.fn(async () => undefined),
   confirmDashboardPasswordReset: vi.fn(async () => undefined)
@@ -33,6 +35,44 @@ test("prefers dashboard user login over admin token", async () => {
 
   await waitFor(() => expect(api.loginDashboardUser).toHaveBeenCalledWith("admin@example.com", "correct horse battery staple"));
   expect(await screen.findByText(/Connected. Refresh dashboard pages/)).toBeInTheDocument();
+});
+
+test("accepts an invitation token from the URL fragment and removes it", async () => {
+  const api = await import("@/lib/api");
+  window.history.replaceState(null, "", "/settings#invitation_token=secopsai_access.invitation-token");
+  render(React.createElement(ApiConnectionPanel));
+  expect(await screen.findByText("Accept workspace invitation")).toBeInTheDocument();
+  expect(window.location.hash).toBe("");
+  fireEvent.change(screen.getByPlaceholderText("Account password (12+ characters)"), {
+    target: { value: "invited-password-value" }
+  });
+  fireEvent.change(screen.getByPlaceholderText("Confirm account password"), {
+    target: { value: "invited-password-value" }
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Accept invitation" }));
+  await waitFor(() => expect(api.acceptUserInvitation).toHaveBeenCalledWith(
+    "secopsai_access.invitation-token",
+    "invited-password-value"
+  ));
+  expect(await screen.findByText(/Invitation accepted/)).toBeInTheDocument();
+});
+
+test("completes an MFA login challenge without storing a session early", async () => {
+  const api = await import("@/lib/api");
+  vi.mocked(api.loginDashboardUser).mockResolvedValueOnce({
+    user: { email: "admin@example.com" } as never,
+    mfaRequired: true,
+    mfaChallenge: "signed-mfa-challenge"
+  });
+  render(React.createElement(ApiConnectionPanel));
+  fireEvent.change(screen.getByPlaceholderText("admin@example.com"), { target: { value: "admin@example.com" } });
+  fireEvent.change(screen.getByPlaceholderText("Password"), { target: { value: "correct horse battery staple" } });
+  fireEvent.click(screen.getByRole("button", { name: "Connect" }));
+  expect(await screen.findByText("Verify multi-factor authentication")).toBeInTheDocument();
+  fireEvent.change(screen.getByPlaceholderText("6-digit code or recovery code"), { target: { value: "123456" } });
+  fireEvent.click(screen.getByRole("button", { name: "Verify" }));
+  await waitFor(() => expect(api.verifyDashboardMfa).toHaveBeenCalledWith("signed-mfa-challenge", "123456"));
+  expect(await screen.findByText(/Multi-factor authentication verified/)).toBeInTheDocument();
 });
 
 test("keeps legacy admin token as recovery flow", async () => {

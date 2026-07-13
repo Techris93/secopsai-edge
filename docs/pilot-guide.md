@@ -14,20 +14,24 @@ SecOpsAI Edge discovers internal network assets, records service exposure, monit
 ## Pilot Workflow
 
 1. Connect the dashboard to the API from Settings and confirm it shows `Live API data`.
-2. Create or select a site in the dashboard.
-3. Click `Enroll sensor` for the target site, copy the one-time installer, and
+2. Invite each operator from Settings > Users & Sessions. Operators choose
+   their own password from the one-time link; do not share temporary passwords.
+3. Have owner/admin operators enable authenticator-app MFA and store their
+   one-use recovery codes outside SecOpsAI.
+4. Create or select a site in the dashboard.
+5. Click `Enroll sensor` for the target site, copy the one-time installer, and
    run it on the authorized MacBook/Raspberry Pi.
-4. Confirm the worker is online.
-5. Queue a scan or configure a schedule.
-6. Review Assets, Wi-Fi, and Findings.
-7. Add notes and mark findings acknowledged/resolved/false positive.
-8. Approve known assets, accepted services, and trusted BSSIDs to establish the site baseline.
-9. Generate a report.
-10. Open the report detail page, verify the frozen reporting period and metrics, then copy the executive summary/client brief or download the client-ready PDF.
-11. Configure webhook/email/Telegram notifications.
-12. Install automatic Edge-to-Core sync, choosing local import or hosted Core
+6. Confirm the worker is online.
+7. Queue a scan or configure a schedule.
+8. Review Assets, Wi-Fi, and Findings.
+9. Add notes and mark findings acknowledged/resolved/false positive.
+10. Approve known assets, accepted services, and trusted BSSIDs to establish the site baseline.
+11. Generate a report.
+12. Open the report detail page, verify the frozen reporting period and metrics, then copy the executive summary/client brief or download the client-ready PDF.
+13. Configure webhook/email/Telegram notifications.
+14. Install automatic Edge-to-Core sync, choosing local import or hosted Core
     push, and confirm its status/logs.
-13. Confirm important operator actions appear in Audit Log.
+15. Confirm important operator and authentication actions appear in Audit Log.
 
 ## Establish The Baseline
 
@@ -81,6 +85,19 @@ Brief` for a short handoff. Raw Nmap output, packet data, scan logs, and finding
 evidence objects are excluded from the PDF.
 
 ## Recovery
+
+Use `Forgot password?` from Settings > API Connection for self-service account
+recovery. The request deliberately gives the same response for known and
+unknown addresses. Owner/admin operators can inspect delivery state and retry a
+failed invitation or recovery email from Users & Sessions, but cannot retrieve
+the one-time token or replace another operator's password.
+
+An operator who loses their authenticator can use one stored recovery code at
+the MFA login prompt. Each code works once. After signing in, replace the
+recovery-code set. If both the authenticator and all codes are lost, another
+workspace owner can choose `Reset MFA` for that operator in Users & Sessions.
+The action revokes the operator's sessions and is audit logged. A signed-in
+owner cannot reset their own MFA; keep a second owner account for recovery.
 
 Rotate a sensor token from the Sites page when credentials are lost or leaked. After rotating, update `.cloud-sensor.env` on the sensor and restart the worker.
 
