@@ -53,7 +53,7 @@ Usage:
   ./scripts/edge worker [--cloud]      Poll for remote scan jobs and execute them locally
   ./scripts/edge worker install-service --cloud
                                       Install background worker service
-  ./scripts/edge worker start|stop|status|logs
+  ./scripts/edge worker start|stop|restart|status|logs
                                       Manage background worker service
   ./scripts/edge report [--cloud]      Generate an AI-style report
   ./scripts/edge schedules run-due [--cloud]
@@ -71,6 +71,10 @@ Usage:
   ./scripts/edge cloud configure <url> Save hosted Render API URL
   ./scripts/edge cloud register        Register this sensor against the hosted API
   ./scripts/edge cloud enroll <token>  Use a one-time workspace enrollment token
+  ./scripts/edge cloud rotate-sensor-token [sensor-id]
+                                      Rotate hosted sensor credentials safely
+  ./scripts/edge cloud reauth [sensor-id]
+                                      Alias for rotate-sensor-token
   ./scripts/edge cloud drift-check     Check Render API, scheduler, and database drift/expiry
   ./scripts/edge cloud backup          Create and verify a hosted Render PostgreSQL backup
   ./scripts/edge cloud uptime-check    Record API/readiness/dashboard health evidence
@@ -526,20 +530,64 @@ register_sensor() {
   sensor_token="$(printf "%s" "$response" | "$PYTHON_BIN" -c 'import json,sys; print(json.load(sys.stdin)["sensor_token"])')"
 
   if [ "$profile" = "cloud" ]; then
-    cat > "$output_file" <<EOF
+    umask 077
+    temporary_sensor_file="$(mktemp "${output_file}.XXXXXX")"
+    cat > "$temporary_sensor_file" <<EOF
 SECOPSAI_CLOUD_SENSOR_ID=$sensor_id
 SECOPSAI_CLOUD_SENSOR_TOKEN=$sensor_token
 EOF
+    chmod 600 "$temporary_sensor_file"
+    mv "$temporary_sensor_file" "$output_file"
   else
-    cat > "$output_file" <<EOF
+    umask 077
+    temporary_sensor_file="$(mktemp "${output_file}.XXXXXX")"
+    cat > "$temporary_sensor_file" <<EOF
 SECOPSAI_SENSOR_ID=$sensor_id
 SECOPSAI_SENSOR_TOKEN=$sensor_token
 SECOPSAI_API_URL=$target_api_url
 EOF
+    chmod 600 "$temporary_sensor_file"
+    mv "$temporary_sensor_file" "$output_file"
   fi
 
   info "Saved sensor credentials to ${output_file#$ROOT_DIR/}"
   printf "Sensor ID: %s\n" "$sensor_id"
+}
+
+rotate_cloud_sensor_token() {
+  sensor_id="${1:-}"
+  load_cloud_env
+  target_api_url="$(cloud_api_url)"
+  sensor_id="${sensor_id:-${SECOPSAI_CLOUD_SENSOR_ID:-}}"
+  [ -n "$sensor_id" ] || fail "No hosted sensor ID. Pass one or run ./scripts/edge cloud register first."
+  target_admin_token="$(cloud_admin_token)"
+
+  info "Rotating hosted sensor token for $sensor_id"
+  response="$({
+    curl -fsS -X POST "$target_api_url/api/v1/sensors/$sensor_id/rotate-token" \
+      -H "Authorization: Bearer $target_admin_token"
+  } 2>&1)" || fail "Hosted sensor token rotation failed. Check the API URL, admin role, and sensor ID."
+
+  ensure_python_tools
+  rotated_sensor_id="$(printf "%s" "$response" | "$PYTHON_BIN" -c 'import json,sys; print(json.load(sys.stdin)["sensor_id"])' 2>/dev/null)" \
+    || fail "Hosted API returned an invalid sensor rotation response."
+  rotated_sensor_token="$(printf "%s" "$response" | "$PYTHON_BIN" -c 'import json,sys; print(json.load(sys.stdin)["sensor_token"])' 2>/dev/null)" \
+    || fail "Hosted API returned an invalid sensor rotation response."
+  [ "$rotated_sensor_id" = "$sensor_id" ] || fail "Hosted API returned a different sensor ID during rotation."
+  [ -n "$rotated_sensor_token" ] || fail "Hosted API returned an empty sensor token."
+
+  umask 077
+  temporary_sensor_file="$(mktemp "${CLOUD_SENSOR_ENV_FILE}.XXXXXX")"
+  cat > "$temporary_sensor_file" <<EOF
+SECOPSAI_CLOUD_SENSOR_ID=$rotated_sensor_id
+SECOPSAI_CLOUD_SENSOR_TOKEN=$rotated_sensor_token
+EOF
+  chmod 600 "$temporary_sensor_file"
+  mv "$temporary_sensor_file" "$CLOUD_SENSOR_ENV_FILE"
+
+  info "Saved the replacement sensor credential to ${CLOUD_SENSOR_ENV_FILE#$ROOT_DIR/}"
+  printf "Sensor ID: %s\n" "$rotated_sensor_id"
+  printf "Restart the worker to load it: ./scripts/edge worker restart\n"
 }
 
 preview_scan() {
@@ -824,8 +872,13 @@ stop_worker_service() {
     info "Stopped $SERVICE_LABEL"
     return
   fi
-  systemctl --user stop "$SERVICE_LABEL.service"
+  systemctl --user stop "$SERVICE_LABEL.service" || true
   info "Stopped $SERVICE_LABEL"
+}
+
+restart_worker_service() {
+  stop_worker_service
+  start_worker_service
 }
 
 worker_service_status() {
@@ -866,6 +919,9 @@ worker() {
       ;;
     stop)
       stop_worker_service
+      ;;
+    restart)
+      restart_worker_service
       ;;
     status)
       worker_service_status
@@ -1757,6 +1813,9 @@ cloud() {
       enrollment_token="${1:-}"
       [ -n "$enrollment_token" ] || fail "Usage: ./scripts/edge cloud enroll <one-time-token>"
       register_sensor cloud "$enrollment_token"
+      ;;
+    rotate-sensor-token|reauth)
+      rotate_cloud_sensor_token "${2:-${1:-}}"
       ;;
     status)
       status --cloud

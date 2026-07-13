@@ -2702,3 +2702,61 @@ Next checkpoint:
 - Merge the cross-repository changes, then audit token rotation, notification
   delivery, and external pilot activation evidence as the remaining product
   readiness work.
+
+## Checkpoint 048 - Sensor Credential Recovery CLI
+
+Status: complete; external pilot acceptance remains pending
+
+Scope:
+
+- Close the remaining operator-recovery gap between the dashboard token-rotation
+  endpoint and the documented sensor-host CLI workflow.
+- Ensure a lost or suspected sensor credential can be replaced without manual
+  file editing or leaving a partially written secret file.
+
+Completed changes:
+
+- Added `./scripts/edge cloud rotate-sensor-token [sensor-id]` and the
+  `./scripts/edge cloud reauth [sensor-id]` alias.
+- The helper uses the hosted administrator credential only for the rotation
+  request, validates that the API returned the requested sensor identity, and
+  never prints the replacement secret.
+- Replaced `.cloud-sensor.env` atomically through a same-directory temporary
+  file with mode `0600`, and applied the same protection to fresh local/cloud
+  registration output.
+- Added `./scripts/edge worker restart` so the running service can load the
+  replacement credential through a documented command.
+- Added regression tests for rotation, alias handling, API argument shape,
+  secret non-disclosure, atomic output, and file permissions.
+
+Validation required before merge:
+
+- `bash -n scripts/edge`.
+- Focused CLI rotation tests.
+- Full `./scripts/edge test` including frontend/browser/build/audit gates.
+- Documentation and checkpoint consistency review.
+
+Validation:
+
+- `bash -n scripts/edge` passed.
+- Focused rotation and queue regression tests passed.
+- Full backend/agent suite passed: `127` tests.
+- Full frontend suite passed: `32` tests.
+- Production dashboard build passed.
+- Both desktop/mobile principal-route accessibility workflows passed after
+  increasing only that test's timeout for the ten-route Axe analysis.
+- Full browser matrix passed: `28` workflows.
+- Frontend dependency audit passed with zero vulnerabilities.
+
+Safety boundary:
+
+- The CLI does not expose the replacement token in stdout or logs; the worker
+  reads it from the owner-only local credential file after restart.
+- The rotation endpoint remains admin-authenticated and workspace-scoped.
+- No scan, packet capture, or raw telemetry is involved.
+
+Next checkpoint:
+
+- Merge this recovery improvement, then close the remaining external pilot
+  evidence gates and audit commercial SaaS/MSP, research-publication, and
+  hardware lifecycle gaps separately.
