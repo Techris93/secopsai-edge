@@ -413,3 +413,11 @@ def test_report_generation_freezes_period_and_operational_metrics() -> None:
         "scans_completed": 1,
         "severity": {"critical": 0, "high": 1, "medium": 1, "low": 0, "info": 0},
     }
+
+    limited = client.post(
+        f"/api/v1/reports/generate?site_id={sensor.site_id}",
+        headers=admin_headers(),
+    )
+    assert limited.status_code == 429
+    assert limited.headers["Retry-After"].isdigit()
+    assert "rate limited" in limited.json()["detail"]

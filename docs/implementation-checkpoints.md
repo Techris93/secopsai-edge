@@ -2405,3 +2405,37 @@ Next checkpoint:
   go/no-go decision. Do not claim the controlled pilot is customer-ready until
   the paid infrastructure, second-owner recovery, notification, fresh-host soak,
   and any in-scope wireless evidence are attached.
+
+## Checkpoint 042 - AI Report Cost Guardrail
+
+Status: implementation complete; release and hosted verification pending
+
+Scope:
+
+- Bound report-generation cost and provider pressure at the API boundary.
+- Make the active guardrail visible to authenticated operators.
+- Validate configuration errors instead of silently accepting unsafe values.
+
+Completed changes:
+
+- Added `AI_REPORT_COOLDOWN_SECONDS`, defaulting to five minutes and scoped per
+  site. A repeated report request returns HTTP 429 with `Retry-After`.
+- Kept `AI_MAX_FINDINGS_PER_REPORT` as an explicit positive bound and exposed
+  both AI guardrail values through `/api/v1/system/status`.
+- Added the guardrail summary to the dashboard System Health panel.
+- Documented production configuration and the controlled-test-only meaning of
+  a zero cooldown.
+
+Validation:
+
+- Focused API/config tests passed, including invalid guardrail values and the
+  repeated-report 429 contract.
+- Frontend tests passed with the new system-health fields.
+
+Release follow-up:
+
+- Run the full Edge release gate, publish `v0.3.5`, deploy the matching
+  dashboard build, and verify hosted health/readiness plus system status.
+- Keep the external pilot acceptance gates from Checkpoint 040 open until
+  paid infrastructure, notification, account recovery, fresh-host soak,
+  wireless scope, and independent dashboard availability evidence are complete.

@@ -53,7 +53,7 @@ The repository includes `render.yaml`.
 Expected response:
 
 ```json
-{"status":"ok","version":"0.3.4","commit":"<commit>"}
+{"status":"ok","version":"0.3.5","commit":"<commit>"}
 ```
 
 `/readyz` must return `status: ready` and schema revision
@@ -144,6 +144,8 @@ In the Render service environment, set these server-side values:
 AI_PROVIDER=openai
 AI_API_KEY=<your OpenAI API key>
 AI_MODEL=gpt-5.4-mini
+AI_MAX_FINDINGS_PER_REPORT=50
+AI_REPORT_COOLDOWN_SECONDS=300
 ```
 
 Redeploy the API, then generate a new report. Existing reports remain unchanged. Never put the API key in a `NEXT_PUBLIC_*` variable or the Cloudflare Pages environment.

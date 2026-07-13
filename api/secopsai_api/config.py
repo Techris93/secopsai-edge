@@ -72,6 +72,7 @@ class Settings:
     ai_api_key: str | None = os.getenv("AI_API_KEY") or None
     ai_model: str = os.getenv("AI_MODEL", "gpt-5.4-mini")
     ai_max_findings_per_report: int = int(os.getenv("AI_MAX_FINDINGS_PER_REPORT", "50"))
+    ai_report_cooldown_seconds: int = int(os.getenv("AI_REPORT_COOLDOWN_SECONDS", "300"))
     splunk_hec_enabled: bool = _bool_env("SPLUNK_HEC_ENABLED", False)
     splunk_hec_url: str | None = os.getenv("SPLUNK_HEC_URL") or None
     splunk_hec_token: str | None = os.getenv("SPLUNK_HEC_TOKEN") or None
@@ -97,6 +98,10 @@ class Settings:
         self.validate()
 
     def validate(self) -> None:
+        if self.ai_max_findings_per_report < 1:
+            raise RuntimeError("AI_MAX_FINDINGS_PER_REPORT must be at least 1")
+        if not 0 <= self.ai_report_cooldown_seconds <= 86_400:
+            raise RuntimeError("AI_REPORT_COOLDOWN_SECONDS must be between 0 and 86400")
         if self.environment not in {"pilot", "production"}:
             return
         problems: list[str] = []

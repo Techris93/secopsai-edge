@@ -15,6 +15,10 @@ Remote scan jobs are limited to `/24` or narrower targets. The API rejects publi
 AI reports receive normalized findings, not raw scanner logs. Evidence redaction removes sensitive identifiers such as MAC address, BSSID, and hostname before provider submission.
 
 If `AI_PROVIDER=openai` or `AI_PROVIDER=http` fails, report generation falls back to deterministic mock output and records the provider error in the report content.
+Report payloads are capped by `AI_MAX_FINDINGS_PER_REPORT`, and report generation
+is site-rate-limited by `AI_REPORT_COOLDOWN_SECONDS` (five minutes by default).
+The API returns `429` with `Retry-After` when the cooldown is active. Set the
+cooldown to `0` only for controlled development or test environments.
 
 ## Sensor Boundary
 

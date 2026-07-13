@@ -128,6 +128,8 @@ async function handleRoute(route: Route, state: MockEdgeApi): Promise<void> {
       schema_revision: "0016_wifi_provenance",
       expected_schema_revision: "0016_wifi_provenance",
       ai_provider: "mock",
+      ai_max_findings_per_report: 50,
+      ai_report_cooldown_seconds: 300,
       organization_id: "organization-demo",
       server_time: new Date().toISOString()
     });
