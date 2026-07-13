@@ -255,6 +255,22 @@ export type SensorEnrollmentSecret = SensorEnrollment & {
   enrollment_token: string;
 };
 
+export type IntegrationToken = {
+  id: string;
+  organization_id: string;
+  name: string;
+  scopes: string[];
+  state: "active" | "expired" | "revoked" | string;
+  expires_at: string;
+  last_used_at?: string | null;
+  revoked_at?: string | null;
+  created_at: string;
+};
+
+export type IntegrationTokenSecret = IntegrationToken & {
+  access_token: string;
+};
+
 export type NotificationEndpoint = {
   id: string;
   site_id?: string | null;

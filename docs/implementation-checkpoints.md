@@ -1098,6 +1098,66 @@ Known risks:
   Checksums detect corruption or asset mismatch; build attestations provide
   provenance for operators that enforce verification.
 
+## Checkpoint 023 - Workspace-Scoped Core Synchronization
+
+Status: complete
+
+Branches:
+
+- Edge repo: `codex/pilot-hardening-foundation`
+- Core repo: `codex/core-edge-hygiene`
+
+Completed changes:
+
+- Replaced the automatic Core sync dependency on a platform administrator
+  secret with expiring, revocable integration credentials limited to the
+  `core:export` scope and the active workspace.
+- Added HMAC-only integration-token storage, one-time plaintext display,
+  expiry, revocation, last-use tracking, audit events, and Alembic revision
+  `0012_integration_tokens`.
+- Added Settings controls to create, copy once, inspect, and revoke Core export
+  credentials. Viewers receive a read-only explanation and cannot enumerate or
+  create tokens.
+- Restricted integration tokens to the normalized Core bundle endpoint. They
+  are explicitly rejected by asset, scan, sensor, user, and general dashboard
+  authorization paths.
+- Updated Core CLI and the supervised sync runner to prefer
+  `SECOPSAI_EDGE_ACCESS_TOKEN`/`--access-token`. Existing admin-token names and
+  owner-only credential files remain readable only for migration compatibility.
+- Updated copied commands to request the credential with cross-shell Python
+  `getpass`, keeping plaintext out of shell history and service arguments.
+- Removed a stale founder-specific path and legacy admin-token installer from
+  dashboard Onboarding; the primary action now opens Sites for one-time sensor
+  enrollment.
+
+Validation:
+
+- Edge full suite: 74 backend/agent tests and 17 frontend tests passed;
+  TypeScript, static Next.js production build, shell/Python syntax checks, and
+  npm audit passed with zero vulnerabilities.
+- Core full suite: 229 tests passed, including scoped access-token environment
+  precedence and legacy compatibility.
+- Adversarial API tests cover one-time secret visibility, HMAC storage,
+  cross-workspace export isolation, denial on unrelated endpoints, expiry,
+  revocation, foreign revocation denial, bad scope rejection, and viewer denial.
+- Against an isolated UTF-8 PostgreSQL 14 cluster, migrations upgraded to
+  `0012_integration_tokens`, `alembic check` found no drift, downgrade reached
+  `0011_schema_alignment`, and re-upgrade restored the integration-token table.
+  The server, data directory, and temporary Homebrew compatibility links were
+  removed afterward.
+
+Known risks:
+
+- Tokens currently expire after 90 days from the dashboard and require manual
+  replacement in the supervised sync service. Rotation reminders and
+  overlap/grace-period rotation belong to fleet operations.
+- The canonical dashboard's optional live Edge enrichment still uses a
+  server-side administrator credential for broader sensor/site/job reads. A
+  separate scoped operations API credential should replace it before hosted
+  multi-tenant dashboard deployment.
+- The legacy platform admin token remains available for the scheduler and
+  emergency recovery. New Core sync installations no longer need it.
+
 ## Completion Rules
 
 A checkpoint is complete only when:

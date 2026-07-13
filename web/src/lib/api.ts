@@ -9,6 +9,8 @@ import type {
   Finding,
   FindingDetail,
   FindingNote,
+  IntegrationToken,
+  IntegrationTokenSecret,
   NotificationEndpoint,
   Organization,
   OnboardingStatus,
@@ -421,6 +423,23 @@ export async function createSensorEnrollment(siteId: string, label: string): Pro
 
 export async function revokeSensorEnrollment(enrollmentId: string): Promise<SensorEnrollment> {
   return requestJson<SensorEnrollment>(`/api/v1/sensor-enrollments/${enrollmentId}`, {
+    method: "DELETE"
+  });
+}
+
+export async function listIntegrationTokens(): Promise<IntegrationToken[]> {
+  return requestJson<IntegrationToken[]>("/api/v1/integration-tokens");
+}
+
+export async function createIntegrationToken(name = "SecOpsAI Core sync"): Promise<IntegrationTokenSecret> {
+  return requestJson<IntegrationTokenSecret>("/api/v1/integration-tokens", {
+    method: "POST",
+    body: JSON.stringify({ name, scopes: ["core:export"], expires_in_days: 90 })
+  });
+}
+
+export async function revokeIntegrationToken(tokenId: string): Promise<IntegrationToken> {
+  return requestJson<IntegrationToken>(`/api/v1/integration-tokens/${tokenId}`, {
     method: "DELETE"
   });
 }

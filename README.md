@@ -118,7 +118,9 @@ Cloud commands:
 ./scripts/edge worker --cloud
 ./scripts/edge scan 192.168.1.0/24 --cloud
 ./scripts/edge report --cloud
-./scripts/edge core sync --cloud --core-root /Users/chrixchange/secopsai --output edge-bundle.json
+SECOPSAI_EDGE_CORE_TOKEN="$(python3 -c 'import getpass; print(getpass.getpass("Core export token: "))')"; export SECOPSAI_EDGE_CORE_TOKEN
+./scripts/edge core sync --cloud --core-root "$HOME/secopsai" --output edge-bundle.json
+unset SECOPSAI_EDGE_CORE_TOKEN
 ```
 
 The hosted dashboard can also queue remote scan jobs. Keep the worker running locally so queued jobs

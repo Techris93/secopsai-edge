@@ -48,7 +48,9 @@ Open Reports, choose a site, and generate a report. Open the report detail page,
 Open Settings and use the SecOpsAI Core Integration buttons:
 
 ```bash
-./scripts/edge core sync --cloud --core-root /Users/chrixchange/secopsai --output edge-bundle.json
+SECOPSAI_EDGE_CORE_TOKEN="$(python3 -c 'import getpass; print(getpass.getpass("Core export token: "))')"; export SECOPSAI_EDGE_CORE_TOKEN
+./scripts/edge core sync --cloud --core-root "$HOME/secopsai" --output edge-bundle.json
+unset SECOPSAI_EDGE_CORE_TOKEN
 ```
 
 Confirm:

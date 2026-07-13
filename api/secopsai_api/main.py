@@ -32,6 +32,7 @@ from secopsai_api.models import (
     BaselineRule,
     Finding,
     FindingNote,
+    IntegrationToken,
     NotificationDelivery,
     NotificationEndpoint,
     Organization,
@@ -67,6 +68,9 @@ from secopsai_api.schemas import (
     FindingNoteOut,
     FindingOut,
     HeartbeatIn,
+    IntegrationTokenCreateRequest,
+    IntegrationTokenCreateResponse,
+    IntegrationTokenOut,
     NotificationEndpointCreateRequest,
     NotificationDeliveryOut,
     NotificationEndpointOut,
@@ -114,10 +118,12 @@ from secopsai_api.security import (
     create_dashboard_session,
     get_dashboard_auth_context,
     generate_sensor_token,
+    generate_integration_token,
     hash_password,
     hash_secret,
     DUMMY_PASSWORD_HASH,
     require_admin,
+    require_core_export_access,
     require_operator,
     require_sensor_for_path,
     verify_password,
@@ -144,6 +150,7 @@ PRIVATE_SCAN_RANGES = tuple(
 TERMINAL_SCAN_JOB_STATUSES = {"completed", "failed", "canceled"}
 SENSOR_OFFLINE_AFTER = timedelta(minutes=3)
 STALE_SCAN_JOB_AFTER = timedelta(minutes=15)
+ALLOWED_INTEGRATION_TOKEN_SCOPES = {"core:export"}
 
 def bootstrap_dashboard_admin(db: Session) -> None:
     ensure_default_organization(db)
@@ -735,6 +742,28 @@ def sensor_enrollment_out(db: Session, enrollment: SensorEnrollment) -> SensorEn
         used_at=enrollment.used_at,
         revoked_at=enrollment.revoked_at,
         created_at=enrollment.created_at,
+    )
+
+
+def integration_token_out(token: IntegrationToken) -> IntegrationTokenOut:
+    now = utcnow()
+    comparison_now = now if token.expires_at.tzinfo is not None else now.replace(tzinfo=None)
+    if token.revoked_at is not None:
+        state = "revoked"
+    elif token.expires_at <= comparison_now:
+        state = "expired"
+    else:
+        state = "active"
+    return IntegrationTokenOut(
+        id=token.id,
+        organization_id=token.organization_id,
+        name=token.name,
+        scopes=list(token.scopes or []),
+        state=state,
+        expires_at=token.expires_at,
+        last_used_at=token.last_used_at,
+        revoked_at=token.revoked_at,
+        created_at=token.created_at,
     )
 
 
@@ -1409,6 +1438,93 @@ def revoke_sensor_enrollment(
     db.commit()
     db.refresh(enrollment)
     return sensor_enrollment_out(db, enrollment)
+
+
+@app.get("/api/v1/integration-tokens", response_model=list[IntegrationTokenOut])
+def list_integration_tokens(
+    auth_context: dict = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> list[IntegrationTokenOut]:
+    organization_id = organization_id_from_context(auth_context)
+    tokens = db.scalars(
+        select(IntegrationToken)
+        .where(IntegrationToken.organization_id == organization_id)
+        .order_by(IntegrationToken.created_at.desc())
+    ).all()
+    return [integration_token_out(token) for token in tokens]
+
+
+@app.post("/api/v1/integration-tokens", response_model=IntegrationTokenCreateResponse)
+def create_integration_token(
+    payload: IntegrationTokenCreateRequest,
+    auth_context: dict = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> IntegrationTokenCreateResponse:
+    organization_id = organization_id_from_context(auth_context)
+    scopes = sorted(set(payload.scopes))
+    invalid_scopes = set(scopes) - ALLOWED_INTEGRATION_TOKEN_SCOPES
+    if invalid_scopes:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unsupported integration scope: {sorted(invalid_scopes)[0]}",
+        )
+    secret = generate_integration_token()
+    token = IntegrationToken(
+        organization_id=organization_id,
+        name=payload.name.strip(),
+        token_hash=hash_secret(secret),
+        scopes=scopes,
+        created_by=str(auth_context.get("uid")) if auth_context.get("uid") else None,
+        expires_at=utcnow() + timedelta(days=payload.expires_in_days),
+    )
+    db.add(token)
+    db.flush()
+    write_audit(
+        db,
+        "integration_token.created",
+        user_id=str(auth_context.get("uid")) if auth_context.get("uid") else None,
+        organization_id=organization_id,
+        resource_type="integration_token",
+        resource_id=token.id,
+        details={"name": token.name, "scopes": scopes, "expires_at": token.expires_at.isoformat()},
+    )
+    db.commit()
+    db.refresh(token)
+    return IntegrationTokenCreateResponse(
+        **integration_token_out(token).model_dump(),
+        access_token=secret,
+    )
+
+
+@app.delete("/api/v1/integration-tokens/{token_id}", response_model=IntegrationTokenOut)
+def revoke_integration_token(
+    token_id: str,
+    auth_context: dict = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> IntegrationTokenOut:
+    organization_id = organization_id_from_context(auth_context)
+    token = db.scalar(
+        select(IntegrationToken).where(
+            IntegrationToken.id == token_id,
+            IntegrationToken.organization_id == organization_id,
+        )
+    )
+    if token is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Integration token not found")
+    if token.revoked_at is None:
+        token.revoked_at = utcnow()
+        write_audit(
+            db,
+            "integration_token.revoked",
+            user_id=str(auth_context.get("uid")) if auth_context.get("uid") else None,
+            organization_id=organization_id,
+            resource_type="integration_token",
+            resource_id=token.id,
+            details={"name": token.name, "scopes": list(token.scopes or [])},
+        )
+        db.commit()
+        db.refresh(token)
+    return integration_token_out(token)
 
 
 @app.post("/api/v1/sensors/enroll", response_model=SensorRegisterResponse)
@@ -2778,7 +2894,7 @@ def retry_notification_delivery(
 
 @app.get("/api/v1/core/export")
 def export_core_bundle(
-    auth_context: dict = Depends(require_admin),
+    auth_context: dict = Depends(require_core_export_access),
     db: Session = Depends(get_db),
 ) -> dict[str, object]:
     return build_core_export(db, organization_id=organization_id_from_context(auth_context))

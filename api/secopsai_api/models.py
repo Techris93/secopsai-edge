@@ -91,6 +91,25 @@ class SensorEnrollment(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
+class IntegrationToken(Base):
+    __tablename__ = "integration_tokens"
+    __table_args__ = (
+        Index("ix_integration_tokens_org_created", "organization_id", "created_at"),
+        Index("ix_integration_tokens_token_hash", "token_hash", unique=True),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), nullable=False)
+    name: Mapped[str] = mapped_column(String(160), nullable=False)
+    token_hash: Mapped[str] = mapped_column(String(128), nullable=False)
+    scopes: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
+    created_by: Mapped[str | None] = mapped_column(ForeignKey("users.id"))
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
 class ScanRun(Base):
     __tablename__ = "scan_runs"
 

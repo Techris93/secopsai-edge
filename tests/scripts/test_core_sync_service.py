@@ -43,6 +43,8 @@ def test_core_sync_service_installer_generates_supervised_timer(tmp_path: Path) 
             str(output),
             "--interval",
             "120",
+            "--access-token",
+            "scoped-core-export-token",
         ],
         cwd=ROOT,
         env=env,
@@ -61,6 +63,10 @@ def test_core_sync_service_installer_generates_supervised_timer(tmp_path: Path) 
         "interval": 120,
         "output": str(output),
         "profile": "local",
+    }
+    assert json.loads(credentials.read_text()) == {
+        "access_token": "scoped-core-export-token",
+        "api_url": "http://127.0.0.1:8000",
     }
 
     if sys.platform == "darwin":
@@ -105,14 +111,14 @@ def test_configured_sync_invokes_core_without_exposing_credentials_and_skips_ove
     args_file = tmp_path / "core-args.txt"
     env_file = tmp_path / "core-env.txt"
     executable.write_text(
-        '#!/bin/sh\nprintf "%s\\n" "$@" > "$CORE_ARGS_FILE"\nprintf "%s\\n%s\\n" "$SECOPSAI_EDGE_API_URL" "$SECOPSAI_EDGE_ADMIN_TOKEN" > "$CORE_ENV_FILE"\n'
+        '#!/bin/sh\nprintf "%s\\n" "$@" > "$CORE_ARGS_FILE"\nprintf "%s\\n%s\\n%s\\n" "$SECOPSAI_EDGE_API_URL" "$SECOPSAI_EDGE_ACCESS_TOKEN" "$SECOPSAI_EDGE_ADMIN_TOKEN" > "$CORE_ENV_FILE"\n'
     )
     executable.chmod(0o755)
     config = tmp_path / "config.json"
     credentials = tmp_path / "credentials.json"
     lock = tmp_path / "sync.lock"
     config.write_text(json.dumps({"profile": "cloud", "core_root": str(core), "output": "", "db_path": "", "interval": 300}))
-    credentials.write_text(json.dumps({"api_url": "https://edge.example.test", "admin_token": "test-admin-token"}))
+    credentials.write_text(json.dumps({"api_url": "https://edge.example.test", "access_token": "scoped-export-token"}))
     config.chmod(0o600)
     credentials.chmod(0o600)
     env = {
@@ -128,7 +134,11 @@ def test_configured_sync_invokes_core_without_exposing_credentials_and_skips_ove
     completed = subprocess.run([str(EDGE), "core", "sync-service", "run-now"], cwd=ROOT, env=env, text=True, capture_output=True, check=False)
     assert completed.returncode == 0, completed.stderr
     assert args_file.read_text().splitlines() == ["edge", "sync"]
-    assert env_file.read_text().splitlines() == ["https://edge.example.test", "test-admin-token"]
+    assert env_file.read_text().splitlines() == [
+        "https://edge.example.test",
+        "scoped-export-token",
+        "scoped-export-token",
+    ]
 
     args_file.unlink()
     with lock.open("a+") as lock_handle:

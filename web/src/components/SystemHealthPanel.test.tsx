@@ -10,8 +10,8 @@ vi.mock("@/lib/api", () => ({
     environment: "pilot",
     version: "0.2.0",
     commit: "abc123def456789",
-    schema_revision: "0011_schema_alignment",
-    expected_schema_revision: "0011_schema_alignment",
+    schema_revision: "0012_integration_tokens",
+    expected_schema_revision: "0012_integration_tokens",
     ai_provider: "mock",
     organization_id: "org-alpha",
     server_time: "2026-07-13T00:00:00Z"
@@ -23,7 +23,7 @@ describe("SystemHealthPanel", () => {
     render(React.createElement(SystemHealthPanel));
 
     expect(await screen.findByText("API and database ready")).toBeInTheDocument();
-    expect(screen.getByText("0011_schema_alignment (current)")).toBeInTheDocument();
+    expect(screen.getByText("0012_integration_tokens (current)")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
     await waitFor(() => expect(api.fetchSystemStatus).toHaveBeenCalledTimes(2));
   });

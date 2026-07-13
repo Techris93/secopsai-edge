@@ -41,7 +41,7 @@ class Settings:
         or os.getenv("RENDER_GIT_COMMIT")
         or "local"
     )
-    expected_schema_revision: str = "0011_schema_alignment"
+    expected_schema_revision: str = "0012_integration_tokens"
     admin_token: str = os.getenv("SECOPSAI_ADMIN_TOKEN", "dev-admin-token")
     token_secret: str = os.getenv("SECOPSAI_TOKEN_SECRET", "dev-token-secret")
     dashboard_admin_email: str | None = os.getenv("SECOPSAI_DASHBOARD_ADMIN_EMAIL") or None

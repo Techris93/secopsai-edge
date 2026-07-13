@@ -141,7 +141,8 @@ After deploying the API to Render and the dashboard to Cloudflare Pages:
 ```
 
 Use the dashboard Settings page to connect to the hosted API with the dashboard admin email and
-password. The admin token remains available only for automation, cron, Core sync, and recovery.
+password. The admin token remains available only for scheduler automation and recovery. Create a
+workspace-scoped Core export token from Settings for Edge-to-Core synchronization.
 
 ## Release And Rollback
 
@@ -190,7 +191,9 @@ Remote jobs are limited to RFC1918 IPv4 CIDRs with `/24` or narrower ranges. Wor
 Keep Core assets/findings current without manually exporting bundles:
 
 ```bash
+SECOPSAI_EDGE_CORE_TOKEN="$(python3 -c 'import getpass; print(getpass.getpass("Core export token: "))')"; export SECOPSAI_EDGE_CORE_TOKEN
 ./scripts/edge core sync-service install --cloud --core-root "$HOME/secopsai" --interval 300
+unset SECOPSAI_EDGE_CORE_TOKEN
 ./scripts/edge core sync-service start
 ./scripts/edge core sync-service status
 ```
@@ -214,5 +217,5 @@ Only normalized findings and report summaries are exported.
 - Confirm you own or are authorized to scan the target network.
 - Use private CIDRs only during the MVP.
 - Start with `/24` or narrower.
-- Keep `SECOPSAI_ADMIN_TOKEN` and sensor tokens out of screenshots and demos.
+- Keep administrator, sensor, enrollment, and Core export tokens out of screenshots and demos.
 - Rotate sensor tokens before any customer pilot.

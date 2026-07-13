@@ -86,7 +86,7 @@ jobs:
             --target-url postgresql://secopsai:secopsai@127.0.0.1:5432/secopsai_edge_restore \
             --confirm-database secopsai_edge_restore
           psql -h 127.0.0.1 -U secopsai -d secopsai_edge_restore \
-            -Atc "SELECT version_num FROM alembic_version" | grep -Fx 0011_schema_alignment
+            -Atc "SELECT version_num FROM alembic_version" | grep -Fx 0012_integration_tokens
 
       - name: Install and test dashboard
         working-directory: web

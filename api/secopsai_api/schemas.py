@@ -103,6 +103,28 @@ class SensorEnrollmentCreateResponse(SensorEnrollmentOut):
     enrollment_token: str
 
 
+class IntegrationTokenCreateRequest(BaseModel):
+    name: str = Field(default="SecOpsAI Core sync", min_length=1, max_length=160)
+    scopes: list[str] = Field(default_factory=lambda: ["core:export"], min_length=1, max_length=8)
+    expires_in_days: int = Field(default=90, ge=1, le=365)
+
+
+class IntegrationTokenOut(BaseModel):
+    id: str
+    organization_id: str
+    name: str
+    scopes: list[str]
+    state: str
+    expires_at: datetime
+    last_used_at: datetime | None = None
+    revoked_at: datetime | None = None
+    created_at: datetime
+
+
+class IntegrationTokenCreateResponse(IntegrationTokenOut):
+    access_token: str
+
+
 class SiteCreateRequest(BaseModel):
     name: str = Field(min_length=1, max_length=160)
 

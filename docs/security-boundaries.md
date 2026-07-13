@@ -29,7 +29,8 @@ Email requires `SMTP_HOST`. Telegram requires `TELEGRAM_BOT_TOKEN`.
 ## Credential Boundary
 
 Dashboard auth should use a short-lived browser session created from a dashboard user login. The
-server-side admin token remains available for automation, cron, Core sync, and emergency recovery.
+server-side admin token remains available for scheduler automation and emergency recovery. Core
+sync uses a separate expiring, revocable, workspace-scoped token restricted to `core:export`.
 Sensor tokens are separate from dashboard auth and can be rotated from the Sites page.
 
 Customer installs use random, HMAC-stored sensor enrollment tokens scoped to
@@ -38,6 +39,12 @@ are consumed under a database row lock, and may be revoked before use. The
 plaintext enrollment token appears only in the creation response and is never
 stored in the dashboard or returned by list APIs. The installer persists only
 the exchanged sensor token.
+
+Core integration tokens are random and stored only as keyed HMAC digests. The
+plaintext is returned once at creation. They cannot authenticate to general
+dashboard, asset, scan, sensor, or administration endpoints. Revocation and
+expiry are checked on every export, and last use is recorded for operator
+review.
 
 Dashboard bootstrap passwords must contain at least 12 characters. Repeated failures are stored on the user record and lock the account temporarily after five attempts by default. Lockouts and blocked attempts are audit logged. Mutation endpoints explicitly require an `owner` or `admin` role; viewers can inspect their assigned workspace but cannot change it. User sessions carry a server-validated generation number and active workspace claim. The API rechecks membership on every request, so logout, password reset/change, role change, membership disablement, or workspace removal immediately invalidates old access. Owner membership changes require an owner. The API prevents disabling or demoting the final active administrator in each workspace.
 

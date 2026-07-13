@@ -14,7 +14,7 @@ python3 -m py_compile scripts/render-run-due-schedules scripts/core-sync-runner.
 [ -x "$ALEMBIC_BIN" ] || { echo "Alembic is not installed in .venv" >&2; exit 1; }
 
 heads="$(PYTHONPATH=api "$ALEMBIC_BIN" -c api/alembic.ini heads | awk '{print $1}')"
-[ "$heads" = "0011_schema_alignment" ] || {
+[ "$heads" = "0012_integration_tokens" ] || {
   echo "Unexpected Alembic head: $heads" >&2
   exit 1
 }

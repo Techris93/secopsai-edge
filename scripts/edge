@@ -54,9 +54,9 @@ Usage:
   ./scripts/edge report [--cloud]      Generate an AI-style report
   ./scripts/edge schedules run-due [--cloud]
                                       Queue due scheduled scans
-  ./scripts/edge core export [--cloud] --output edge-bundle.json
+  ./scripts/edge core export [--cloud] [--access-token TOKEN] --output edge-bundle.json
                                       Export normalized graph/findings for SecOpsAI Core
-  ./scripts/edge core sync [--cloud] [--core-root ~/secopsai]
+  ./scripts/edge core sync [--cloud] [--access-token TOKEN] [--core-root ~/secopsai]
                                       Export Edge data and import it into SecOpsAI Core
   ./scripts/edge core sync-service install --cloud [--core-root ~/secopsai]
   ./scripts/edge core sync-service start|stop|status|logs|run-now|uninstall
@@ -873,6 +873,7 @@ database_command() {
 core_export() {
   profile="local"
   output=""
+  access_token_value="${SECOPSAI_EDGE_CORE_TOKEN:-}"
   while [ "$#" -gt 0 ]; do
     case "$1" in
       --cloud)
@@ -883,6 +884,11 @@ core_export() {
         output="${1:-}"
         [ -n "$output" ] || fail "Usage: ./scripts/edge core export [--cloud] --output edge-bundle.json"
         ;;
+      --access-token)
+        shift || true
+        access_token_value="${1:-}"
+        [ -n "$access_token_value" ] || fail "--access-token requires a value"
+        ;;
       *)
         fail "Unknown core export option: $1"
         ;;
@@ -892,22 +898,27 @@ core_export() {
 
   if [ "$profile" = "cloud" ]; then
     target_api_url="$(cloud_api_url)"
-    target_admin_token="$(cloud_admin_token)"
+    if [ -z "$access_token_value" ]; then
+      warn "No workspace Core export token supplied; falling back to the legacy cloud admin token"
+      access_token_value="$(cloud_admin_token)"
+    fi
   else
     load_env
     target_api_url="$(api_url)"
-    target_admin_token="$(admin_token)"
+    if [ -z "$access_token_value" ]; then
+      access_token_value="$(admin_token)"
+    fi
   fi
 
   info "Exporting SecOpsAI Core bundle from $target_api_url"
   if [ -n "$output" ]; then
     curl -fsS "$target_api_url/api/v1/core/export" \
-      -H "Authorization: Bearer $target_admin_token" \
+      -H "Authorization: Bearer $access_token_value" \
       -o "$output"
     printf "Saved %s\n" "$output"
   else
     curl -fsS "$target_api_url/api/v1/core/export" \
-      -H "Authorization: Bearer $target_admin_token"
+      -H "Authorization: Bearer $access_token_value"
     printf "\n"
   fi
 }
@@ -926,6 +937,7 @@ core_sync() {
   output="$ROOT_DIR/edge-bundle.json"
   core_root="${SECOPSAI_CORE_ROOT:-$HOME/secopsai}"
   db_path=""
+  access_token_value="${SECOPSAI_EDGE_CORE_TOKEN:-}"
 
   while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -947,6 +959,11 @@ core_sync() {
         db_path="${1:-}"
         [ -n "$db_path" ] || fail "--db-path requires a SQLite path"
         ;;
+      --access-token)
+        shift || true
+        access_token_value="${1:-}"
+        [ -n "$access_token_value" ] || fail "--access-token requires a value"
+        ;;
       *)
         fail "Unknown core sync option: $1"
         ;;
@@ -966,6 +983,9 @@ core_sync() {
 
   info "Exporting Edge bundle for SecOpsAI Core"
   export_args=(--output "$bundle_path")
+  if [ -n "$access_token_value" ]; then
+    export_args=(--access-token "$access_token_value" "${export_args[@]}")
+  fi
   if [ "$profile" = "cloud" ]; then
     export_args=(--cloud "${export_args[@]}")
   fi
@@ -1006,15 +1026,15 @@ PY
 
 save_core_sync_credentials() {
   api_url="$1"
-  admin_token_value="$2"
+  access_token_value="$2"
   umask 077
-  CORE_SYNC_API_URL="$api_url" CORE_SYNC_ADMIN_TOKEN="$admin_token_value" CORE_SYNC_CREDENTIALS_FILE="$CORE_SYNC_CREDENTIALS_FILE" python3 - <<'PY'
+  CORE_SYNC_API_URL="$api_url" CORE_SYNC_ACCESS_TOKEN="$access_token_value" CORE_SYNC_CREDENTIALS_FILE="$CORE_SYNC_CREDENTIALS_FILE" python3 - <<'PY'
 import json
 import os
 
 with open(os.environ["CORE_SYNC_CREDENTIALS_FILE"], "w", encoding="utf-8") as handle:
     json.dump(
-        {"api_url": os.environ["CORE_SYNC_API_URL"], "admin_token": os.environ["CORE_SYNC_ADMIN_TOKEN"]},
+        {"access_token": os.environ["CORE_SYNC_ACCESS_TOKEN"], "api_url": os.environ["CORE_SYNC_API_URL"]},
         handle,
         indent=2,
         sort_keys=True,
@@ -1063,6 +1083,7 @@ install_core_sync_service() {
   output="$ROOT_DIR/edge-bundle.json"
   db_path=""
   interval="300"
+  access_token_value="${SECOPSAI_EDGE_CORE_TOKEN:-}"
   while [ "$#" -gt 0 ]; do
     case "$1" in
       --cloud) profile="cloud" ;;
@@ -1070,6 +1091,7 @@ install_core_sync_service() {
       --output|-o) shift; output="${1:-}" ;;
       --db-path) shift; db_path="${1:-}" ;;
       --interval) shift; interval="${1:-}" ;;
+      --access-token) shift; access_token_value="${1:-}"; [ -n "$access_token_value" ] || fail "--access-token requires a value" ;;
       *) fail "Unknown core sync service option: $1" ;;
     esac
     shift || true
@@ -1085,19 +1107,23 @@ install_core_sync_service() {
   [ -d "$core_root" ] || fail "SecOpsAI Core root not found: $core_root"
   if [ "$profile" = "cloud" ]; then
     cloud_api_url >/dev/null
-    cloud_admin_token >/dev/null
   fi
   mkdir -p "$CORE_SYNC_STATE_DIR" "$LOG_DIR" "$SYSTEMD_USER_DIR"
   if [ "$profile" = "cloud" ]; then
     sync_api_url="$(cloud_api_url)"
-    sync_admin_token="$(cloud_admin_token)"
+    if [ -z "$access_token_value" ]; then
+      warn "No workspace Core export token supplied; falling back to the legacy cloud admin token"
+      access_token_value="$(cloud_admin_token)"
+    fi
   else
     load_env
     sync_api_url="$(api_url)"
-    sync_admin_token="$(admin_token)"
+    if [ -z "$access_token_value" ]; then
+      access_token_value="$(admin_token)"
+    fi
   fi
   save_core_sync_config "$profile" "$core_root" "$output" "$db_path" "$interval"
-  save_core_sync_credentials "$sync_api_url" "$sync_admin_token"
+  save_core_sync_credentials "$sync_api_url" "$access_token_value"
   install -m 700 "$ROOT_DIR/scripts/core-sync-runner.py" "$CORE_SYNC_RUNTIME_RUNNER"
 
   if [ "$(uname -s)" = "Darwin" ]; then

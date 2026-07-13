@@ -35,9 +35,9 @@ def main() -> int:
     if not core_root.is_dir():
         raise RuntimeError(f"SecOpsAI Core root not found: {core_root}")
     api_url = str(credentials.get("api_url", "")).rstrip("/")
-    admin_token = str(credentials.get("admin_token", ""))
-    if not api_url or not admin_token:
-        raise RuntimeError("Core sync API URL and admin token are required")
+    access_token = str(credentials.get("access_token") or credentials.get("admin_token") or "")
+    if not api_url or not access_token:
+        raise RuntimeError("Core sync API URL and access token are required")
 
     args.lock.parent.mkdir(parents=True, exist_ok=True)
     with args.lock.open("a+") as lock_handle:
@@ -61,7 +61,8 @@ def main() -> int:
 
         env = os.environ.copy()
         env["SECOPSAI_EDGE_API_URL"] = api_url
-        env["SECOPSAI_EDGE_ADMIN_TOKEN"] = admin_token
+        env["SECOPSAI_EDGE_ACCESS_TOKEN"] = access_token
+        env["SECOPSAI_EDGE_ADMIN_TOKEN"] = access_token
         completed = subprocess.run(command, cwd=core_root, env=env, check=False)
         return completed.returncode
 

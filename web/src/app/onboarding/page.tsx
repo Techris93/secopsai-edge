@@ -1,16 +1,17 @@
 "use client";
 
-import { Clipboard, Play, ServerCog } from "lucide-react";
+import { Clipboard, Play, RadioTower, ServerCog } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { DataStatePanel } from "@/components/DataStatePanel";
 import { LiveState } from "@/components/LiveState";
 import { OnboardingChecklist } from "@/components/OnboardingChecklist";
 import { PageHeader } from "@/components/PageHeader";
-import { apiBaseUrl, fetchDashboardData } from "@/lib/api";
+import { fetchDashboardData } from "@/lib/api";
 import type { DashboardDataMode } from "@/lib/api";
 import type { DashboardData } from "@/lib/types";
 
-const EDGE_ROOT = "/Users/chrixchange/Documents/Codex/2026-06-15/i-want-to-build-this-make";
+const EDGE_ROOT = process.env.NEXT_PUBLIC_EDGE_ROOT ?? "$HOME/.local/share/secopsai-edge";
 
 export default function OnboardingPage() {
   const [data, setData] = useState<DashboardData | null>(null);
@@ -31,12 +32,8 @@ export default function OnboardingPage() {
   const commands = useMemo(
     () => [
       {
-        label: "Copy Installer",
-        value: `cd ${EDGE_ROOT}\n./scripts/install-secopsai-edge.sh --cloud --api-url ${apiBaseUrl()} --admin-token <admin-token> --site-name "Main Office" --sensor-name "MacBook Sensor"`
-      },
-      {
-        label: "Copy Onboard",
-        value: `cd ${EDGE_ROOT}\n./scripts/edge onboard --cloud --api-url ${apiBaseUrl()} --install-service --start-service`
+        label: "Copy Worker Start",
+        value: `cd ${EDGE_ROOT}\n./scripts/edge worker start`
       },
       {
         label: "Copy Worker Status",
@@ -77,6 +74,16 @@ export default function OnboardingPage() {
             <ServerCog size={20} className="text-sea" aria-hidden="true" />
             <h2 className="text-lg font-semibold text-ink">Sensor Commands</h2>
           </div>
+          <p className="mt-2 text-sm leading-6 text-zinc-600">
+            Create a site-scoped, one-time installer from Sites. No platform administrator token is shared with the sensor operator.
+          </p>
+          <Link
+            href="/sites"
+            className="focus-ring mt-4 inline-flex h-10 items-center gap-2 rounded-md bg-sea px-3 text-sm font-semibold text-white hover:bg-ink"
+          >
+            <RadioTower size={16} aria-hidden={true} />
+            Open Sites and enroll sensor
+          </Link>
           <div className="mt-4 grid gap-3">
             {commands.map((command) => (
               <button

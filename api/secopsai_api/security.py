@@ -10,16 +10,18 @@ from typing import Any
 
 from fastapi import Depends, Header, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from secopsai_api.config import get_settings
 from secopsai_api.database import get_db
-from secopsai_api.models import DEFAULT_ORGANIZATION_ID, Sensor, User
+from secopsai_api.models import DEFAULT_ORGANIZATION_ID, IntegrationToken, Organization, Sensor, User, utcnow
 from secopsai_api.tenancy import ensure_default_membership, ensure_default_tenant_state, membership_for_user
 
 
 bearer = HTTPBearer(auto_error=False)
 DASHBOARD_SESSION_PREFIX = "secopsai_session"
+INTEGRATION_TOKEN_PREFIX = "secopsai_core_"
 PASSWORD_HASH_PREFIX = "pbkdf2_sha256"
 PASSWORD_HASH_ITERATIONS = 260_000
 DUMMY_PASSWORD_HASH = f"{PASSWORD_HASH_PREFIX}${PASSWORD_HASH_ITERATIONS}$secopsai-dummy$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
@@ -27,6 +29,10 @@ DUMMY_PASSWORD_HASH = f"{PASSWORD_HASH_PREFIX}${PASSWORD_HASH_ITERATIONS}$secops
 
 def generate_sensor_token() -> str:
     return secrets.token_urlsafe(32)
+
+
+def generate_integration_token() -> str:
+    return f"{INTEGRATION_TOKEN_PREFIX}{secrets.token_urlsafe(32)}"
 
 
 def hash_secret(secret: str) -> str:
@@ -138,6 +144,48 @@ def require_operator(
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     return get_dashboard_auth_context(credentials, db)
+
+
+def require_core_export_access(
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    if not credentials or credentials.scheme.lower() != "bearer":
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing bearer token")
+    credential = credentials.credentials
+    if credential.startswith(INTEGRATION_TOKEN_PREFIX):
+        token = db.scalar(
+            select(IntegrationToken).where(IntegrationToken.token_hash == hash_secret(credential))
+        )
+        now = utcnow()
+        if token is None:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid integration token")
+        comparison_now = now
+        if token.expires_at.tzinfo is None:
+            comparison_now = now.replace(tzinfo=None)
+        organization = db.get(Organization, token.organization_id)
+        if (
+            token.revoked_at is not None
+            or token.expires_at <= comparison_now
+            or "core:export" not in (token.scopes or [])
+            or organization is None
+            or not organization.active
+        ):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid integration token")
+        token.last_used_at = now
+        db.commit()
+        return {
+            "sub": f"integration-token:{token.id}",
+            "role": "integration",
+            "org": token.organization_id,
+            "scopes": list(token.scopes or []),
+            "integration_token_id": token.id,
+        }
+
+    context = get_dashboard_auth_context(credentials, db)
+    if str(context.get("role") or "").lower() not in {"owner", "admin"}:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Administrator role required")
+    return context
 
 
 def get_dashboard_auth_context(

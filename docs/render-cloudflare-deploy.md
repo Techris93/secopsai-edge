@@ -45,7 +45,7 @@ Expected response:
 ```
 
 `/readyz` must return `status: ready` and schema revision
-`0011_schema_alignment`. Settings > System Health exposes the same safe
+`0012_integration_tokens`. Settings > System Health exposes the same safe
 release/schema context to an authenticated operator.
 
 The Render start script runs Alembic migrations before starting Uvicorn. Keep
