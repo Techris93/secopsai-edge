@@ -105,8 +105,27 @@ class UserOut(BaseModel):
     id: str
     email: str
     role: str
+    active: bool
     created_at: datetime
     last_login_at: datetime | None = None
+    password_changed_at: datetime | None = None
+
+
+class UserCreateRequest(BaseModel):
+    email: str = Field(min_length=3, max_length=255)
+    password: str = Field(min_length=12, max_length=512)
+    role: str = Field(default="viewer", pattern="^(owner|admin|viewer)$")
+
+
+class UserUpdateRequest(BaseModel):
+    role: str | None = Field(default=None, pattern="^(owner|admin|viewer)$")
+    active: bool | None = None
+    password: str | None = Field(default=None, min_length=12, max_length=512)
+
+
+class PasswordChangeRequest(BaseModel):
+    current_password: str = Field(min_length=1, max_length=512)
+    new_password: str = Field(min_length=12, max_length=512)
 
 
 class DashboardSessionResponse(BaseModel):

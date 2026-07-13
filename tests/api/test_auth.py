@@ -199,3 +199,87 @@ def test_bootstrap_dashboard_admin_rejects_short_password(monkeypatch) -> None:
 
     with pytest.raises(RuntimeError, match="at least 12 characters"):
         bootstrap_dashboard_admin(db)
+
+
+def test_logout_revokes_existing_user_session() -> None:
+    db = make_session()
+    db.add(User(email="admin@example.com", password_hash=hash_password("secret-password"), role="admin"))
+    db.commit()
+    client = make_client(db)
+    try:
+        login = client.post(
+            "/api/v1/auth/login",
+            json={"email": "admin@example.com", "password": "secret-password"},
+        )
+        token = login.json()["access_token"]
+        headers = {"Authorization": f"Bearer {token}"}
+        assert client.post("/api/v1/auth/logout", headers=headers).status_code == 200
+        revoked = client.get("/api/v1/auth/me", headers=headers)
+        assert revoked.status_code == 403
+        assert revoked.json()["detail"] == "Dashboard session revoked"
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_password_change_revokes_sessions_and_accepts_new_password() -> None:
+    db = make_session()
+    db.add(User(email="admin@example.com", password_hash=hash_password("old-secret-password"), role="admin"))
+    db.commit()
+    client = make_client(db)
+    try:
+        login = client.post(
+            "/api/v1/auth/login",
+            json={"email": "admin@example.com", "password": "old-secret-password"},
+        )
+        headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+        changed = client.post(
+            "/api/v1/auth/change-password",
+            headers=headers,
+            json={"current_password": "old-secret-password", "new_password": "new-secret-password"},
+        )
+        assert changed.status_code == 200
+        assert client.get("/api/v1/auth/me", headers=headers).status_code == 403
+        assert client.post(
+            "/api/v1/auth/login",
+            json={"email": "admin@example.com", "password": "new-secret-password"},
+        ).status_code == 200
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_user_administration_and_last_admin_guard() -> None:
+    db = make_session()
+    admin = User(email="admin@example.com", password_hash=hash_password("admin-password"), role="admin")
+    db.add(admin)
+    db.commit()
+    client = make_client(db)
+    try:
+        created = client.post(
+            "/api/v1/users",
+            headers={"Authorization": "Bearer dev-admin-token"},
+            json={"email": "viewer@example.com", "password": "viewer-password", "role": "viewer"},
+        )
+        assert created.status_code == 200
+        assert created.json()["active"] is True
+        viewer_id = created.json()["id"]
+        promoted = client.patch(
+            f"/api/v1/users/{viewer_id}",
+            headers={"Authorization": "Bearer dev-admin-token"},
+            json={"role": "admin"},
+        )
+        assert promoted.status_code == 200
+        assert promoted.json()["role"] == "admin"
+        disabled = client.patch(
+            f"/api/v1/users/{viewer_id}",
+            headers={"Authorization": "Bearer dev-admin-token"},
+            json={"active": False},
+        )
+        assert disabled.status_code == 200
+        blocked = client.patch(
+            f"/api/v1/users/{admin.id}",
+            headers={"Authorization": "Bearer dev-admin-token"},
+            json={"active": False},
+        )
+        assert blocked.status_code == 409
+    finally:
+        app.dependency_overrides.clear()

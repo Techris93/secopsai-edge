@@ -8,7 +8,8 @@ import {
   fetchAuthIdentity,
   hasDashboardSession,
   loginDashboard,
-  loginDashboardUser
+  loginDashboardUser,
+  logoutDashboard
 } from "@/lib/api";
 
 export function ApiConnectionPanel() {
@@ -64,11 +65,18 @@ export function ApiConnectionPanel() {
     }
   }
 
-  function disconnect() {
-    clearDashboardSession();
-    setConnected(false);
-    setIdentity(null);
-    setStatus("Disconnected from the API session.");
+  async function disconnect() {
+    setBusy(true);
+    try {
+      await logoutDashboard();
+    } catch {
+      clearDashboardSession();
+    } finally {
+      setBusy(false);
+      setConnected(false);
+      setIdentity(null);
+      setStatus("Disconnected from the API session.");
+    }
   }
 
   return (
@@ -162,7 +170,7 @@ export function ApiConnectionPanel() {
       <button
         className="focus-ring mt-3 inline-flex items-center gap-2 rounded-md border border-line bg-white px-3 py-2 text-sm font-medium text-ink disabled:cursor-not-allowed disabled:text-zinc-400"
         disabled={!connected}
-        onClick={disconnect}
+        onClick={() => void disconnect()}
         type="button"
       >
         <LogOut size={16} aria-hidden="true" />

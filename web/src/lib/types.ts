@@ -147,8 +147,10 @@ export type User = {
   id: string;
   email: string;
   role: string;
+  active: boolean;
   created_at: string;
   last_login_at?: string | null;
+  password_changed_at?: string | null;
 };
 
 export type ScanJob = {

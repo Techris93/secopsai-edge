@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 
 from secopsai_api.config import get_settings
 from secopsai_api.database import get_db
-from secopsai_api.models import Sensor
+from secopsai_api.models import Sensor, User
 
 
 bearer = HTTPBearer(auto_error=False)
@@ -69,7 +69,12 @@ def verify_password(password: str, password_hash: str) -> bool:
     return constant_time_equals(_b64url_encode(digest), expected)
 
 
-def create_dashboard_session(subject: str = "dashboard", role: str = "admin", user_id: str | None = None) -> str:
+def create_dashboard_session(
+    subject: str = "dashboard",
+    role: str = "admin",
+    user_id: str | None = None,
+    session_version: int | None = None,
+) -> str:
     settings = get_settings()
     payload = {
         "sub": subject,
@@ -79,6 +84,7 @@ def create_dashboard_session(subject: str = "dashboard", role: str = "admin", us
     }
     if user_id:
         payload["uid"] = user_id
+        payload["ver"] = session_version if session_version is not None else 1
     payload_part = _b64url_encode(json.dumps(payload, separators=(",", ":")).encode("utf-8"))
     signature = _sign(payload_part)
     return f"{DASHBOARD_SESSION_PREFIX}.{payload_part}.{signature}"
@@ -124,6 +130,7 @@ def require_admin(
 
 def get_dashboard_auth_context(
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer),
+    db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     settings = get_settings()
     if not credentials or credentials.scheme.lower() != "bearer":
@@ -133,6 +140,13 @@ def get_dashboard_auth_context(
         return {"sub": "admin-token", "role": "admin", "legacy": True}
     session = decode_dashboard_session(credential)
     if session is not None:
+        user_id = session.get("uid")
+        if user_id:
+            user = db.get(User, user_id)
+            if user is None or not user.active or int(session.get("ver", 0)) != user.session_version:
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Dashboard session revoked")
+            session["sub"] = user.email
+            session["role"] = user.role
         return session
     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid admin token")
 

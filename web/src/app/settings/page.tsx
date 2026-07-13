@@ -2,6 +2,7 @@
 
 import { Database, Radar, ShieldCheck, Terminal } from "lucide-react";
 import { ApiConnectionPanel } from "@/components/ApiConnectionPanel";
+import { AccountManagementPanel } from "@/components/AccountManagementPanel";
 import { BaselinePanel } from "@/components/BaselinePanel";
 import { CoreIntegrationPanel } from "@/components/CoreIntegrationPanel";
 import { CopyCommand } from "@/components/CopyCommand";
@@ -42,6 +43,7 @@ export default function SettingsPage() {
         </section>
 
         <CoreIntegrationPanel />
+        <AccountManagementPanel />
         <NotificationPanel />
         <BaselinePanel />
 

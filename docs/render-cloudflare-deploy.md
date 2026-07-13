@@ -51,6 +51,10 @@ For hosted pilots, use the dashboard user login in Settings > API Connection. Th
 still exists for scripts, Render cron, Core sync automation, and emergency recovery, but it should
 not be the normal browser login method.
 
+Settings > Users & Sessions creates pilot users, changes roles, disables accounts, resets passwords,
+and changes the signed-in user's password. Every security change revokes existing sessions. Keep at
+least two active administrator accounts for recovery; the API will not allow removal of the final one.
+
 ### Live OpenAI Reports
 
 In the Render service environment, set these server-side values:

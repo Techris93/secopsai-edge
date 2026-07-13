@@ -669,6 +669,44 @@ Known risks:
   PostgreSQL migration was not replayed locally because Docker was unavailable;
   it must be verified by the normal Render migration step before pilot use.
 
+## Checkpoint 014 - User and Session Lifecycle
+
+Status: complete
+
+Branch:
+
+- Edge repo: `codex/pilot-hardening-foundation`
+
+Completed changes:
+
+- Added active state and session generations to dashboard users with Alembic
+  revision `0007_user_lifecycle`.
+- Server-side validation now rejects sessions after logout, password change or
+  reset, role change, and account disablement.
+- Added audited user list/create/update, password change, and logout APIs.
+- Added a final-administrator guard so a deployment cannot remove its last
+  active owner/admin account.
+- Added dashboard user creation, role/state management, password reset, and
+  signed-in password-change controls.
+- Dashboard Disconnect now calls server logout before clearing browser state.
+
+Validation:
+
+- Auth tests cover logout revocation, password rotation, new-password login,
+  user administration, and the final-administrator guard.
+- Frontend tests cover user creation and access disablement.
+- `./scripts/edge test`: 54 backend/agent tests passed, 8 frontend test files
+  with 12 tests passed, the static production build passed, and npm audit
+  reported 0 vulnerabilities.
+- Alembic reports `0007_user_lifecycle` as the single migration head.
+
+Known risks:
+
+- Session generations revoke all of a user's sessions together. Per-device
+  session inventory, MFA, and email-based recovery remain SaaS milestones.
+- Viewer accounts exist in the canonical role model, but a dedicated read-only
+  operator route policy is still required before they are useful in the UI.
+
 ## Completion Rules
 
 A checkpoint is complete only when:

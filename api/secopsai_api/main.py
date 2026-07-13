@@ -90,7 +90,10 @@ from secopsai_api.schemas import (
     SiteOut,
     SiteUpdateRequest,
     AuthMeOut,
+    PasswordChangeRequest,
+    UserCreateRequest,
     UserOut,
+    UserUpdateRequest,
     WifiNetworkOut,
 )
 from secopsai_api.security import (
@@ -127,7 +130,7 @@ def bootstrap_dashboard_admin(db: Session) -> None:
         raise RuntimeError("SECOPSAI_DASHBOARD_ADMIN_PASSWORD must be at least 12 characters")
     user = db.scalar(select(User).where(func.lower(User.email) == email))
     password_hash = hash_password(settings.dashboard_admin_password)
-    if user is None:
+    if user is None or not user.active:
         db.add(User(email=email, password_hash=password_hash, role="admin"))
     else:
         user.password_hash = password_hash
@@ -622,7 +625,12 @@ def login_dashboard_user(payload: DashboardUserLoginRequest, db: Session = Depen
     db.commit()
     db.refresh(user)
     return DashboardSessionResponse(
-        access_token=create_dashboard_session(subject=user.email, role=user.role, user_id=user.id),
+        access_token=create_dashboard_session(
+            subject=user.email,
+            role=user.role,
+            user_id=user.id,
+            session_version=user.session_version,
+        ),
         expires_in=settings.dashboard_session_ttl_seconds,
         user=user,
     )
@@ -648,6 +656,115 @@ def auth_me(
         role=str(auth_context.get("role") or "admin"),
         user=user,
     )
+
+
+@app.post("/api/v1/auth/logout")
+def logout_dashboard_user(
+    auth_context: dict = Depends(get_dashboard_auth_context),
+    db: Session = Depends(get_db),
+) -> dict[str, str]:
+    user = db.get(User, auth_context.get("uid")) if auth_context.get("uid") else None
+    if user is not None:
+        user.session_version += 1
+        write_audit(db, "auth.logout", user_id=user.id, resource_type="user", resource_id=user.id)
+        db.commit()
+    return {"status": "logged_out"}
+
+
+@app.post("/api/v1/auth/change-password")
+def change_dashboard_password(
+    payload: PasswordChangeRequest,
+    auth_context: dict = Depends(get_dashboard_auth_context),
+    db: Session = Depends(get_db),
+) -> dict[str, str]:
+    user = db.get(User, auth_context.get("uid")) if auth_context.get("uid") else None
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User login required")
+    if not verify_password(payload.current_password, user.password_hash):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Current password is incorrect")
+    if verify_password(payload.new_password, user.password_hash):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="New password must be different")
+    user.password_hash = hash_password(payload.new_password)
+    user.password_changed_at = utcnow()
+    user.session_version += 1
+    write_audit(db, "auth.password_changed", user_id=user.id, resource_type="user", resource_id=user.id)
+    db.commit()
+    return {"status": "password_changed"}
+
+
+@app.get("/api/v1/users", response_model=list[UserOut], dependencies=[Depends(require_admin)])
+def list_users(db: Session = Depends(get_db)) -> list[User]:
+    return list(db.scalars(select(User).order_by(User.created_at.asc())).all())
+
+
+@app.post("/api/v1/users", response_model=UserOut, dependencies=[Depends(require_admin)])
+def create_user(payload: UserCreateRequest, db: Session = Depends(get_db)) -> User:
+    email = payload.email.strip().lower()
+    if db.scalar(select(User).where(func.lower(User.email) == email)):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="User already exists")
+    user = User(email=email, password_hash=hash_password(payload.password), role=payload.role, active=True)
+    db.add(user)
+    db.flush()
+    write_audit(
+        db,
+        "user.created",
+        resource_type="user",
+        resource_id=user.id,
+        details={"email": user.email, "role": user.role},
+    )
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+@app.patch("/api/v1/users/{user_id}", response_model=UserOut, dependencies=[Depends(require_admin)])
+def update_user(user_id: str, payload: UserUpdateRequest, db: Session = Depends(get_db)) -> User:
+    user = db.get(User, user_id)
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    removing_privileged_access = user.active and user.role in {"owner", "admin"} and (
+        payload.active is False or payload.role == "viewer"
+    )
+    if removing_privileged_access:
+        others = db.scalar(
+            select(func.count(User.id)).where(
+                User.id != user.id,
+                User.active.is_(True),
+                User.role.in_(["owner", "admin"]),
+            )
+        ) or 0
+        if others == 0:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="At least one active administrator is required",
+            )
+    security_changed = False
+    if payload.role is not None and payload.role != user.role:
+        user.role = payload.role
+        security_changed = True
+    if payload.active is not None and payload.active != user.active:
+        user.active = payload.active
+        security_changed = True
+    if payload.password is not None:
+        user.password_hash = hash_password(payload.password)
+        user.password_changed_at = utcnow()
+        security_changed = True
+    if security_changed:
+        user.session_version += 1
+    write_audit(
+        db,
+        "user.updated",
+        resource_type="user",
+        resource_id=user.id,
+        details={
+            "role": user.role,
+            "active": user.active,
+            "credentials_rotated": payload.password is not None,
+        },
+    )
+    db.commit()
+    db.refresh(user)
+    return user
 
 
 @app.get("/api/v1/sites", response_model=list[SiteOut], dependencies=[Depends(require_admin)])

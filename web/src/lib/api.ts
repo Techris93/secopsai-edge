@@ -77,6 +77,34 @@ export function clearDashboardSession(): void {
   window.sessionStorage.removeItem(SESSION_TOKEN_KEY);
 }
 
+export async function logoutDashboard(): Promise<void> {
+  await requestJson<{ status: string }>("/api/v1/auth/logout", { method: "POST" });
+  clearDashboardSession();
+}
+
+export async function changeDashboardPassword(currentPassword: string, newPassword: string): Promise<void> {
+  await requestJson<{ status: string }>("/api/v1/auth/change-password", {
+    method: "POST",
+    body: JSON.stringify({ current_password: currentPassword, new_password: newPassword })
+  });
+  clearDashboardSession();
+}
+
+export async function listUsers(): Promise<User[]> {
+  return requestJson<User[]>("/api/v1/users");
+}
+
+export async function createUser(payload: { email: string; password: string; role: string }): Promise<User> {
+  return requestJson<User>("/api/v1/users", { method: "POST", body: JSON.stringify(payload) });
+}
+
+export async function updateUser(
+  userId: string,
+  payload: Partial<{ role: string; active: boolean; password: string }>
+): Promise<User> {
+  return requestJson<User>(`/api/v1/users/${userId}`, { method: "PATCH", body: JSON.stringify(payload) });
+}
+
 export async function loginDashboard(adminToken: string): Promise<void> {
   const response = await fetch(`${API_BASE_URL}/api/v1/auth/session`, {
     method: "POST",

@@ -9,7 +9,8 @@ vi.mock("@/lib/api", () => ({
   fetchAuthIdentity: vi.fn(),
   hasDashboardSession: vi.fn(() => false),
   loginDashboard: vi.fn(async () => undefined),
-  loginDashboardUser: vi.fn(async () => ({ email: "admin@example.com" }))
+  loginDashboardUser: vi.fn(async () => ({ email: "admin@example.com" })),
+  logoutDashboard: vi.fn(async () => undefined)
 }));
 
 test("prefers dashboard user login over admin token", async () => {

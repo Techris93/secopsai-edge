@@ -32,7 +32,7 @@ Dashboard auth should use a short-lived browser session created from a dashboard
 server-side admin token remains available for automation, cron, Core sync, and emergency recovery.
 Sensor tokens are separate from dashboard auth and can be rotated from the Sites page.
 
-Dashboard bootstrap passwords must contain at least 12 characters. Repeated failures are stored on the user record and lock the account temporarily after five attempts by default. Lockouts and blocked attempts are audit logged. Admin-protected endpoints explicitly require an `owner` or `admin` role; a valid viewer session is not sufficient.
+Dashboard bootstrap passwords must contain at least 12 characters. Repeated failures are stored on the user record and lock the account temporarily after five attempts by default. Lockouts and blocked attempts are audit logged. Admin-protected endpoints explicitly require an `owner` or `admin` role; a valid viewer session is not sufficient. User sessions carry a server-validated generation number: logout, password reset/change, role change, and account disablement increment it and immediately revoke older tokens. The API prevents disabling or demoting the final active administrator.
 
 ## Baseline Boundary
 
