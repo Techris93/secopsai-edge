@@ -3,9 +3,9 @@ services:
     name: secopsai-edge-api
     runtime: python
     plan: free
-    buildCommand: pip install -r api/requirements.txt -r agent/requirements.txt
+    buildCommand: pip install -r requirements.lock
     startCommand: ./scripts/render-start-api
-    healthCheckPath: /healthz
+    healthCheckPath: /readyz
     envVars:
       - key: DATABASE_URL
         fromDatabase:
@@ -13,14 +13,28 @@ services:
           property: connectionString
       - key: SECOPSAI_AUTO_CREATE_TABLES
         value: "false"
+      - key: SECOPSAI_ENVIRONMENT
+        value: "pilot"
       - key: SECOPSAI_CORS_ORIGINS
         sync: false
       - key: SECOPSAI_ADMIN_TOKEN
+        sync: false
+      - key: SECOPSAI_DASHBOARD_ADMIN_EMAIL
+        sync: false
+      - key: SECOPSAI_DASHBOARD_ADMIN_PASSWORD
         sync: false
       - key: SECOPSAI_TOKEN_SECRET
         generateValue: true
       - key: SECOPSAI_DASHBOARD_SESSION_TTL_SECONDS
         value: "28800"
+      - key: SECOPSAI_LOGIN_MAX_ATTEMPTS
+        value: "5"
+      - key: SECOPSAI_LOGIN_LOCKOUT_SECONDS
+        value: "900"
+      - key: SECOPSAI_WEBHOOK_SIGNING_SECRET
+        generateValue: true
+      - key: SECOPSAI_NOTIFICATION_MAX_ATTEMPTS
+        value: "4"
       - key: AI_PROVIDER
         value: mock
       - key: AI_API_KEY
@@ -33,7 +47,7 @@ services:
     name: secopsai-edge-scheduler
     runtime: python
     schedule: "*/5 * * * *"
-    buildCommand: pip install -r api/requirements.txt -r agent/requirements.txt
+    buildCommand: pip install -r requirements.lock
     startCommand: ./scripts/render-run-due-schedules
     envVars:
       - key: SECOPSAI_EDGE_API_HOSTPORT

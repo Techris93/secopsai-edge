@@ -8,6 +8,7 @@ import {
   LayoutDashboard,
   MapPinned,
   Radar,
+  ScrollText,
   Server,
   Settings,
   ShieldAlert,
@@ -16,6 +17,7 @@ import {
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
+import { WorkspaceSwitcher } from "@/components/WorkspaceSwitcher";
 
 const navItems = [
   { href: "/", label: "Overview", icon: LayoutDashboard },
@@ -26,6 +28,7 @@ const navItems = [
   { href: "/findings", label: "Findings", icon: ShieldAlert },
   { href: "/schedules", label: "Schedules", icon: CalendarClock },
   { href: "/reports", label: "Reports", icon: FileText },
+  { href: "/audit", label: "Audit Log", icon: ScrollText },
   { href: "/settings", label: "Settings", icon: Settings }
 ];
 
@@ -34,7 +37,7 @@ export function Shell({ children }: { children: ReactNode }) {
 
   return (
     <div className="min-h-screen bg-paper">
-      <aside className="fixed inset-y-0 left-0 hidden w-64 border-r border-line bg-white px-4 py-5 lg:block">
+      <aside className="fixed inset-y-0 left-0 hidden w-64 flex-col border-r border-line bg-white px-4 py-5 lg:flex">
         <Link href="/" className="flex items-center gap-3">
           <span className="grid h-10 w-10 place-items-center rounded-lg bg-sea text-white">
             <Radar size={22} aria-hidden="true" />
@@ -46,7 +49,8 @@ export function Shell({ children }: { children: ReactNode }) {
             <span className="block text-lg font-semibold text-ink">Edge Sensor</span>
           </span>
         </Link>
-        <nav className="mt-8 space-y-1">
+        <WorkspaceSwitcher />
+        <nav className="mt-4 min-h-0 flex-1 space-y-1 overflow-y-auto py-1">
           {navItems.map((item) => {
             const active = pathname === item.href;
             const Icon = item.icon;
@@ -66,7 +70,7 @@ export function Shell({ children }: { children: ReactNode }) {
             );
           })}
         </nav>
-        <div className="absolute bottom-5 left-4 right-4 rounded-lg border border-line bg-paper p-3">
+        <div className="mt-4 rounded-lg border border-line bg-paper p-3">
           <div className="flex items-center gap-2 text-sm font-medium text-ink">
             <Activity size={16} className="text-sea" aria-hidden="true" />
             Local pilot mode
@@ -77,13 +81,16 @@ export function Shell({ children }: { children: ReactNode }) {
         </div>
       </aside>
 
-      <div className="lg:pl-64">
+      <div className="min-w-0 lg:pl-64">
         <header className="sticky top-0 z-10 border-b border-line bg-white/95 px-4 py-3 backdrop-blur lg:hidden">
           <div className="flex items-center justify-between">
             <Link href="/" className="flex items-center gap-2 font-semibold text-ink">
               <Radar size={20} className="text-sea" aria-hidden="true" />
               SecOpsAI Edge
             </Link>
+            <div className="w-48 max-w-[52vw]">
+              <WorkspaceSwitcher compact />
+            </div>
           </div>
           <nav className="mt-3 flex gap-1 overflow-x-auto pb-1">
             {navItems.map((item) => {
@@ -104,7 +111,7 @@ export function Shell({ children }: { children: ReactNode }) {
             })}
           </nav>
         </header>
-        <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">{children}</main>
+        <main className="mx-auto w-full min-w-0 max-w-7xl overflow-x-clip px-4 py-6 sm:px-6 lg:px-8">{children}</main>
       </div>
     </div>
   );

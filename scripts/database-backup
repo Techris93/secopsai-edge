@@ -1,0 +1,139 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+umask 077
+
+fail() {
+  printf "error: %s\n" "$*" >&2
+  exit 1
+}
+
+usage() {
+  cat <<'EOF'
+SecOpsAI Edge PostgreSQL backup tool
+
+Usage:
+  ./scripts/database-backup create [--database-url URL] [--output FILE]
+  ./scripts/database-backup verify --input FILE
+  ./scripts/database-backup restore --input FILE --target-url URL --confirm-database NAME [--allow-remote]
+
+Restore is destructive. Remote targets are refused unless --allow-remote is
+present, and the exact target database name must be supplied separately.
+EOF
+}
+
+normalize_url() {
+  value="$1"
+  printf "%s" "${value/postgresql+psycopg:/postgresql:}"
+}
+
+url_field() {
+  url="$1"
+  field="$2"
+  python3 - "$url" "$field" <<'PY'
+import sys
+from urllib.parse import urlparse
+
+parsed = urlparse(sys.argv[1])
+field = sys.argv[2]
+if field == "database":
+    print(parsed.path.lstrip("/"))
+elif field == "hostname":
+    print(parsed.hostname or "")
+else:
+    raise SystemExit(2)
+PY
+}
+
+require_tool() {
+  command -v "$1" >/dev/null 2>&1 || fail "$1 is required"
+}
+
+create_backup() {
+  database_url="${DATABASE_URL:-}"
+  output=""
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --database-url) shift; database_url="${1:-}" ;;
+      --output) shift; output="${1:-}" ;;
+      *) fail "Unknown create option: $1" ;;
+    esac
+    shift || true
+  done
+  [ -n "$database_url" ] || fail "DATABASE_URL or --database-url is required"
+  require_tool pg_dump
+  database_url="$(normalize_url "$database_url")"
+  if [ -z "$output" ]; then
+    output="$ROOT_DIR/backups/secopsai-edge-$(date -u +%Y%m%dT%H%M%SZ).dump"
+  fi
+  output_dir="$(dirname "$output")"
+  if [ ! -d "$output_dir" ]; then
+    mkdir -p "$output_dir"
+    chmod 700 "$output_dir"
+  fi
+  pg_dump --format=custom --compress=9 --no-owner --no-acl --file "$output" "$database_url"
+  chmod 600 "$output"
+  verify_backup --input "$output" >/dev/null
+  printf "%s\n" "$output"
+}
+
+verify_backup() {
+  input=""
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --input) shift; input="${1:-}" ;;
+      *) fail "Unknown verify option: $1" ;;
+    esac
+    shift || true
+  done
+  [ -f "$input" ] || fail "Backup archive not found: $input"
+  require_tool pg_restore
+  listing="$(pg_restore --list "$input")"
+  for table in organizations sites sensors assets findings reports alembic_version; do
+    printf "%s\n" "$listing" | grep -Eq "TABLE( DATA)? [^ ]+ ${table} " || fail "Backup is missing required table: $table"
+  done
+  printf "Backup verified: %s\n" "$input"
+}
+
+restore_backup() {
+  input=""
+  target_url=""
+  confirmation=""
+  allow_remote="no"
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --input) shift; input="${1:-}" ;;
+      --target-url) shift; target_url="${1:-}" ;;
+      --confirm-database) shift; confirmation="${1:-}" ;;
+      --allow-remote) allow_remote="yes" ;;
+      *) fail "Unknown restore option: $1" ;;
+    esac
+    shift || true
+  done
+  [ -f "$input" ] || fail "Backup archive not found: $input"
+  [ -n "$target_url" ] || fail "--target-url is required"
+  require_tool pg_restore
+  target_url="$(normalize_url "$target_url")"
+  database_name="$(url_field "$target_url" database)"
+  hostname="$(url_field "$target_url" hostname)"
+  [ -n "$database_name" ] || fail "Target URL must include a database name"
+  [ "$confirmation" = "$database_name" ] || fail "--confirm-database must exactly match $database_name"
+  case "$hostname" in
+    localhost|127.0.0.1|::1) ;;
+    *) [ "$allow_remote" = "yes" ] || fail "Remote restore refused; add --allow-remote after reviewing the target" ;;
+  esac
+  verify_backup --input "$input" >/dev/null
+  pg_restore --clean --if-exists --no-owner --no-acl --exit-on-error --dbname "$target_url" "$input"
+  printf "Restore completed: %s\n" "$database_name"
+}
+
+command_name="${1:-help}"
+shift || true
+case "$command_name" in
+  create) create_backup "$@" ;;
+  verify) verify_backup "$@" ;;
+  restore) restore_backup "$@" ;;
+  help|-h|--help) usage ;;
+  *) usage; fail "Unknown command: $command_name" ;;
+esac

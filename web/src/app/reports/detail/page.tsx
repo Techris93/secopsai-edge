@@ -5,7 +5,7 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { PageHeader } from "@/components/PageHeader";
 import { SeverityBadge } from "@/components/SeverityBadge";
-import { getReport } from "@/lib/api";
+import { downloadReportHtml, getReport } from "@/lib/api";
 import { timeAgo } from "@/lib/format";
 import type { Finding, Report } from "@/lib/types";
 
@@ -38,17 +38,26 @@ function ReportDetail() {
     setMessage("Executive summary copied");
   }
 
-  function downloadHtml() {
+  async function copyBrief() {
     if (!report) return;
-    const html = buildReportHtml(report);
-    const blob = new Blob([html], { type: "text/html" });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = `${report.title.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}.html`;
-    anchor.click();
-    URL.revokeObjectURL(url);
-    setMessage("Report downloaded");
+    await navigator.clipboard.writeText(buildClientBrief(report, findings));
+    setMessage("Client brief copied");
+  }
+
+  async function downloadHtml() {
+    if (!report) return;
+    try {
+      const blob = await downloadReportHtml(report.id);
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `${report.title.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}.html`;
+      anchor.click();
+      URL.revokeObjectURL(url);
+      setMessage("Report downloaded");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to download report");
+    }
   }
 
   return (
@@ -77,9 +86,13 @@ function ReportDetail() {
                 <Clipboard size={16} aria-hidden="true" />
                 Copy Summary
               </button>
+              <button className="ButtonSecondary" onClick={copyBrief} type="button">
+                <Clipboard size={16} aria-hidden="true" />
+                Copy Brief
+              </button>
               <button className="ButtonSecondary" onClick={downloadHtml} type="button">
                 <Download size={16} aria-hidden="true" />
-                Download HTML
+                Download Report
               </button>
               <button className="ButtonSecondary" onClick={() => window.print()} type="button">
                 <Printer size={16} aria-hidden="true" />
@@ -136,32 +149,20 @@ function Meta({ label, value }: { label: string; value: string }) {
   );
 }
 
-function buildReportHtml(report: Report): string {
-  const findings = (report.content.findings ?? []) as Finding[];
-  return `<!doctype html>
-<html><head><meta charset="utf-8"><title>${escapeHtml(report.title)}</title>
-<style>body{font-family:Inter,Arial,sans-serif;margin:40px;color:#1f2933}h1{margin-bottom:8px}.badge{display:inline-block;padding:4px 8px;border:1px solid #d9ded7;border-radius:4px}.card{border:1px solid #d9ded7;border-radius:8px;padding:14px;margin:12px 0}.muted{color:#52606d}</style>
-</head><body>
-<p class="badge">${escapeHtml(report.risk_level)}</p>
-<h1>${escapeHtml(report.title)}</h1>
-<p class="muted">Generated ${escapeHtml(new Date(report.created_at).toLocaleString())}</p>
-<p>${escapeHtml(report.summary)}</p>
-<h2>Recommended Actions</h2>
-${(report.content.recommended_actions ?? []).map((action) => `<div class="card">${escapeHtml(action)}</div>`).join("")}
-<h2>Findings</h2>
-${findings.map((finding) => `<div class="card"><strong>${escapeHtml(finding.severity)}: ${escapeHtml(finding.title)}</strong><p>${escapeHtml(finding.summary)}</p></div>`).join("") || "<p>No active findings were included.</p>"}
-</body></html>`;
-}
-
-function escapeHtml(value: string): string {
-  return value.replace(/[&<>"']/g, (char) => {
-    const entities: Record<string, string> = {
-      "&": "&amp;",
-      "<": "&lt;",
-      ">": "&gt;",
-      '"': "&quot;",
-      "'": "&#039;"
-    };
-    return entities[char] ?? char;
-  });
+function buildClientBrief(report: Report, findings: Finding[]): string {
+  const actions = (report.content.recommended_actions ?? []).map((action, index) => `${index + 1}. ${action}`);
+  const topFindings = findings.slice(0, 5).map((finding) => `- [${finding.severity}] ${finding.title}: ${finding.summary}`);
+  return [
+    report.title,
+    `Risk: ${report.risk_level}`,
+    "",
+    "Executive summary:",
+    report.summary,
+    "",
+    "Recommended actions:",
+    actions.join("\n") || "No recommended actions were included.",
+    "",
+    "Findings:",
+    topFindings.join("\n") || "No active findings were included.",
+  ].join("\n");
 }

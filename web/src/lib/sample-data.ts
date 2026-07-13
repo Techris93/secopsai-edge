@@ -6,6 +6,7 @@ export const sampleData: DashboardData = {
   sites: [
     {
       id: "site-demo",
+      organization_id: "organization-demo",
       name: "Demo Site",
       created_at: now
     }
@@ -78,6 +79,7 @@ export const sampleData: DashboardData = {
       last_seen_at: now
     }
   ],
+  baselines: [],
   findings: [
     {
       id: "finding-1",
@@ -126,6 +128,7 @@ export const sampleData: DashboardData = {
     }
   ],
   scanJobs: [],
+  sensorEnrollments: [],
   schedules: [],
   notifications: [],
   onboarding: {

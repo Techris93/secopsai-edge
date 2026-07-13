@@ -8,7 +8,7 @@ from sqlalchemy.pool import StaticPool
 
 from secopsai_api.database import get_db
 from secopsai_api.main import app
-from secopsai_api.models import Asset, Base, Finding, NotificationEndpoint, ScanJob, ScanRun, ScanSchedule, Sensor, Site, utcnow
+from secopsai_api.models import Asset, AuditLog, Base, Finding, NotificationEndpoint, Report, ScanJob, ScanRun, ScanSchedule, Sensor, Site, utcnow
 from secopsai_api.security import hash_secret
 
 
@@ -127,6 +127,37 @@ def test_sensor_rotation_and_disable() -> None:
     assert disable_response.status_code == 200
     assert disable_response.json()["connection_state"] == "disabled"
 
+    enable_response = client.post(f"/api/v1/sensors/{sensor.id}/enable", headers=admin_headers())
+    assert enable_response.status_code == 200
+    assert enable_response.json()["connection_state"] != "disabled"
+
+
+def test_heartbeat_tracks_runtime_state_without_audit_spam() -> None:
+    db = make_session()
+    sensor = seed_sensor(db)
+    client = make_client(db)
+    payload = {
+        "status": "online",
+        "details": {
+            "state": "scanning",
+            "job_id": "job-123",
+            "version": "0.1.0",
+            "os": "Darwin 25",
+            "hostname": "sensor-host",
+        },
+    }
+    headers = {"X-Sensor-Token": "sensor-token"}
+
+    assert client.post(f"/api/v1/sensors/{sensor.id}/heartbeat", headers=headers, json=payload).status_code == 200
+    assert client.post(f"/api/v1/sensors/{sensor.id}/heartbeat", headers=headers, json=payload).status_code == 200
+    db.refresh(sensor)
+    assert sensor.worker_state == "scanning"
+    assert sensor.current_job_id == "job-123"
+    assert sensor.version == "0.1.0"
+    assert sensor.hostname == "sensor-host"
+    state_events = db.query(AuditLog).filter(AuditLog.action == "sensor.state_changed").all()
+    assert len(state_events) == 1
+
 
 def test_onboarding_status_tracks_pilot_readiness() -> None:
     db = make_session()
@@ -194,3 +225,46 @@ def test_notification_endpoint_crud_without_delivery() -> None:
 
     delete_response = client.delete(f"/api/v1/notification-endpoints/{endpoint_id}", headers=admin_headers())
     assert delete_response.status_code == 200
+
+
+def test_report_html_export_requires_admin_and_returns_branded_report() -> None:
+    db = make_session()
+    sensor = seed_sensor(db)
+    report = Report(
+        site_id=sensor.site_id,
+        title="Weekly Edge Risk Summary",
+        summary="A new unmanaged device exposed SSH.",
+        risk_level="high",
+        content={
+            "provider": "mock",
+            "model": "deterministic",
+            "recommended_actions": ["Verify device ownership.", "Review SSH authentication logs."],
+            "findings": [
+                {
+                    "type": "risky_open_port",
+                    "severity": "high",
+                    "status": "open",
+                    "title": "SSH exposed internally",
+                    "summary": "192.168.1.42 exposes tcp/22.",
+                    "raw_nmap": "<host>secret raw scan</host>",
+                }
+            ],
+        },
+    )
+    db.add(report)
+    db.commit()
+    client = make_client(db)
+
+    unauthorized = client.get(f"/api/v1/reports/{report.id}/export.html")
+    assert unauthorized.status_code == 401
+
+    response = client.get(f"/api/v1/reports/{report.id}/export.html", headers=admin_headers())
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/html")
+    assert "attachment;" in response.headers["content-disposition"]
+    assert "SecOpsAI Edge Report" in response.text
+    assert "Weekly Edge Risk Summary" in response.text
+    assert "Pilot Office" in response.text
+    assert "Verify device ownership." in response.text
+    assert "secret raw scan" not in response.text

@@ -1,0 +1,102 @@
+name: SecOpsAI Edge CI
+
+on:
+  push:
+    branches: [main, "codex/**"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: secopsai
+          POSTGRES_PASSWORD: secopsai
+          POSTGRES_DB: secopsai_edge
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U secopsai -d secopsai_edge"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql+psycopg://secopsai:secopsai@127.0.0.1:5432/secopsai_edge
+      SECOPSAI_ADMIN_TOKEN: dev-admin-token
+      SECOPSAI_TOKEN_SECRET: ci-token-secret-that-is-not-used-in-production
+      SECOPSAI_AUTO_CREATE_TABLES: "false"
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: 3.12.8
+          cache: pip
+          cache-dependency-path: requirements.lock
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install Python dependencies
+        run: pip install -r requirements.lock pip-audit
+
+      - name: Validate scripts and Python syntax
+        run: |
+          bash -n scripts/edge scripts/install-secopsai-edge.sh scripts/bootstrap-secopsai-edge.sh scripts/build-release scripts/database-backup scripts/render-start-api
+          python -m py_compile scripts/render-run-due-schedules scripts/core-sync-runner.py
+          PYTHONPATH=api:agent python -m compileall -q api/secopsai_api agent/secopsai_agent
+
+      - name: Exercise migrations and check schema drift
+        run: |
+          alembic -c api/alembic.ini upgrade head
+          alembic -c api/alembic.ini check
+          alembic -c api/alembic.ini downgrade -1
+          alembic -c api/alembic.ini upgrade head
+
+      - name: Run backend and agent tests
+        run: PYTHONPATH=api:agent pytest tests
+
+      - name: Audit Python dependencies
+        run: pip-audit -r requirements.lock
+
+      - name: Build and inspect sensor release
+        run: |
+          ./scripts/build-release 0.2.0 /tmp/secopsai-release
+          (cd /tmp/secopsai-release && shasum -a 256 -c secopsai-edge-0.2.0.tar.gz.sha256)
+          tar -tzf /tmp/secopsai-release/secopsai-edge-0.2.0.tar.gz | grep -q '/scripts/edge$'
+          ! tar -tzf /tmp/secopsai-release/secopsai-edge-0.2.0.tar.gz | grep -Eq '/(\.env|\.cloud\.env|\.cloud-sensor\.env|\.sensor\.env|node_modules|\.venv)(/|$)'
+
+      - name: Drill PostgreSQL backup and restore
+        env:
+          PGPASSWORD: secopsai
+        run: |
+          ./scripts/database-backup create --output /tmp/secopsai-edge.dump
+          ./scripts/database-backup verify --input /tmp/secopsai-edge.dump
+          createdb -h 127.0.0.1 -U secopsai secopsai_edge_restore
+          ./scripts/database-backup restore \
+            --input /tmp/secopsai-edge.dump \
+            --target-url postgresql://secopsai:secopsai@127.0.0.1:5432/secopsai_edge_restore \
+            --confirm-database secopsai_edge_restore
+          psql -h 127.0.0.1 -U secopsai -d secopsai_edge_restore \
+            -Atc "SELECT version_num FROM alembic_version" | grep -Fx 0012_integration_tokens
+
+      - name: Install and test dashboard
+        working-directory: web
+        run: |
+          npm ci
+          npm test -- --run
+          npm run build
+          npm audit --audit-level=moderate
+
+      - name: Verify clean generated state
+        run: |
+          git diff --check
+          test -z "$(git status --short --untracked-files=no)"

@@ -12,6 +12,6 @@ export function timeAgo(value: string): string {
 
 export function titleize(value: string): string {
   return value
-    .replaceAll("_", " ")
+    .replace(/[_.]+/g, " ")
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }

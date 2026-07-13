@@ -88,3 +88,53 @@ def test_missing_device_detection_marks_asset_missing() -> None:
 
     assert any(finding.type == "missing_device" for finding in findings)
     assert db.scalar(select(Finding).where(Finding.type == "missing_device")) is not None
+
+
+def test_multiple_port_changes_on_one_asset_remain_distinct() -> None:
+    db = make_session()
+    sensor = seed_sensor(db)
+    ingest_scan(
+        db,
+        sensor,
+        ScanIn(
+            sensor_id=sensor.id,
+            target_cidr="192.168.1.0/24",
+            assets=[AssetObservationIn(ip="192.168.1.30", vendor="Apple", services=[])],
+        ),
+    )
+
+    _scan, added = ingest_scan(
+        db,
+        sensor,
+        ScanIn(
+            sensor_id=sensor.id,
+            target_cidr="192.168.1.0/24",
+            assets=[
+                AssetObservationIn(
+                    ip="192.168.1.30",
+                    vendor="Apple",
+                    services=[ServiceIn(port=8080), ServiceIn(port=8443)],
+                )
+            ],
+        ),
+    )
+    db.commit()
+
+    added_changes = [finding for finding in added if finding.type == "port_change"]
+    assert {finding.evidence["port"] for finding in added_changes} == {8080, 8443}
+    assert len(db.scalars(select(Finding).where(Finding.type == "port_change")).all()) == 2
+
+    _scan, removed = ingest_scan(
+        db,
+        sensor,
+        ScanIn(
+            sensor_id=sensor.id,
+            target_cidr="192.168.1.0/24",
+            assets=[AssetObservationIn(ip="192.168.1.30", vendor="Apple", services=[])],
+        ),
+    )
+    db.commit()
+
+    removed_changes = [finding for finding in removed if finding.type == "port_change"]
+    assert {finding.evidence["port"] for finding in removed_changes} == {8080, 8443}
+    assert all(finding.title == "Previously open port disappeared" for finding in removed_changes)

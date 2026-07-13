@@ -12,18 +12,31 @@ ALEMBIC_BIN="$ROOT_DIR/.venv/bin/alembic"
 UVICORN_BIN="$ROOT_DIR/.venv/bin/uvicorn"
 API_URL_DEFAULT="http://127.0.0.1:8000"
 SERVICE_LABEL="ai.secopsai.edge"
+CORE_SYNC_SERVICE_LABEL="ai.secopsai.edge-core-sync"
 LOG_DIR="$HOME/Library/Logs/secopsai-edge"
 LAUNCH_AGENT_FILE="$HOME/Library/LaunchAgents/$SERVICE_LABEL.plist"
+CORE_SYNC_LAUNCH_AGENT_FILE="$HOME/Library/LaunchAgents/$CORE_SYNC_SERVICE_LABEL.plist"
+if [ "$(uname -s)" = "Darwin" ]; then
+  CORE_SYNC_STATE_DIR="${SECOPSAI_EDGE_SERVICE_STATE_DIR:-$HOME/Library/Application Support/SecOpsAI Edge}"
+else
+  CORE_SYNC_STATE_DIR="${SECOPSAI_EDGE_SERVICE_STATE_DIR:-$HOME/.local/share/secopsai-edge}"
+fi
+CORE_SYNC_CONFIG_FILE="${SECOPSAI_CORE_SYNC_CONFIG_FILE:-$CORE_SYNC_STATE_DIR/core-sync-service.json}"
+CORE_SYNC_CREDENTIALS_FILE="${SECOPSAI_CORE_SYNC_CREDENTIALS_FILE:-$CORE_SYNC_STATE_DIR/core-sync-credentials.json}"
+CORE_SYNC_LOCK_FILE="${SECOPSAI_CORE_SYNC_LOCK_FILE:-$CORE_SYNC_STATE_DIR/core-sync.lock}"
+CORE_SYNC_RUNTIME_RUNNER="$CORE_SYNC_STATE_DIR/core-sync-runner.py"
 SYSTEMD_USER_DIR="$HOME/.config/systemd/user"
 SYSTEMD_SERVICE_FILE="$SYSTEMD_USER_DIR/$SERVICE_LABEL.service"
+CORE_SYNC_SYSTEMD_SERVICE_FILE="$SYSTEMD_USER_DIR/$CORE_SYNC_SERVICE_LABEL.service"
+CORE_SYNC_SYSTEMD_TIMER_FILE="$SYSTEMD_USER_DIR/$CORE_SYNC_SERVICE_LABEL.timer"
 
 usage() {
   cat <<'EOF'
 SecOpsAI Edge helper
 
 Usage:
-  ./scripts/edge setup                 Install local Python and web dependencies
-  ./scripts/edge onboard --cloud       Guided cloud setup, sensor registration, and worker setup
+  ./scripts/edge setup [--sensor-only] Install dependencies (omit dashboard for appliances)
+  ./scripts/edge onboard --cloud       Guided cloud setup, sensor enrollment, and worker setup
   ./scripts/edge dev                   Start Postgres, migrate DB, API, and dashboard
   ./scripts/edge db                    Start Postgres only
   ./scripts/edge api                   Start the FastAPI backend only
@@ -41,11 +54,24 @@ Usage:
   ./scripts/edge report [--cloud]      Generate an AI-style report
   ./scripts/edge schedules run-due [--cloud]
                                       Queue due scheduled scans
-  ./scripts/edge core export [--cloud] --output edge-bundle.json
+  ./scripts/edge core export [--cloud] [--access-token TOKEN] --output edge-bundle.json
                                       Export normalized graph/findings for SecOpsAI Core
+  ./scripts/edge core sync [--cloud] [--access-token TOKEN] [--core-root ~/secopsai]
+                                      Export Edge data and import it into SecOpsAI Core
+  ./scripts/edge core sync-service install --cloud [--core-root ~/secopsai]
+  ./scripts/edge core sync-service start|stop|status|logs|run-now|uninstall
+                                      Manage automatic Edge-to-Core synchronization
   ./scripts/edge cloud configure <url> Save hosted Render API URL
   ./scripts/edge cloud register        Register this sensor against the hosted API
+  ./scripts/edge cloud enroll <token>  Use a one-time workspace enrollment token
   ./scripts/edge test                  Run backend, frontend, build, and audit checks
+  ./scripts/edge support-bundle [--cloud]
+                                      Create a redacted diagnostics bundle for support
+  ./scripts/edge database backup [--output FILE]
+  ./scripts/edge database verify --input FILE
+  ./scripts/edge database restore --input FILE --target-url URL --confirm-database NAME
+                                      Create, verify, or restore PostgreSQL backups
+  ./scripts/edge release-check        Run the complete local release gate
   ./scripts/edge status [--cloud]      Check local or hosted API status
   ./scripts/edge stop-db               Stop Postgres
 
@@ -97,6 +123,14 @@ load_env() {
 }
 
 load_cloud_env() {
+  override_url_set="${SECOPSAI_CLOUD_API_URL+x}"
+  override_url="${SECOPSAI_CLOUD_API_URL:-}"
+  override_admin_set="${SECOPSAI_CLOUD_ADMIN_TOKEN+x}"
+  override_admin="${SECOPSAI_CLOUD_ADMIN_TOKEN:-}"
+  override_sensor_id_set="${SECOPSAI_CLOUD_SENSOR_ID+x}"
+  override_sensor_id="${SECOPSAI_CLOUD_SENSOR_ID:-}"
+  override_sensor_token_set="${SECOPSAI_CLOUD_SENSOR_TOKEN+x}"
+  override_sensor_token="${SECOPSAI_CLOUD_SENSOR_TOKEN:-}"
   if [ -f "$CLOUD_ENV_FILE" ]; then
     set -a
     # shellcheck disable=SC1090
@@ -110,6 +144,11 @@ load_cloud_env() {
     . "$CLOUD_SENSOR_ENV_FILE"
     set +a
   fi
+
+  if [ -n "$override_url_set" ]; then export SECOPSAI_CLOUD_API_URL="$override_url"; fi
+  if [ -n "$override_admin_set" ]; then export SECOPSAI_CLOUD_ADMIN_TOKEN="$override_admin"; fi
+  if [ -n "$override_sensor_id_set" ]; then export SECOPSAI_CLOUD_SENSOR_ID="$override_sensor_id"; fi
+  if [ -n "$override_sensor_token_set" ]; then export SECOPSAI_CLOUD_SENSOR_TOKEN="$override_sensor_token"; fi
 }
 
 ensure_env_file() {
@@ -130,7 +169,7 @@ ensure_python_tools() {
   ensure_python_env
   if [ ! -x "$UVICORN_BIN" ] || [ ! -x "$ALEMBIC_BIN" ]; then
     info "Installing Python dependencies"
-    "$PIP_BIN" install -r "$ROOT_DIR/api/requirements.txt" -r "$ROOT_DIR/agent/requirements.txt"
+    "$PIP_BIN" install -r "$ROOT_DIR/requirements.lock"
   fi
 }
 
@@ -246,12 +285,22 @@ require_docker() {
 }
 
 setup() {
+  sensor_only="no"
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --sensor-only) sensor_only="yes" ;;
+      *) fail "Unknown setup option: $1" ;;
+    esac
+    shift || true
+  done
   ensure_env_file
   ensure_python_env
   info "Installing Python dependencies"
-  "$PIP_BIN" install -r "$ROOT_DIR/api/requirements.txt" -r "$ROOT_DIR/agent/requirements.txt"
-  info "Installing web dependencies"
-  (cd "$ROOT_DIR/web" && npm install)
+  "$PIP_BIN" install -r "$ROOT_DIR/requirements.lock"
+  if [ "$sensor_only" = "no" ]; then
+    info "Installing web dependencies"
+    (cd "$ROOT_DIR/web" && npm install)
+  fi
   info "Setup complete"
 }
 
@@ -259,6 +308,7 @@ onboard() {
   profile="local"
   target_api_url=""
   target_admin_token=""
+  enrollment_token=""
   site_name="Default Site"
   sensor_name="$(hostname) Edge Sensor"
   preview_cidr=""
@@ -277,6 +327,10 @@ onboard() {
       --admin-token)
         shift || true
         target_admin_token="${1:-}"
+        ;;
+      --enrollment-token)
+        shift || true
+        enrollment_token="${1:-}"
         ;;
       --site-name)
         shift || true
@@ -312,7 +366,7 @@ onboard() {
     if [ -z "$target_api_url" ]; then
       target_api_url="$(prompt_default "Cloud API URL" "${SECOPSAI_CLOUD_API_URL:-https://secopsai-edge-api.onrender.com}")"
     fi
-    if [ -z "$target_admin_token" ]; then
+    if [ -z "$enrollment_token" ] && [ -z "$target_admin_token" ]; then
       saved="no"
       [ -n "${SECOPSAI_CLOUD_ADMIN_TOKEN:-}" ] && saved="yes"
       entered_token="$(prompt_secret_default "Cloud API admin token" "$saved")"
@@ -322,11 +376,13 @@ onboard() {
         target_admin_token="${SECOPSAI_CLOUD_ADMIN_TOKEN:-}"
       fi
     fi
-    [ -n "$target_admin_token" ] || fail "Cloud API admin token is required."
+    if [ -z "$enrollment_token" ]; then
+      [ -n "$target_admin_token" ] || fail "Cloud API admin token or enrollment token is required."
+    fi
     save_cloud_env "$target_api_url" "$target_admin_token"
     info "Checking cloud API health"
     curl -fsS "${target_api_url%/}/healthz" >/dev/null
-    SECOPSAI_REGISTER_SITE_NAME="$site_name" SECOPSAI_REGISTER_SENSOR_NAME="$sensor_name" register_sensor cloud
+    SECOPSAI_REGISTER_SITE_NAME="$site_name" SECOPSAI_REGISTER_SENSOR_NAME="$sensor_name" register_sensor cloud "$enrollment_token"
   else
     load_env
     target_api_url="${target_api_url:-$(api_url)}"
@@ -413,10 +469,15 @@ dev() {
 
 register_sensor() {
   profile="${1:-local}"
+  enrollment_token="${2:-}"
   ensure_python_env
   if [ "$profile" = "cloud" ]; then
     target_api_url="$(cloud_api_url)"
-    target_admin_token="$(cloud_admin_token)"
+    if [ -z "$enrollment_token" ]; then
+      target_admin_token="$(cloud_admin_token)"
+    else
+      target_admin_token=""
+    fi
     output_file="$CLOUD_SENSOR_ENV_FILE"
   else
     load_env
@@ -428,13 +489,24 @@ register_sensor() {
   hostname_value="$(hostname)"
   sensor_name="${SECOPSAI_REGISTER_SENSOR_NAME:-MacBook Sensor}"
   site_name="${SECOPSAI_REGISTER_SITE_NAME:-Default Site}"
-  info "Registering sensor with API at $target_api_url"
-  response="$(
-    curl -sS -X POST "$target_api_url/api/v1/sensors/register" \
-      -H "Authorization: Bearer $target_admin_token" \
-      -H "Content-Type: application/json" \
-      -d "{\"name\":\"$sensor_name\",\"hostname\":\"$hostname_value\",\"site_name\":\"$site_name\"}"
-  )"
+  if [ -n "$enrollment_token" ]; then
+    info "Enrolling sensor with API at $target_api_url"
+    request_body="$("$PYTHON_BIN" -c 'import json,sys; print(json.dumps({"enrollment_token":sys.argv[1],"name":sys.argv[2],"hostname":sys.argv[3]}))' "$enrollment_token" "$sensor_name" "$hostname_value")"
+    response="$(
+      curl -fsS -X POST "$target_api_url/api/v1/sensors/enroll" \
+        -H "Content-Type: application/json" \
+        --data-binary "$request_body"
+    )"
+  else
+    info "Registering sensor with API at $target_api_url"
+    request_body="$("$PYTHON_BIN" -c 'import json,sys; print(json.dumps({"name":sys.argv[1],"hostname":sys.argv[2],"site_name":sys.argv[3]}))' "$sensor_name" "$hostname_value" "$site_name")"
+    response="$(
+      curl -fsS -X POST "$target_api_url/api/v1/sensors/register" \
+        -H "Authorization: Bearer $target_admin_token" \
+        -H "Content-Type: application/json" \
+        --data-binary "$request_body"
+    )"
+  fi
 
   sensor_id="$(printf "%s" "$response" | "$PYTHON_BIN" -c 'import json,sys; print(json.load(sys.stdin)["sensor_id"])')"
   sensor_token="$(printf "%s" "$response" | "$PYTHON_BIN" -c 'import json,sys; print(json.load(sys.stdin)["sensor_token"])')"
@@ -770,6 +842,7 @@ run_tests() {
   ensure_python_tools
   info "Checking Render scheduler script"
   python3 -m py_compile "$ROOT_DIR/scripts/render-run-due-schedules"
+  bash -n "$ROOT_DIR/scripts/database-backup"
 
   info "Running backend and agent tests"
   (cd "$ROOT_DIR" && PYTHONPATH="$ROOT_DIR/api:$ROOT_DIR/agent" "$PYTHON_BIN" -m pytest tests)
@@ -784,9 +857,23 @@ run_tests() {
   (cd "$ROOT_DIR/web" && npm audit --audit-level=moderate)
 }
 
+database_command() {
+  subcommand="${1:-help}"
+  shift || true
+  load_env
+  case "$subcommand" in
+    backup) "$ROOT_DIR/scripts/database-backup" create "$@" ;;
+    verify) "$ROOT_DIR/scripts/database-backup" verify "$@" ;;
+    restore) "$ROOT_DIR/scripts/database-backup" restore "$@" ;;
+    help|-h|--help) "$ROOT_DIR/scripts/database-backup" help ;;
+    *) fail "Unknown database command: $subcommand" ;;
+  esac
+}
+
 core_export() {
   profile="local"
   output=""
+  access_token_value="${SECOPSAI_EDGE_CORE_TOKEN:-}"
   while [ "$#" -gt 0 ]; do
     case "$1" in
       --cloud)
@@ -797,6 +884,11 @@ core_export() {
         output="${1:-}"
         [ -n "$output" ] || fail "Usage: ./scripts/edge core export [--cloud] --output edge-bundle.json"
         ;;
+      --access-token)
+        shift || true
+        access_token_value="${1:-}"
+        [ -n "$access_token_value" ] || fail "--access-token requires a value"
+        ;;
       *)
         fail "Unknown core export option: $1"
         ;;
@@ -806,24 +898,366 @@ core_export() {
 
   if [ "$profile" = "cloud" ]; then
     target_api_url="$(cloud_api_url)"
-    target_admin_token="$(cloud_admin_token)"
+    if [ -z "$access_token_value" ]; then
+      warn "No workspace Core export token supplied; falling back to the legacy cloud admin token"
+      access_token_value="$(cloud_admin_token)"
+    fi
   else
     load_env
     target_api_url="$(api_url)"
-    target_admin_token="$(admin_token)"
+    if [ -z "$access_token_value" ]; then
+      access_token_value="$(admin_token)"
+    fi
   fi
 
   info "Exporting SecOpsAI Core bundle from $target_api_url"
   if [ -n "$output" ]; then
     curl -fsS "$target_api_url/api/v1/core/export" \
-      -H "Authorization: Bearer $target_admin_token" \
+      -H "Authorization: Bearer $access_token_value" \
       -o "$output"
     printf "Saved %s\n" "$output"
   else
     curl -fsS "$target_api_url/api/v1/core/export" \
-      -H "Authorization: Bearer $target_admin_token"
+      -H "Authorization: Bearer $access_token_value"
     printf "\n"
   fi
+}
+
+resolve_path() {
+  path="${1:-}"
+  [ -n "$path" ] || fail "resolve_path requires a path"
+  case "$path" in
+    /*) printf "%s\n" "$path" ;;
+    *) printf "%s/%s\n" "$(pwd)" "$path" ;;
+  esac
+}
+
+core_sync() {
+  profile="local"
+  output="$ROOT_DIR/edge-bundle.json"
+  core_root="${SECOPSAI_CORE_ROOT:-$HOME/secopsai}"
+  db_path=""
+  access_token_value="${SECOPSAI_EDGE_CORE_TOKEN:-}"
+
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --cloud)
+        profile="cloud"
+        ;;
+      --output|-o)
+        shift || true
+        output="${1:-}"
+        [ -n "$output" ] || fail "Usage: ./scripts/edge core sync [--cloud] [--core-root ~/secopsai] [--output edge-bundle.json]"
+        ;;
+      --core-root)
+        shift || true
+        core_root="${1:-}"
+        [ -n "$core_root" ] || fail "--core-root requires a path"
+        ;;
+      --db-path)
+        shift || true
+        db_path="${1:-}"
+        [ -n "$db_path" ] || fail "--db-path requires a SQLite path"
+        ;;
+      --access-token)
+        shift || true
+        access_token_value="${1:-}"
+        [ -n "$access_token_value" ] || fail "--access-token requires a value"
+        ;;
+      *)
+        fail "Unknown core sync option: $1"
+        ;;
+    esac
+    shift || true
+  done
+
+  bundle_path="$(resolve_path "$output")"
+  core_root="$(resolve_path "$core_root")"
+  [ -d "$core_root" ] || fail "SecOpsAI Core root not found: $core_root"
+
+  core_python="$core_root/.venv/bin/python"
+  if [ ! -x "$core_python" ]; then
+    warn "Core virtualenv Python not found at $core_python; using python3 from PATH"
+    core_python="python3"
+  fi
+
+  info "Exporting Edge bundle for SecOpsAI Core"
+  export_args=(--output "$bundle_path")
+  if [ -n "$access_token_value" ]; then
+    export_args=(--access-token "$access_token_value" "${export_args[@]}")
+  fi
+  if [ "$profile" = "cloud" ]; then
+    export_args=(--cloud "${export_args[@]}")
+  fi
+  core_export "${export_args[@]}"
+
+  info "Importing Edge bundle into SecOpsAI Core at $core_root"
+  import_args=(-m secopsai.cli edge import --bundle "$bundle_path")
+  if [ -n "$db_path" ]; then
+    import_args+=(--db-path "$db_path")
+  fi
+  (cd "$core_root" && "$core_python" "${import_args[@]}")
+}
+
+save_core_sync_config() {
+  profile="$1"
+  core_root="$2"
+  output="$3"
+  db_path="$4"
+  interval="$5"
+  umask 077
+  CORE_SYNC_PROFILE="$profile" CORE_SYNC_CORE_ROOT="$core_root" CORE_SYNC_OUTPUT="$output" CORE_SYNC_DB_PATH="$db_path" CORE_SYNC_INTERVAL="$interval" CORE_SYNC_CONFIG_FILE="$CORE_SYNC_CONFIG_FILE" python3 - <<'PY'
+import json
+import os
+
+payload = {
+    "profile": os.environ["CORE_SYNC_PROFILE"],
+    "core_root": os.environ["CORE_SYNC_CORE_ROOT"],
+    "output": os.environ["CORE_SYNC_OUTPUT"],
+    "db_path": os.environ["CORE_SYNC_DB_PATH"],
+    "interval": int(os.environ["CORE_SYNC_INTERVAL"]),
+}
+with open(os.environ["CORE_SYNC_CONFIG_FILE"], "w", encoding="utf-8") as handle:
+    json.dump(payload, handle, indent=2, sort_keys=True)
+    handle.write("\n")
+PY
+  chmod 600 "$CORE_SYNC_CONFIG_FILE"
+}
+
+save_core_sync_credentials() {
+  api_url="$1"
+  access_token_value="$2"
+  umask 077
+  CORE_SYNC_API_URL="$api_url" CORE_SYNC_ACCESS_TOKEN="$access_token_value" CORE_SYNC_CREDENTIALS_FILE="$CORE_SYNC_CREDENTIALS_FILE" python3 - <<'PY'
+import json
+import os
+
+with open(os.environ["CORE_SYNC_CREDENTIALS_FILE"], "w", encoding="utf-8") as handle:
+    json.dump(
+        {"access_token": os.environ["CORE_SYNC_ACCESS_TOKEN"], "api_url": os.environ["CORE_SYNC_API_URL"]},
+        handle,
+        indent=2,
+        sort_keys=True,
+    )
+    handle.write("\n")
+PY
+  chmod 600 "$CORE_SYNC_CREDENTIALS_FILE"
+}
+
+load_core_sync_config() {
+  [ -f "$CORE_SYNC_CONFIG_FILE" ] || fail "Core sync service is not configured. Run ./scripts/edge core sync-service install --cloud first."
+  config_values="$(CORE_SYNC_CONFIG_FILE="$CORE_SYNC_CONFIG_FILE" python3 - <<'PY'
+import json
+import os
+
+with open(os.environ["CORE_SYNC_CONFIG_FILE"], encoding="utf-8") as handle:
+    payload = json.load(handle)
+for key in ("profile", "core_root", "output", "db_path", "interval"):
+    value = str(payload.get(key, ""))
+    if "\n" in value or "\r" in value:
+        raise SystemExit(f"invalid newline in {key}")
+    print(value)
+PY
+)"
+  CORE_SYNC_PROFILE="$(printf "%s\n" "$config_values" | sed -n '1p')"
+  CORE_SYNC_CORE_ROOT="$(printf "%s\n" "$config_values" | sed -n '2p')"
+  CORE_SYNC_OUTPUT="$(printf "%s\n" "$config_values" | sed -n '3p')"
+  CORE_SYNC_DB_PATH="$(printf "%s\n" "$config_values" | sed -n '4p')"
+  CORE_SYNC_INTERVAL="$(printf "%s\n" "$config_values" | sed -n '5p')"
+  [ "$CORE_SYNC_PROFILE" = "local" ] || [ "$CORE_SYNC_PROFILE" = "cloud" ] || fail "Invalid Core sync service profile"
+}
+
+run_configured_core_sync() {
+  load_core_sync_config
+  [ -f "$CORE_SYNC_CREDENTIALS_FILE" ] || fail "Core sync credentials are missing; reinstall the service"
+  runner="$CORE_SYNC_RUNTIME_RUNNER"
+  if [ ! -x "$runner" ]; then
+    runner="$ROOT_DIR/scripts/core-sync-runner.py"
+  fi
+  "$runner" --config "$CORE_SYNC_CONFIG_FILE" --credentials "$CORE_SYNC_CREDENTIALS_FILE" --lock "$CORE_SYNC_LOCK_FILE"
+}
+
+install_core_sync_service() {
+  profile="local"
+  core_root="${SECOPSAI_CORE_ROOT:-$HOME/secopsai}"
+  output="$ROOT_DIR/edge-bundle.json"
+  db_path=""
+  interval="300"
+  access_token_value="${SECOPSAI_EDGE_CORE_TOKEN:-}"
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --cloud) profile="cloud" ;;
+      --core-root) shift; core_root="${1:-}" ;;
+      --output|-o) shift; output="${1:-}" ;;
+      --db-path) shift; db_path="${1:-}" ;;
+      --interval) shift; interval="${1:-}" ;;
+      --access-token) shift; access_token_value="${1:-}"; [ -n "$access_token_value" ] || fail "--access-token requires a value" ;;
+      *) fail "Unknown core sync service option: $1" ;;
+    esac
+    shift || true
+  done
+  [[ "$interval" =~ ^[0-9]+$ ]] || fail "--interval must be an integer number of seconds"
+  [ "$interval" -ge 60 ] && [ "$interval" -le 86400 ] || fail "--interval must be between 60 and 86400 seconds"
+  case "$core_root$output$db_path" in *$'\n'*|*$'\r'*) fail "Core sync service paths cannot contain newlines" ;; esac
+  core_root="$(resolve_path "$core_root")"
+  output="$(resolve_path "$output")"
+  if [ -n "$db_path" ]; then
+    db_path="$(resolve_path "$db_path")"
+  fi
+  [ -d "$core_root" ] || fail "SecOpsAI Core root not found: $core_root"
+  if [ "$profile" = "cloud" ]; then
+    cloud_api_url >/dev/null
+  fi
+  mkdir -p "$CORE_SYNC_STATE_DIR" "$LOG_DIR" "$SYSTEMD_USER_DIR"
+  if [ "$profile" = "cloud" ]; then
+    sync_api_url="$(cloud_api_url)"
+    if [ -z "$access_token_value" ]; then
+      warn "No workspace Core export token supplied; falling back to the legacy cloud admin token"
+      access_token_value="$(cloud_admin_token)"
+    fi
+  else
+    load_env
+    sync_api_url="$(api_url)"
+    if [ -z "$access_token_value" ]; then
+      access_token_value="$(admin_token)"
+    fi
+  fi
+  save_core_sync_config "$profile" "$core_root" "$output" "$db_path" "$interval"
+  save_core_sync_credentials "$sync_api_url" "$access_token_value"
+  install -m 700 "$ROOT_DIR/scripts/core-sync-runner.py" "$CORE_SYNC_RUNTIME_RUNNER"
+
+  if [ "$(uname -s)" = "Darwin" ]; then
+    mkdir -p "$(dirname "$CORE_SYNC_LAUNCH_AGENT_FILE")"
+    CORE_ROOT="$core_root" RUNNER="$CORE_SYNC_RUNTIME_RUNNER" CONFIG="$CORE_SYNC_CONFIG_FILE" CREDENTIALS="$CORE_SYNC_CREDENTIALS_FILE" LOCK="$CORE_SYNC_LOCK_FILE" LABEL="$CORE_SYNC_SERVICE_LABEL" INTERVAL="$interval" LOG_DIR="$LOG_DIR" OUTPUT="$CORE_SYNC_LAUNCH_AGENT_FILE" python3 - <<'PY'
+import os
+import plistlib
+
+payload = {
+    "Label": os.environ["LABEL"],
+    "ProgramArguments": [os.environ["RUNNER"], "--config", os.environ["CONFIG"], "--credentials", os.environ["CREDENTIALS"], "--lock", os.environ["LOCK"]],
+    "WorkingDirectory": os.environ["CORE_ROOT"],
+    "RunAtLoad": True,
+    "StartInterval": int(os.environ["INTERVAL"]),
+    "ProcessType": "Background",
+    "StandardOutPath": os.path.join(os.environ["LOG_DIR"], "core-sync.out.log"),
+    "StandardErrorPath": os.path.join(os.environ["LOG_DIR"], "core-sync.err.log"),
+    "EnvironmentVariables": {"PATH": "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"},
+}
+with open(os.environ["OUTPUT"], "wb") as handle:
+    plistlib.dump(payload, handle, sort_keys=False)
+PY
+    info "Installed launchd Core sync service at $CORE_SYNC_LAUNCH_AGENT_FILE"
+  else
+    systemd_core_root="${core_root//\\/\\\\}"
+    systemd_core_root="${systemd_core_root//\"/\\\"}"
+    systemd_core_root="${systemd_core_root//%/%%}"
+    systemd_runner="${CORE_SYNC_RUNTIME_RUNNER//\\/\\\\}"
+    systemd_runner="${systemd_runner//\"/\\\"}"
+    systemd_runner="${systemd_runner//%/%%}"
+    systemd_config="${CORE_SYNC_CONFIG_FILE//\\/\\\\}"
+    systemd_config="${systemd_config//\"/\\\"}"
+    systemd_credentials="${CORE_SYNC_CREDENTIALS_FILE//\\/\\\\}"
+    systemd_credentials="${systemd_credentials//\"/\\\"}"
+    systemd_lock="${CORE_SYNC_LOCK_FILE//\\/\\\\}"
+    systemd_lock="${systemd_lock//\"/\\\"}"
+    cat > "$CORE_SYNC_SYSTEMD_SERVICE_FILE" <<EOF
+[Unit]
+Description=SecOpsAI Edge to Core synchronization
+After=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory="$systemd_core_root"
+ExecStart="$systemd_runner" --config "$systemd_config" --credentials "$systemd_credentials" --lock "$systemd_lock"
+Environment=PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
+EOF
+    cat > "$CORE_SYNC_SYSTEMD_TIMER_FILE" <<EOF
+[Unit]
+Description=Run SecOpsAI Edge to Core synchronization periodically
+
+[Timer]
+OnBootSec=60
+OnUnitActiveSec=$interval
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+    systemctl --user daemon-reload || true
+    info "Installed systemd Core sync service and timer"
+  fi
+  printf "Start it with: ./scripts/edge core sync-service start\n"
+}
+
+start_core_sync_service() {
+  load_core_sync_config
+  if [ "$(uname -s)" = "Darwin" ]; then
+    [ -f "$CORE_SYNC_LAUNCH_AGENT_FILE" ] || fail "Core sync service is not installed"
+    launchctl bootout "gui/$(id -u)" "$CORE_SYNC_LAUNCH_AGENT_FILE" >/dev/null 2>&1 || true
+    launchctl bootstrap "gui/$(id -u)" "$CORE_SYNC_LAUNCH_AGENT_FILE"
+    launchctl enable "gui/$(id -u)/$CORE_SYNC_SERVICE_LABEL" >/dev/null 2>&1 || true
+  else
+    systemctl --user daemon-reload
+    systemctl --user enable --now "$CORE_SYNC_SERVICE_LABEL.timer"
+  fi
+  info "Started automatic Core synchronization"
+}
+
+stop_core_sync_service() {
+  if [ "$(uname -s)" = "Darwin" ]; then
+    launchctl bootout "gui/$(id -u)" "$CORE_SYNC_LAUNCH_AGENT_FILE" >/dev/null 2>&1 || true
+  else
+    systemctl --user disable --now "$CORE_SYNC_SERVICE_LABEL.timer" >/dev/null 2>&1 || true
+  fi
+  info "Stopped automatic Core synchronization"
+}
+
+core_sync_service_status() {
+  if [ "$(uname -s)" = "Darwin" ]; then
+    if launchctl print "gui/$(id -u)/$CORE_SYNC_SERVICE_LABEL" >/dev/null 2>&1; then
+      printf "Core sync service: running (%s)\n" "$CORE_SYNC_SERVICE_LABEL"
+    else
+      printf "Core sync service: not running (%s)\n" "$CORE_SYNC_SERVICE_LABEL"
+    fi
+    [ -f "$CORE_SYNC_LAUNCH_AGENT_FILE" ] && printf "Launch agent:      %s\n" "$CORE_SYNC_LAUNCH_AGENT_FILE"
+  else
+    systemctl --user status "$CORE_SYNC_SERVICE_LABEL.timer" --no-pager || true
+  fi
+  [ -f "$CORE_SYNC_CONFIG_FILE" ] && printf "Configuration:     %s\n" "$CORE_SYNC_CONFIG_FILE"
+  printf "Logs:              %s\n" "$LOG_DIR"
+}
+
+core_sync_service_logs() {
+  if [ "$(uname -s)" = "Darwin" ]; then
+    tail -n 80 "$LOG_DIR/core-sync.out.log" 2>/dev/null || true
+    tail -n 80 "$LOG_DIR/core-sync.err.log" 2>/dev/null || true
+  else
+    journalctl --user -u "$CORE_SYNC_SERVICE_LABEL.service" -n 120 --no-pager
+  fi
+}
+
+uninstall_core_sync_service() {
+  stop_core_sync_service
+  rm -f "$CORE_SYNC_LAUNCH_AGENT_FILE" "$CORE_SYNC_SYSTEMD_SERVICE_FILE" "$CORE_SYNC_SYSTEMD_TIMER_FILE" "$CORE_SYNC_CONFIG_FILE" "$CORE_SYNC_CREDENTIALS_FILE" "$CORE_SYNC_LOCK_FILE" "$CORE_SYNC_RUNTIME_RUNNER"
+  if [ "$(uname -s)" != "Darwin" ]; then
+    systemctl --user daemon-reload || true
+  fi
+  info "Uninstalled automatic Core synchronization"
+}
+
+core_sync_service() {
+  subcommand="${1:-status}"
+  shift || true
+  case "$subcommand" in
+    install) install_core_sync_service "$@" ;;
+    start) start_core_sync_service ;;
+    stop) stop_core_sync_service ;;
+    status) core_sync_service_status ;;
+    logs) core_sync_service_logs ;;
+    run-now|run-configured) run_configured_core_sync ;;
+    uninstall) uninstall_core_sync_service ;;
+    *) fail "Unknown core sync-service command: $subcommand" ;;
+  esac
 }
 
 core() {
@@ -834,6 +1268,12 @@ core() {
     export)
       core_export "$@"
       ;;
+    sync)
+      core_sync "$@"
+      ;;
+    sync-service)
+      core_sync_service "$@"
+      ;;
     help|-h|--help)
       usage
       ;;
@@ -841,6 +1281,107 @@ core() {
       fail "Unknown core command: $subcommand"
       ;;
   esac
+}
+
+redact_support_stream() {
+  sed -E \
+    -e 's/(Bearer )[A-Za-z0-9._~-]+/\1[redacted]/g' \
+    -e 's/((TOKEN|KEY|PASSWORD|SECRET)[=:][[:space:]]*)[^[:space:]]+/\1[redacted]/g' \
+    -e 's/((token|key|password|secret)[=:][[:space:]]*)[^[:space:]]+/\1[redacted]/g' \
+    -e 's/([[:xdigit:]]{2}:){5}[[:xdigit:]]{2}/[redacted-hardware-id]/g'
+}
+
+support_bundle() {
+  profile="local"
+  output=""
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --cloud)
+        profile="cloud"
+        ;;
+      --output|-o)
+        shift || true
+        output="${1:-}"
+        [ -n "$output" ] || fail "--output requires a path"
+        ;;
+      *)
+        fail "Unknown support-bundle option: $1"
+        ;;
+    esac
+    shift || true
+  done
+
+  if [ -z "$output" ]; then
+    output="$ROOT_DIR/secopsai-edge-support-$(date -u +%Y%m%dT%H%M%SZ).txt"
+  fi
+  output="$(resolve_path "$output")"
+  mkdir -p "$(dirname "$output")"
+  umask 077
+
+  {
+    printf "SecOpsAI Edge Support Bundle\n"
+    printf "Generated (UTC): %s\n" "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    printf "Profile: %s\n" "$profile"
+    printf "Root: %s\n" "${ROOT_DIR/#$HOME/~}"
+    printf "\n== Release ==\n"
+    git -C "$ROOT_DIR" rev-parse --short HEAD 2>/dev/null || true
+    git -C "$ROOT_DIR" branch --show-current 2>/dev/null || true
+    git -C "$ROOT_DIR" status --short 2>/dev/null || true
+
+    printf "\n== Platform ==\n"
+    uname -a 2>/dev/null || true
+    sw_vers 2>/dev/null || true
+
+    printf "\n== Dependencies ==\n"
+    printf "nmap: %s\n" "$(command -v nmap 2>/dev/null || printf 'missing')"
+    nmap --version 2>/dev/null | head -n 1 || true
+    printf "python: %s\n" "$(command -v python3 2>/dev/null || printf 'missing')"
+    python3 --version 2>/dev/null || true
+    printf "node: %s\n" "$(command -v node 2>/dev/null || printf 'missing')"
+    node --version 2>/dev/null || true
+    printf "docker: %s\n" "$(command -v docker 2>/dev/null || printf 'missing')"
+    docker --version 2>/dev/null || true
+
+    printf "\n== Configuration Presence ==\n"
+    [ -f "$ENV_FILE" ] && printf ".env: present\n" || printf ".env: missing\n"
+    [ -f "$SENSOR_ENV_FILE" ] && printf ".sensor.env: present\n" || printf ".sensor.env: missing\n"
+    [ -f "$CLOUD_ENV_FILE" ] && printf ".cloud.env: present\n" || printf ".cloud.env: missing\n"
+    [ -f "$CLOUD_SENSOR_ENV_FILE" ] && printf ".cloud-sensor.env: present\n" || printf ".cloud-sensor.env: missing\n"
+    [ -f "$CORE_SYNC_CONFIG_FILE" ] && printf "Core sync config: present\n" || printf "Core sync config: missing\n"
+
+    printf "\n== Service Status ==\n"
+    if [ "$profile" = "cloud" ]; then
+      load_cloud_env
+      if [ -n "${SECOPSAI_CLOUD_API_URL:-}" ]; then
+        if curl -fsS "${SECOPSAI_CLOUD_API_URL%/}/healthz" >/dev/null 2>&1; then
+          printf "API:       running at %s\n" "${SECOPSAI_CLOUD_API_URL%/}"
+          if curl -fsS "${SECOPSAI_CLOUD_API_URL%/}/readyz" >/dev/null 2>&1; then
+            printf "Readiness: ready\n"
+          else
+            printf "Readiness: degraded (database or schema)\n"
+          fi
+        else
+          printf "API:       not responding at %s\n" "${SECOPSAI_CLOUD_API_URL%/}"
+        fi
+      else
+        printf "API:       cloud URL is not configured\n"
+      fi
+    else
+      status || true
+    fi
+    worker_service_status || true
+    core_sync_service_status || true
+
+    printf "\n== Recent Worker Logs ==\n"
+    worker_service_logs || true
+    printf "\n== Recent Core Sync Logs ==\n"
+    core_sync_service_logs || true
+  } 2>&1 | redact_support_stream > "$output"
+
+  chmod 600 "$output"
+  info "Created redacted support bundle"
+  printf "%s\n" "$output"
+  warn "Review the bundle before sharing; local paths and network ranges may still be present."
 }
 
 status() {
@@ -860,6 +1401,11 @@ status() {
 
   if curl -fsS "$target_api_url/healthz" >/dev/null 2>&1; then
     printf "API:       running at %s\n" "$target_api_url"
+    if curl -fsS "$target_api_url/readyz" >/dev/null 2>&1; then
+      printf "Readiness: ready\n"
+    else
+      printf "Readiness: degraded (database or schema)\n"
+    fi
   else
     printf "API:       not responding at %s\n" "$target_api_url"
   fi
@@ -900,6 +1446,11 @@ cloud() {
     register)
       register_sensor cloud
       ;;
+    enroll)
+      enrollment_token="${1:-}"
+      [ -n "$enrollment_token" ] || fail "Usage: ./scripts/edge cloud enroll <one-time-token>"
+      register_sensor cloud "$enrollment_token"
+      ;;
     status)
       status --cloud
       ;;
@@ -918,7 +1469,7 @@ main() {
 
   case "$command" in
     help|-h|--help) usage ;;
-    setup) setup ;;
+    setup) setup "$@" ;;
     onboard) onboard "$@" ;;
     dev) dev ;;
     db) start_db ;;
@@ -935,6 +1486,9 @@ main() {
     schedules) schedules "$@" ;;
     core) core "$@" ;;
     test) run_tests ;;
+    support-bundle) support_bundle "$@" ;;
+    database) database_command "$@" ;;
+    release-check) "$ROOT_DIR/scripts/release-gate" ;;
     status) status "$@" ;;
     *) usage; fail "Unknown command: $command" ;;
   esac

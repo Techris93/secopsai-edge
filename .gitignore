@@ -3,15 +3,21 @@
 .sensor.env
 .cloud.env
 .cloud-sensor.env
+.core-sync-service.json
+.core-sync.lock/
+edge-bundle.json
 .env*.local
 work/
 outputs/
+output/
+.playwright-cli/
 .venv/
 __pycache__/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
 .wrangler/
+.brv/
 *.pyc
 *.egg-info/
 node_modules/
@@ -22,3 +28,5 @@ coverage/
 htmlcov/
 *.log
 agent/raw_scans/
+backups/
+secopsai-edge-support-*.txt

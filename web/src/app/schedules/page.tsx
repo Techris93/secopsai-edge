@@ -2,6 +2,7 @@
 
 import { CalendarClock, Play, Plus, Trash2 } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import { DataStatePanel } from "@/components/DataStatePanel";
 import { LiveState } from "@/components/LiveState";
 import { PageHeader } from "@/components/PageHeader";
 import {
@@ -12,11 +13,13 @@ import {
   updateScanSchedule
 } from "@/lib/api";
 import { timeAgo } from "@/lib/format";
+import type { DashboardDataMode } from "@/lib/api";
 import type { DashboardData, ScanSchedule } from "@/lib/types";
 
 export default function SchedulesPage() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [live, setLive] = useState(false);
+  const [mode, setMode] = useState<DashboardDataMode>("blocked");
   const [error, setError] = useState<string | undefined>();
   const [message, setMessage] = useState<string | null>(null);
   const [listSite, setListSite] = useState("all");
@@ -35,6 +38,7 @@ export default function SchedulesPage() {
     const result = await fetchDashboardData();
     setData(result.data);
     setLive(result.live);
+    setMode(result.mode);
     setError(result.error);
   }
 
@@ -82,8 +86,9 @@ export default function SchedulesPage() {
         eyebrow="Automation"
         title="Scheduled Scans"
         description="Queue recurring LAN discovery jobs for registered sensors and sites."
-        action={<LiveState live={live} error={error} />}
+        action={<LiveState live={live} mode={mode} error={error} />}
       />
+      <DataStatePanel mode={mode} error={error} />
 
       <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
         <section className="rounded-lg border border-line bg-white p-4 shadow-panel">

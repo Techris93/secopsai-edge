@@ -13,16 +13,35 @@ SecOpsAI Edge discovers internal network assets, records service exposure, monit
 
 ## Pilot Workflow
 
-1. Create or select a site in the dashboard.
-2. Install and onboard the local sensor.
-3. Confirm the worker is online.
-4. Queue a scan or configure a schedule.
-5. Review Assets, Wi-Fi, and Findings.
-6. Add notes and mark findings acknowledged/resolved/false positive.
-7. Generate a report.
-8. Open the report detail page, copy the executive summary, print, or download HTML.
-9. Configure webhook/email/Telegram notifications.
-10. Sync Edge findings into SecOpsAI Core when needed.
+1. Connect the dashboard to the API from Settings and confirm it shows `Live API data`.
+2. Create or select a site in the dashboard.
+3. Click `Enroll sensor` for the target site, copy the one-time installer, and
+   run it on the authorized MacBook/Raspberry Pi.
+4. Confirm the worker is online.
+5. Queue a scan or configure a schedule.
+6. Review Assets, Wi-Fi, and Findings.
+7. Add notes and mark findings acknowledged/resolved/false positive.
+8. Approve known assets, accepted services, and trusted BSSIDs to establish the site baseline.
+9. Generate a report.
+10. Open the report detail page, copy the executive summary or client brief, print, or download the report.
+11. Configure webhook/email/Telegram notifications.
+12. Install automatic Edge-to-Core sync and confirm its status/logs.
+13. Confirm important operator actions appear in Audit Log.
+
+## Establish The Baseline
+
+Use Asset Detail to approve an owned device or accept an intentionally exposed service. Use Wi-Fi to trust an exact BSSID. Active rules are visible and reversible under Settings > Approved Baselines.
+
+- Approving an asset acknowledges `new_device` and `vendor_unknown`; missing-device changes remain visible.
+- Accepting a service applies only to that asset, port, and protocol.
+- Trusting a BSSID acknowledges duplicate-SSID noise; weak/open encryption remains a finding.
+- Disabling a baseline reopens findings that were acknowledged by that rule.
+
+## Dashboard Data States
+
+- `Live API data`: the dashboard is connected to the configured API and is showing real pilot telemetry.
+- `API not connected`: the dashboard cannot read pilot telemetry yet. Open Settings, create an API session, and confirm the API URL is correct.
+- `Demo data only`: sample telemetry is visible only when demo mode is explicitly enabled with `NEXT_PUBLIC_SECOPSAI_DEMO_MODE=true`. Do not use demo mode for customer pilots.
 
 ## Required Permission
 
@@ -53,3 +72,10 @@ Sensitive evidence fields such as MAC address, BSSID, and hostnames are redacted
 Rotate a sensor token from the Sites page when credentials are lost or leaked. After rotating, update `.cloud-sensor.env` on the sensor and restart the worker.
 
 Disable retired sensors from the Sites page. Queued jobs for disabled sensors are canceled.
+
+New sensor installs use 30-minute, single-use enrollment tokens created in the
+active workspace. Revoke an unused enrollment from Sites if the command was
+sent to the wrong person. Enrollment secrets are never recoverable from the API
+after the creation response; create a replacement instead.
+
+For a support-safe operational snapshot, run `./scripts/edge support-bundle --cloud` or copy the command from Settings. Review the generated file before sharing because local paths and authorized network ranges can remain visible.

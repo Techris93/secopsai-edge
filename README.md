@@ -5,11 +5,21 @@ Standalone MacBook-first MVP for an AI-assisted asset discovery and wireless int
 ## What Is Included
 
 - Native Python collection agent using safe, allowlisted Nmap scans.
-- FastAPI backend with PostgreSQL, migrations, auth, audit logs, findings, reports, and Splunk HEC export hooks.
+- FastAPI backend with PostgreSQL, workspace isolation, role-based auth, audit logs, approved baselines, findings, reports, and Splunk HEC export hooks.
 - Next.js/Tailwind dashboard for onboarding, sites, assets, Wi-Fi networks, findings, schedules, reports, notifications, and sensor settings.
 - Guided onboarding, launchd/systemd worker service installation, scheduled scans, sensor token rotation, and report export.
 - Docker Compose for local PostgreSQL.
 - Tests for scan safety, Nmap parsing, detection rules, and AI payload redaction.
+
+## Product Role
+
+SecOpsAI Edge is the network discovery and sensor module for the wider SecOpsAI product:
+
+- Main product: [secopsai.dev](https://secopsai.dev)
+- Research and advisories: [blog.secopsai.dev](https://blog.secopsai.dev)
+- Operator documentation: [docs.secopsai.dev](https://docs.secopsai.dev)
+
+Edge owns local LAN discovery, Wi-Fi inventory, scan jobs, worker heartbeat, and safe telemetry minimization. Main SecOpsAI should own long-term graph context, canonical findings, triage, reports, research intelligence, and AI memory.
 
 ## Quick Start
 
@@ -19,10 +29,13 @@ The easiest hosted pilot path is:
 ./scripts/edge onboard --cloud --install-service --start-service
 ```
 
-Or use the installer wrapper:
+For a released sensor, use the one-time command copied from Sites. It downloads
+the standalone bootstrap, verifies the release checksum, and installs the
+background worker without cloning the repository:
 
 ```bash
-./scripts/install-secopsai-edge.sh --cloud --api-url https://<your-api>.onrender.com --admin-token <admin-token>
+curl -fsSLO https://github.com/Techris93/secopsai-edge/releases/latest/download/bootstrap-secopsai-edge.sh
+bash bootstrap-secopsai-edge.sh --cloud --api-url https://<your-api>.onrender.com --enrollment-token <one-time-token>
 ```
 
 The local development path is:
@@ -35,6 +48,17 @@ The local development path is:
 Then open:
 
 [http://127.0.0.1:3000](http://127.0.0.1:3000)
+
+The dashboard shows one of three data states:
+
+- `Live API data`: connected to the configured API with a browser session.
+- `API not connected`: no usable API/session, so pilot telemetry is not being displayed.
+- `Demo data only`: sample telemetry is shown only when `NEXT_PUBLIC_SECOPSAI_DEMO_MODE=true` is explicitly configured.
+
+Authenticated users can switch among their assigned workspaces from the global selector. Sites,
+sensors, assets, findings, schedules, reports, notifications, audit records, and Core exports are
+restricted to the active workspace. Owners can create another customer workspace; administrators
+manage sites and members, while viewers have read-only access.
 
 In another terminal, register this MacBook as a sensor:
 
@@ -68,12 +92,16 @@ Replace `192.168.1.0/24` with your own authorized local network.
 - Scans are limited to private CIDR ranges with a maximum host count.
 - Nmap uses conservative timing, retries, and timeouts.
 - Raw Nmap output is retained by the agent only; AI reports receive normalized findings.
+- Approved baselines are site-scoped, audited, reversible, and never hide weak Wi-Fi encryption by default.
 
 ## Useful Commands
 
 ```bash
 ./scripts/edge status
+./scripts/edge support-bundle --cloud
 ./scripts/edge test
+./scripts/edge release-check
+./scripts/edge database backup
 ./scripts/edge worker status
 ./scripts/edge worker logs
 ./scripts/edge schedules run-due --cloud
@@ -90,6 +118,9 @@ Cloud commands:
 ./scripts/edge worker --cloud
 ./scripts/edge scan 192.168.1.0/24 --cloud
 ./scripts/edge report --cloud
+SECOPSAI_EDGE_CORE_TOKEN="$(python3 -c 'import getpass; print(getpass.getpass("Core export token: "))')"; export SECOPSAI_EDGE_CORE_TOKEN
+./scripts/edge core sync --cloud --core-root "$HOME/secopsai" --output edge-bundle.json
+unset SECOPSAI_EDGE_CORE_TOKEN
 ```
 
 The hosted dashboard can also queue remote scan jobs. Keep the worker running locally so queued jobs

@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, JSON, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Index, Integer, JSON, String, Text, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -16,17 +16,38 @@ def new_id() -> str:
     return str(uuid.uuid4())
 
 
+DEFAULT_ORGANIZATION_ID = "00000000-0000-4000-8000-000000000001"
+
+
 class Base(DeclarativeBase):
     pass
 
 
-class Site(Base):
-    __tablename__ = "sites"
+class Organization(Base):
+    __tablename__ = "organizations"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
-    name: Mapped[str] = mapped_column(String(160), unique=True, nullable=False)
+    name: Mapped[str] = mapped_column(String(160), nullable=False)
+    slug: Mapped[str] = mapped_column(String(120), unique=True, nullable=False)
+    active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    sites: Mapped[list["Site"]] = relationship(back_populates="organization")
+
+
+class Site(Base):
+    __tablename__ = "sites"
+    __table_args__ = (UniqueConstraint("organization_id", "name", name="uq_site_org_name"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    organization_id: Mapped[str] = mapped_column(
+        ForeignKey("organizations.id"), default=DEFAULT_ORGANIZATION_ID, nullable=False, index=True
+    )
+    name: Mapped[str] = mapped_column(String(160), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
+    organization: Mapped[Organization] = relationship(back_populates="sites")
     sensors: Mapped[list["Sensor"]] = relationship(back_populates="site")
 
 
@@ -41,12 +62,52 @@ class Sensor(Base):
     token_hash: Mapped[str] = mapped_column(String(128), nullable=False)
     version: Mapped[str | None] = mapped_column(String(80))
     os_name: Mapped[str | None] = mapped_column(String(120))
+    worker_state: Mapped[str | None] = mapped_column(String(40))
+    current_job_id: Mapped[str | None] = mapped_column(String(36))
     last_error: Mapped[str | None] = mapped_column(Text)
     disabled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     site: Mapped[Site] = relationship(back_populates="sensors")
+
+
+class SensorEnrollment(Base):
+    __tablename__ = "sensor_enrollments"
+    __table_args__ = (
+        Index("ix_sensor_enrollments_org_created", "organization_id", "created_at"),
+        Index("ix_sensor_enrollments_token_hash", "token_hash", unique=True),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), nullable=False)
+    site_id: Mapped[str] = mapped_column(ForeignKey("sites.id"), nullable=False)
+    label: Mapped[str] = mapped_column(String(160), nullable=False)
+    token_hash: Mapped[str] = mapped_column(String(128), nullable=False)
+    created_by: Mapped[str | None] = mapped_column(ForeignKey("users.id"))
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class IntegrationToken(Base):
+    __tablename__ = "integration_tokens"
+    __table_args__ = (
+        Index("ix_integration_tokens_org_created", "organization_id", "created_at"),
+        Index("ix_integration_tokens_token_hash", "token_hash", unique=True),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), nullable=False)
+    name: Mapped[str] = mapped_column(String(160), nullable=False)
+    token_hash: Mapped[str] = mapped_column(String(128), nullable=False)
+    scopes: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
+    created_by: Mapped[str | None] = mapped_column(ForeignKey("users.id"))
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
 class ScanRun(Base):
@@ -65,6 +126,10 @@ class ScanRun(Base):
 
 class ScanJob(Base):
     __tablename__ = "scan_jobs"
+    __table_args__ = (
+        Index("ix_scan_jobs_sensor_status", "sensor_id", "status"),
+        Index("ix_scan_jobs_schedule", "schedule_id"),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     site_id: Mapped[str] = mapped_column(ForeignKey("sites.id"), nullable=False)
@@ -85,6 +150,7 @@ class ScanJob(Base):
 
 class ScanSchedule(Base):
     __tablename__ = "scan_schedules"
+    __table_args__ = (Index("ix_scan_schedules_enabled_next_run", "enabled", "next_run_at"),)
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     site_id: Mapped[str] = mapped_column(ForeignKey("sites.id"), nullable=False)
@@ -177,6 +243,26 @@ class WifiNetwork(Base):
     last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
+class BaselineRule(Base):
+    __tablename__ = "baseline_rules"
+    __table_args__ = (
+        Index("ix_baseline_rules_site_kind_status", "site_id", "kind", "status"),
+        Index("ix_baseline_rules_expires_at", "expires_at"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    site_id: Mapped[str] = mapped_column(ForeignKey("sites.id"), nullable=False)
+    kind: Mapped[str] = mapped_column(String(32), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), default="active", nullable=False)
+    matcher: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
+    finding_types: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
+    reason: Mapped[str | None] = mapped_column(Text)
+    created_by: Mapped[str] = mapped_column(String(120), default="operator", nullable=False)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
 class Finding(Base):
     __tablename__ = "findings"
 
@@ -197,6 +283,7 @@ class Finding(Base):
 
 class FindingNote(Base):
     __tablename__ = "finding_notes"
+    __table_args__ = (Index("ix_finding_notes_finding", "finding_id"),)
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     finding_id: Mapped[str] = mapped_column(ForeignKey("findings.id"), nullable=False)
@@ -226,14 +313,43 @@ class User(Base):
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     role: Mapped[str] = mapped_column(String(32), default="admin")
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    session_version: Mapped[int] = mapped_column(Integer, default=1)
+    failed_login_count: Mapped[int] = mapped_column(Integer, default=0)
+    locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    password_changed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    memberships: Mapped[list["OrganizationMembership"]] = relationship(back_populates="user")
+
+
+class OrganizationMembership(Base):
+    __tablename__ = "organization_memberships"
+    __table_args__ = (
+        UniqueConstraint("organization_id", "user_id", name="uq_organization_membership"),
+        Index("ix_organization_memberships_user_active", "user_id", "active"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), nullable=False)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), nullable=False)
+    role: Mapped[str] = mapped_column(String(32), default="viewer", nullable=False)
+    active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    organization: Mapped[Organization] = relationship()
+    user: Mapped[User] = relationship(back_populates="memberships")
 
 
 class AuditLog(Base):
     __tablename__ = "audit_logs"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    organization_id: Mapped[str] = mapped_column(
+        ForeignKey("organizations.id"), default=DEFAULT_ORGANIZATION_ID, nullable=False, index=True
+    )
     user_id: Mapped[str | None] = mapped_column(ForeignKey("users.id"))
     sensor_id: Mapped[str | None] = mapped_column(ForeignKey("sensors.id"))
     action: Mapped[str] = mapped_column(String(120), nullable=False)
@@ -247,6 +363,9 @@ class NotificationEndpoint(Base):
     __tablename__ = "notification_endpoints"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    organization_id: Mapped[str] = mapped_column(
+        ForeignKey("organizations.id"), default=DEFAULT_ORGANIZATION_ID, nullable=False, index=True
+    )
     site_id: Mapped[str | None] = mapped_column(ForeignKey("sites.id"))
     name: Mapped[str] = mapped_column(String(160), nullable=False)
     type: Mapped[str] = mapped_column(String(32), nullable=False)
@@ -255,5 +374,33 @@ class NotificationEndpoint(Base):
     events: Mapped[list[str]] = mapped_column(JSON, default=list)
     last_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     last_error: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class NotificationDelivery(Base):
+    __tablename__ = "notification_deliveries"
+    __table_args__ = (
+        Index("ix_notification_deliveries_due", "status", "next_attempt_at"),
+        Index("ix_notification_deliveries_endpoint_created", "endpoint_id", "created_at"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    organization_id: Mapped[str] = mapped_column(
+        ForeignKey("organizations.id"), default=DEFAULT_ORGANIZATION_ID, nullable=False, index=True
+    )
+    endpoint_id: Mapped[str] = mapped_column(
+        ForeignKey("notification_endpoints.id", ondelete="CASCADE"), nullable=False
+    )
+    site_id: Mapped[str | None] = mapped_column(ForeignKey("sites.id"))
+    event_type: Mapped[str] = mapped_column(String(80), nullable=False)
+    payload: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    status: Mapped[str] = mapped_column(String(32), default="queued", nullable=False)
+    attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    max_attempts: Mapped[int] = mapped_column(Integer, default=4, nullable=False)
+    next_attempt_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    last_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    response_detail: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

@@ -10,6 +10,10 @@ def test_redact_evidence_removes_sensitive_identifiers() -> None:
         "mac": "aa:bb:cc:dd:ee:ff",
         "hostname": "finance-macbook",
         "port": 22,
+        "related": {
+            "bssid": "11:22:33:44:55:66",
+            "devices": [{"mac_address": "00:11:22:33:44:55", "port": 443}],
+        },
     }
 
     redacted = redact_evidence(evidence)
@@ -18,6 +22,9 @@ def test_redact_evidence_removes_sensitive_identifiers() -> None:
     assert redacted["port"] == 22
     assert redacted["mac"] == "[redacted]"
     assert redacted["hostname"] == "[redacted]"
+    assert redacted["related"]["bssid"] == "[redacted]"
+    assert redacted["related"]["devices"][0]["mac_address"] == "[redacted]"
+    assert redacted["related"]["devices"][0]["port"] == 443
 
 
 def test_openai_provider_uses_structured_outputs_and_preserves_findings(monkeypatch) -> None:

@@ -1,16 +1,20 @@
 "use client";
 
+import Link from "next/link";
 import { Search, Server } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { DataStatePanel } from "@/components/DataStatePanel";
 import { LiveState } from "@/components/LiveState";
 import { PageHeader } from "@/components/PageHeader";
 import { fetchDashboardData } from "@/lib/api";
 import { timeAgo } from "@/lib/format";
+import type { DashboardDataMode } from "@/lib/api";
 import type { Asset, DashboardData } from "@/lib/types";
 
 export default function AssetsPage() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [live, setLive] = useState(false);
+  const [mode, setMode] = useState<DashboardDataMode>("blocked");
   const [error, setError] = useState<string | undefined>();
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("all");
@@ -24,6 +28,7 @@ export default function AssetsPage() {
     fetchDashboardData().then((result) => {
       setData(result.data);
       setLive(result.live);
+      setMode(result.mode);
       setError(result.error);
     });
   }, []);
@@ -40,8 +45,9 @@ export default function AssetsPage() {
         eyebrow="Inventory"
         title="Assets"
         description="Search discovered devices by IP, hostname, vendor, device type, OS guess, and status."
-        action={<LiveState live={live} error={error} />}
+        action={<LiveState live={live} mode={mode} error={error} />}
       />
+      <DataStatePanel mode={mode} error={error} />
 
       <section className="rounded-lg border border-line bg-white shadow-panel">
         <div className="grid gap-3 border-b border-line p-4 xl:grid-cols-[1fr_repeat(6,9rem)]">
@@ -80,7 +86,7 @@ export default function AssetsPage() {
           <FilterSelect label="Service" value={service} values={options.services} onChange={setService} />
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[1020px] text-left text-sm">
+          <table className="w-full min-w-[1120px] text-left text-sm">
             <thead className="bg-paper text-xs uppercase text-zinc-600">
               <tr>
                 <th className="px-4 py-3">Device</th>
@@ -91,6 +97,7 @@ export default function AssetsPage() {
                 <th className="px-4 py-3">Status</th>
                 <th className="px-4 py-3">Services</th>
                 <th className="px-4 py-3">Last Seen</th>
+                <th className="px-4 py-3">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-line">
@@ -125,6 +132,17 @@ export default function AssetsPage() {
                     </div>
                   </td>
                   <td className="px-4 py-3 text-zinc-600">{timeAgo(asset.last_seen_at)}</td>
+                  <td className="px-4 py-3">
+                    {live ? (
+                      <Link className="ButtonSecondary" href={`/assets/detail?id=${encodeURIComponent(asset.id)}`}>
+                        Detail
+                      </Link>
+                    ) : (
+                      <span className="rounded border border-line bg-paper px-3 py-2 text-xs font-semibold text-zinc-500">
+                        Detail
+                      </span>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>

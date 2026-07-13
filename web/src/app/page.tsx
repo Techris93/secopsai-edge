@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertTriangle, FileText, RefreshCw, Server, ShieldAlert, Wifi } from "lucide-react";
+import { DataStatePanel } from "@/components/DataStatePanel";
 import { LiveState } from "@/components/LiveState";
 import { OnboardingChecklist } from "@/components/OnboardingChecklist";
 import { PageHeader } from "@/components/PageHeader";
@@ -10,17 +11,20 @@ import { SeverityBadge } from "@/components/SeverityBadge";
 import { StatCard } from "@/components/StatCard";
 import { fetchDashboardData } from "@/lib/api";
 import { timeAgo } from "@/lib/format";
+import type { DashboardDataMode } from "@/lib/api";
 import type { DashboardData } from "@/lib/types";
 
 export default function OverviewPage() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [live, setLive] = useState(false);
+  const [mode, setMode] = useState<DashboardDataMode>("blocked");
   const [error, setError] = useState<string | undefined>();
 
   const loadDashboardData = useCallback(async () => {
     const result = await fetchDashboardData();
     setData(result.data);
     setLive(result.live);
+    setMode(result.mode);
     setError(result.error);
   }, []);
 
@@ -47,8 +51,9 @@ export default function OverviewPage() {
         eyebrow="SecOpsAI Console"
         title="Wireless Intelligence & Asset Discovery"
         description="Track local assets, risky exposed services, Wi-Fi changes, and AI-generated security summaries from your MacBook sensor."
-        action={<LiveState live={live} error={error} />}
+        action={<LiveState live={live} mode={mode} error={error} />}
       />
+      <DataStatePanel mode={mode} error={error} />
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Assets" value={summary.activeAssets} detail="Currently active inventory" icon={Server} />
@@ -57,29 +62,26 @@ export default function OverviewPage() {
         <StatCard label="Open Findings" value={summary.openFindings} detail="Waiting for review" icon={ShieldAlert} tone="amber" />
       </div>
 
-      <div className="mt-6 grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
-        <section className="rounded-lg border border-line bg-white shadow-panel">
-          <div className="flex items-center justify-between border-b border-line px-4 py-3">
-            <h2 className="text-lg font-semibold text-ink">Recent Findings</h2>
-            <RefreshCw size={18} className="text-zinc-500" aria-hidden="true" />
-          </div>
-          <div className="divide-y divide-line">
-            {latestFindings.map((finding) => (
-              <article key={finding.id} className="grid gap-3 px-4 py-4 sm:grid-cols-[8rem_1fr_auto] sm:items-center">
-                <SeverityBadge severity={finding.severity} />
-                <div>
-                  <h3 className="font-medium text-ink">{finding.title}</h3>
-                  <p className="mt-1 text-sm leading-6 text-zinc-600">{finding.summary}</p>
-                </div>
-                <span className="text-sm text-zinc-500">{timeAgo(finding.created_at)}</span>
-              </article>
-            ))}
-          </div>
-        </section>
-
+      <div className="mt-6 grid items-start gap-6 xl:grid-cols-[1.15fr_0.85fr]">
         <div className="grid gap-6">
-          <OnboardingChecklist status={data?.onboarding ?? null} />
-          <ScanActions scanJobs={data?.scanJobs ?? []} sensors={data?.sensors ?? []} onChanged={loadDashboardData} />
+          <section className="rounded-lg border border-line bg-white shadow-panel">
+            <div className="flex items-center justify-between border-b border-line px-4 py-3">
+              <h2 className="text-lg font-semibold text-ink">Recent Findings</h2>
+              <RefreshCw size={18} className="text-zinc-500" aria-hidden="true" />
+            </div>
+            <div className="divide-y divide-line">
+              {latestFindings.map((finding) => (
+                <article key={finding.id} className="grid gap-3 px-4 py-4 sm:grid-cols-[8rem_1fr_auto] sm:items-center">
+                  <SeverityBadge severity={finding.severity} />
+                  <div>
+                    <h3 className="font-medium text-ink">{finding.title}</h3>
+                    <p className="mt-1 text-sm leading-6 text-zinc-600">{finding.summary}</p>
+                  </div>
+                  <span className="text-sm text-zinc-500">{timeAgo(finding.created_at)}</span>
+                </article>
+              ))}
+            </div>
+          </section>
 
           <section className="rounded-lg border border-line bg-white p-4 shadow-panel">
             <div className="flex items-center gap-2">
@@ -103,6 +105,11 @@ export default function OverviewPage() {
               <p className="mt-4 text-sm text-zinc-600">Generate a report after ingesting scan findings.</p>
             )}
           </section>
+        </div>
+
+        <div className="grid gap-6">
+          <OnboardingChecklist status={data?.onboarding ?? null} />
+          <ScanActions scanJobs={data?.scanJobs ?? []} sensors={data?.sensors ?? []} onChanged={loadDashboardData} />
         </div>
       </div>
     </>

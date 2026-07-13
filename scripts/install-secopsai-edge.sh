@@ -33,12 +33,14 @@ usage() {
 Install SecOpsAI Edge sensor
 
 Usage:
-  bash scripts/install-secopsai-edge.sh --cloud --api-url https://... --admin-token TOKEN
+  bash scripts/install-secopsai-edge.sh --cloud --api-url https://... --enrollment-token TOKEN
 
 Options:
   --cloud              Configure hosted API mode
   --api-url URL        Render/FastAPI URL
   --admin-token TOKEN  API admin token
+  --enrollment-token TOKEN
+                       Short-lived, single-use customer enrollment token (recommended)
   --site-name NAME     Site name for this sensor
   --sensor-name NAME   Sensor display name
   --cidr CIDR          Optional first preview target
@@ -73,16 +75,23 @@ main() {
 
   info "Installing SecOpsAI Edge from $ROOT_DIR"
   ensure_nmap_hint
-  "$ROOT_DIR/scripts/edge" setup
+  "$ROOT_DIR/scripts/edge" setup --sensor-only
 
-  onboard_args=("${args[@]}")
+  onboard_args=()
+  if [ "${#args[@]}" -gt 0 ]; then
+    onboard_args=("${args[@]}")
+  fi
   if [ "$install_service" = "yes" ]; then
     onboard_args+=("--install-service")
   fi
   if [ "$start_service" = "yes" ]; then
     onboard_args+=("--start-service")
   fi
-  "$ROOT_DIR/scripts/edge" onboard "${onboard_args[@]}"
+  if [ "${#onboard_args[@]}" -gt 0 ]; then
+    "$ROOT_DIR/scripts/edge" onboard "${onboard_args[@]}"
+  else
+    "$ROOT_DIR/scripts/edge" onboard
+  fi
   "$ROOT_DIR/scripts/edge" worker status || true
 
   info "SecOpsAI Edge install flow finished"

@@ -6,22 +6,33 @@ import hmac
 import json
 import secrets
 import time
+from typing import Any
 
 from fastapi import Depends, Header, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from secopsai_api.config import get_settings
 from secopsai_api.database import get_db
-from secopsai_api.models import Sensor
+from secopsai_api.models import DEFAULT_ORGANIZATION_ID, IntegrationToken, Organization, Sensor, User, utcnow
+from secopsai_api.tenancy import ensure_default_membership, ensure_default_tenant_state, membership_for_user
 
 
 bearer = HTTPBearer(auto_error=False)
 DASHBOARD_SESSION_PREFIX = "secopsai_session"
+INTEGRATION_TOKEN_PREFIX = "secopsai_core_"
+PASSWORD_HASH_PREFIX = "pbkdf2_sha256"
+PASSWORD_HASH_ITERATIONS = 260_000
+DUMMY_PASSWORD_HASH = f"{PASSWORD_HASH_PREFIX}${PASSWORD_HASH_ITERATIONS}$secopsai-dummy$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
 
 
 def generate_sensor_token() -> str:
     return secrets.token_urlsafe(32)
+
+
+def generate_integration_token() -> str:
+    return f"{INTEGRATION_TOKEN_PREFIX}{secrets.token_urlsafe(32)}"
 
 
 def hash_secret(secret: str) -> str:
@@ -37,53 +48,181 @@ def constant_time_equals(left: str, right: str) -> bool:
     return hmac.compare_digest(left.encode("utf-8"), right.encode("utf-8"))
 
 
-def create_dashboard_session() -> str:
+def hash_password(password: str) -> str:
+    salt = secrets.token_urlsafe(16)
+    digest = hashlib.pbkdf2_hmac(
+        "sha256",
+        password.encode("utf-8"),
+        salt.encode("utf-8"),
+        PASSWORD_HASH_ITERATIONS,
+    )
+    return f"{PASSWORD_HASH_PREFIX}${PASSWORD_HASH_ITERATIONS}${salt}${_b64url_encode(digest)}"
+
+
+def verify_password(password: str, password_hash: str) -> bool:
+    try:
+        prefix, iterations_raw, salt, expected = password_hash.split("$", 3)
+        iterations = int(iterations_raw)
+    except ValueError:
+        return False
+    if prefix != PASSWORD_HASH_PREFIX:
+        return False
+    digest = hashlib.pbkdf2_hmac(
+        "sha256",
+        password.encode("utf-8"),
+        salt.encode("utf-8"),
+        iterations,
+    )
+    return constant_time_equals(_b64url_encode(digest), expected)
+
+
+def create_dashboard_session(
+    subject: str = "dashboard",
+    role: str = "admin",
+    user_id: str | None = None,
+    session_version: int | None = None,
+    organization_id: str = DEFAULT_ORGANIZATION_ID,
+) -> str:
     settings = get_settings()
     payload = {
-        "sub": "dashboard",
+        "sub": subject,
+        "role": role,
         "exp": int(time.time()) + settings.dashboard_session_ttl_seconds,
         "nonce": secrets.token_urlsafe(12),
+        "org": organization_id,
     }
+    if user_id:
+        payload["uid"] = user_id
+        payload["ver"] = session_version if session_version is not None else 1
     payload_part = _b64url_encode(json.dumps(payload, separators=(",", ":")).encode("utf-8"))
     signature = _sign(payload_part)
     return f"{DASHBOARD_SESSION_PREFIX}.{payload_part}.{signature}"
 
 
-def verify_dashboard_session(token: str) -> bool:
+def decode_dashboard_session(token: str) -> dict[str, Any] | None:
     parts = token.split(".")
     if len(parts) != 3 or parts[0] != DASHBOARD_SESSION_PREFIX:
-        return False
+        return None
 
     payload_part = parts[1]
     signature = parts[2]
     if not constant_time_equals(signature, _sign(payload_part)):
-        return False
+        return None
 
     try:
         payload = json.loads(_b64url_decode(payload_part))
     except (ValueError, json.JSONDecodeError):
-        return False
+        return None
 
-    if payload.get("sub") != "dashboard":
-        return False
+    if not payload.get("sub"):
+        return None
     try:
         expires_at = int(payload["exp"])
     except (KeyError, TypeError, ValueError):
-        return False
-    return expires_at > int(time.time())
+        return None
+    if expires_at <= int(time.time()):
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
+def verify_dashboard_session(token: str) -> bool:
+    return decode_dashboard_session(token) is not None
 
 
 def require_admin(
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer),
-) -> None:
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    context = get_dashboard_auth_context(credentials, db)
+    if str(context.get("role") or "").lower() not in {"owner", "admin"}:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Administrator role required")
+    return context
+
+
+def require_operator(
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    return get_dashboard_auth_context(credentials, db)
+
+
+def require_core_export_access(
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    if not credentials or credentials.scheme.lower() != "bearer":
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing bearer token")
+    credential = credentials.credentials
+    if credential.startswith(INTEGRATION_TOKEN_PREFIX):
+        token = db.scalar(
+            select(IntegrationToken).where(IntegrationToken.token_hash == hash_secret(credential))
+        )
+        now = utcnow()
+        if token is None:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid integration token")
+        comparison_now = now
+        if token.expires_at.tzinfo is None:
+            comparison_now = now.replace(tzinfo=None)
+        organization = db.get(Organization, token.organization_id)
+        if (
+            token.revoked_at is not None
+            or token.expires_at <= comparison_now
+            or "core:export" not in (token.scopes or [])
+            or organization is None
+            or not organization.active
+        ):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid integration token")
+        token.last_used_at = now
+        db.commit()
+        return {
+            "sub": f"integration-token:{token.id}",
+            "role": "integration",
+            "org": token.organization_id,
+            "scopes": list(token.scopes or []),
+            "integration_token_id": token.id,
+        }
+
+    context = get_dashboard_auth_context(credentials, db)
+    if str(context.get("role") or "").lower() not in {"owner", "admin"}:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Administrator role required")
+    return context
+
+
+def get_dashboard_auth_context(
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
     settings = get_settings()
     if not credentials or credentials.scheme.lower() != "bearer":
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing admin token")
     credential = credentials.credentials
-    if constant_time_equals(credential, settings.admin_token) or verify_dashboard_session(credential):
-        return
-    else:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid admin token")
+    if constant_time_equals(credential, settings.admin_token):
+        ensure_default_tenant_state(db)
+        return {
+            "sub": "admin-token",
+            "role": "admin",
+            "org": DEFAULT_ORGANIZATION_ID,
+            "legacy": True,
+        }
+    session = decode_dashboard_session(credential)
+    if session is not None:
+        user_id = session.get("uid")
+        if user_id:
+            user = db.get(User, user_id)
+            if user is None or not user.active or int(session.get("ver", 0)) != user.session_version:
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Dashboard session revoked")
+            organization_id = str(session.get("org") or DEFAULT_ORGANIZATION_ID)
+            membership = membership_for_user(db, user.id, organization_id)
+            if membership is None and "org" not in session:
+                membership = ensure_default_membership(db, user)
+                db.commit()
+            if membership is None:
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Workspace access revoked")
+            session["sub"] = user.email
+            session["role"] = membership.role
+            session["org"] = membership.organization_id
+        return session
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid admin token")
 
 
 def authenticate_sensor(db: Session, sensor_id: str, sensor_token: str | None) -> Sensor:

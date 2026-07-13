@@ -7,6 +7,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from secopsai_api.baselines import is_baselined
 from secopsai_api.models import (
     Asset,
     AssetObservation,
@@ -57,7 +58,9 @@ def ingest_scan(db: Session, sensor: Sensor, payload: ScanIn) -> tuple[ScanRun, 
     for observed_asset in payload.assets:
         asset, is_new = upsert_asset(db, sensor, scan, observed_asset)
         current_asset_ids.add(asset.id)
-        if is_new:
+        if is_new and not is_baselined(
+            db, sensor.site_id, "asset", "new_device", asset=asset
+        ):
             findings.append(
                 upsert_finding(
                     db,
@@ -71,7 +74,9 @@ def ingest_scan(db: Session, sensor: Sensor, payload: ScanIn) -> tuple[ScanRun, 
                     mitre=[{"id": "T1046", "name": "Network Service Discovery"}],
                 )
             )
-        if _is_unknown_vendor(asset.vendor):
+        if _is_unknown_vendor(asset.vendor) and not is_baselined(
+            db, sensor.site_id, "asset", "vendor_unknown", asset=asset
+        ):
             findings.append(
                 upsert_finding(
                     db,
@@ -175,7 +180,14 @@ def sync_services(
         service.state = observed.state
         service.last_seen_at = utcnow()
 
-        if observed.port in RISKY_PORTS:
+        if observed.port in RISKY_PORTS and not is_baselined(
+            db,
+            site_id,
+            "service",
+            "risky_open_port",
+            asset=asset,
+            service=service,
+        ):
             severity, title = RISKY_PORTS[observed.port]
             findings.append(
                 upsert_finding(
@@ -196,7 +208,14 @@ def sync_services(
                 )
             )
 
-        if service_is_new and not asset_is_new:
+        if service_is_new and not asset_is_new and not is_baselined(
+            db,
+            site_id,
+            "service",
+            "port_change",
+            asset=asset,
+            service=service,
+        ):
             findings.append(
                 upsert_finding(
                     db,
@@ -213,18 +232,26 @@ def sync_services(
     for key, service in existing.items():
         if key not in observed_keys and service.state == "open":
             service.state = "closed"
-            findings.append(
-                upsert_finding(
-                    db,
-                    site_id,
-                    "port_change",
-                    "Previously open port disappeared",
-                    f"{asset.ip_address} no longer exposes {service.protocol}/{service.port}.",
-                    "low",
-                    {"ip": asset.ip_address, "port": service.port, "protocol": service.protocol},
-                    asset_id=asset.id,
+            if not is_baselined(
+                db,
+                site_id,
+                "service",
+                "port_change",
+                asset=asset,
+                service=service,
+            ):
+                findings.append(
+                    upsert_finding(
+                        db,
+                        site_id,
+                        "port_change",
+                        "Previously open port disappeared",
+                        f"{asset.ip_address} no longer exposes {service.protocol}/{service.port}.",
+                        "low",
+                        {"ip": asset.ip_address, "port": service.port, "protocol": service.protocol},
+                        asset_id=asset.id,
+                    )
                 )
-            )
     return findings
 
 
@@ -253,18 +280,19 @@ def mark_missing_assets(
         if not in_scope:
             continue
         asset.status = "missing"
-        findings.append(
-            upsert_finding(
-                db,
-                site_id,
-                "missing_device",
-                "Previously seen device is missing",
-                f"{asset.ip_address} was not observed in the latest scan.",
-                "low",
-                {"ip": asset.ip_address, "last_seen_at": _iso(asset.last_seen_at)},
-                asset_id=asset.id,
+        if not is_baselined(db, site_id, "asset", "missing_device", asset=asset):
+            findings.append(
+                upsert_finding(
+                    db,
+                    site_id,
+                    "missing_device",
+                    "Previously seen device is missing",
+                    f"{asset.ip_address} was not observed in the latest scan.",
+                    "low",
+                    {"ip": asset.ip_address, "last_seen_at": _iso(asset.last_seen_at)},
+                    asset_id=asset.id,
+                )
             )
-        )
     return findings
 
 
@@ -303,7 +331,10 @@ def evaluate_wifi(
 ) -> list[Finding]:
     findings: list[Finding] = []
     encryption = (observed.encryption or "").strip().lower()
-    if any(marker == encryption or marker in encryption for marker in OPEN_WIFI_MARKERS):
+    if (
+        any(marker == encryption or marker in encryption for marker in OPEN_WIFI_MARKERS)
+        and not is_baselined(db, site_id, "wifi", "weak_wifi", wifi=wifi)
+    ):
         findings.append(
             upsert_finding(
                 db,
@@ -330,7 +361,9 @@ def evaluate_wifi(
                 WifiNetwork.bssid != observed.bssid,
             )
         ).all()
-        if matching_ssids:
+        if matching_ssids and not is_baselined(
+            db, site_id, "wifi", "duplicate_ssid", wifi=wifi
+        ):
             findings.append(
                 upsert_finding(
                     db,
@@ -364,7 +397,7 @@ def upsert_finding(
     wifi_network_id: str | None = None,
     mitre: list[dict[str, Any]] | None = None,
 ) -> Finding:
-    existing = db.scalar(
+    candidates = db.scalars(
         select(Finding).where(
             Finding.site_id == site_id,
             Finding.type == finding_type,
@@ -373,6 +406,15 @@ def upsert_finding(
             Finding.wifi_network_id == wifi_network_id,
             Finding.status.in_(["open", "acknowledged"]),
         )
+    ).all()
+    identity = _finding_identity(finding_type, evidence)
+    existing = next(
+        (
+            candidate
+            for candidate in candidates
+            if identity is None or _finding_identity(candidate.type, candidate.evidence or {}) == identity
+        ),
+        None,
     )
     if existing:
         existing.evidence = evidence
@@ -395,6 +437,16 @@ def upsert_finding(
     db.add(finding)
     db.flush()
     return finding
+
+
+def _finding_identity(finding_type: str, evidence: dict[str, Any]) -> tuple[Any, ...] | None:
+    if finding_type == "port_change":
+        return (
+            str(evidence.get("ip") or ""),
+            int(evidence.get("port") or 0),
+            str(evidence.get("protocol") or "tcp").lower(),
+        )
+    return None
 
 
 def infer_device_type(observed: AssetObservationIn) -> str | None:

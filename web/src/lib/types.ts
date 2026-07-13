@@ -25,6 +25,38 @@ export type Asset = {
   }>;
 };
 
+export type AssetObservation = {
+  id: string;
+  site_id: string;
+  sensor_id: string;
+  scan_id: string;
+  asset_id: string;
+  ip_address: string;
+  mac_address?: string | null;
+  vendor?: string | null;
+  hostname?: string | null;
+  os_guess?: string | null;
+  raw_source?: string | null;
+  observed_at: string;
+};
+
+export type AssetTimelineEvent = {
+  id: string;
+  kind: string;
+  title: string;
+  summary: string;
+  occurred_at: string;
+  severity: Severity | "info" | string;
+  metadata: Record<string, unknown>;
+};
+
+export type AssetDetail = {
+  asset: Asset;
+  observations: AssetObservation[];
+  findings: Finding[];
+  timeline: AssetTimelineEvent[];
+};
+
 export type WifiNetwork = {
   id: string;
   site_id: string;
@@ -36,6 +68,31 @@ export type WifiNetwork = {
   status: string;
   first_seen_at: string;
   last_seen_at: string;
+};
+
+export type BaselineRule = {
+  id: string;
+  site_id: string;
+  kind: "asset" | "service" | "wifi" | string;
+  status: "active" | "disabled" | string;
+  matcher: Record<string, string | number | null>;
+  finding_types: string[];
+  reason?: string | null;
+  created_by: string;
+  expires_at?: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type AuditLog = {
+  id: string;
+  user_id?: string | null;
+  sensor_id?: string | null;
+  action: string;
+  resource_type?: string | null;
+  resource_id?: string | null;
+  details: Record<string, unknown>;
+  created_at: string;
 };
 
 export type Finding = {
@@ -82,8 +139,48 @@ export type Report = {
 
 export type Site = {
   id: string;
+  organization_id: string;
   name: string;
   created_at: string;
+};
+
+export type Organization = {
+  id: string;
+  name: string;
+  slug: string;
+  active: boolean;
+  role: "owner" | "admin" | "viewer" | string;
+  created_at: string;
+};
+
+export type AuthIdentity = {
+  subject: string;
+  role: string;
+  organization_id: string;
+  organizations: Organization[];
+  user?: User | null;
+};
+
+export type SystemStatus = {
+  status: "ready" | "degraded" | string;
+  environment: string;
+  version: string;
+  commit: string;
+  schema_revision?: string | null;
+  expected_schema_revision: string;
+  ai_provider: string;
+  organization_id: string;
+  server_time: string;
+};
+
+export type User = {
+  id: string;
+  email: string;
+  role: string;
+  active: boolean;
+  created_at: string;
+  last_login_at?: string | null;
+  password_changed_at?: string | null;
 };
 
 export type ScanJob = {
@@ -132,11 +229,46 @@ export type Sensor = {
   connection_state: "online" | "offline" | string;
   version?: string | null;
   os_name?: string | null;
+  worker_state?: string | null;
+  current_job_id?: string | null;
   last_error?: string | null;
   disabled_at?: string | null;
   created_at: string;
   last_seen_at?: string | null;
   current_job?: ScanJob | null;
+};
+
+export type SensorEnrollment = {
+  id: string;
+  organization_id: string;
+  site_id: string;
+  site_name: string;
+  label: string;
+  state: "active" | "used" | "expired" | "revoked" | string;
+  expires_at: string;
+  used_at?: string | null;
+  revoked_at?: string | null;
+  created_at: string;
+};
+
+export type SensorEnrollmentSecret = SensorEnrollment & {
+  enrollment_token: string;
+};
+
+export type IntegrationToken = {
+  id: string;
+  organization_id: string;
+  name: string;
+  scopes: string[];
+  state: "active" | "expired" | "revoked" | string;
+  expires_at: string;
+  last_used_at?: string | null;
+  revoked_at?: string | null;
+  created_at: string;
+};
+
+export type IntegrationTokenSecret = IntegrationToken & {
+  access_token: string;
 };
 
 export type NotificationEndpoint = {
@@ -149,6 +281,22 @@ export type NotificationEndpoint = {
   events: string[];
   last_sent_at?: string | null;
   last_error?: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type NotificationDelivery = {
+  id: string;
+  endpoint_id: string;
+  site_id?: string | null;
+  event_type: string;
+  status: "queued" | "retrying" | "delivered" | "failed" | string;
+  attempts: number;
+  max_attempts: number;
+  next_attempt_at: string;
+  last_attempt_at?: string | null;
+  delivered_at?: string | null;
+  response_detail?: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -168,10 +316,12 @@ export type DashboardData = {
   sites: Site[];
   assets: Asset[];
   wifiNetworks: WifiNetwork[];
+  baselines: BaselineRule[];
   findings: Finding[];
   reports: Report[];
   scanJobs: ScanJob[];
   sensors: Sensor[];
+  sensorEnrollments: SensorEnrollment[];
   schedules: ScanSchedule[];
   notifications: NotificationEndpoint[];
   onboarding: OnboardingStatus | null;

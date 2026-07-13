@@ -3,16 +3,19 @@
 import Link from "next/link";
 import { CheckCircle2, Search, ShieldAlert } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { DataStatePanel } from "@/components/DataStatePanel";
 import { LiveState } from "@/components/LiveState";
 import { PageHeader } from "@/components/PageHeader";
 import { SeverityBadge } from "@/components/SeverityBadge";
 import { fetchDashboardData, updateFindingStatus } from "@/lib/api";
 import { timeAgo, titleize } from "@/lib/format";
+import type { DashboardDataMode } from "@/lib/api";
 import type { DashboardData, Finding } from "@/lib/types";
 
 export default function FindingsPage() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [live, setLive] = useState(false);
+  const [mode, setMode] = useState<DashboardDataMode>("blocked");
   const [error, setError] = useState<string | undefined>();
   const [query, setQuery] = useState("");
   const [severity, setSeverity] = useState("all");
@@ -25,6 +28,7 @@ export default function FindingsPage() {
     fetchDashboardData().then((result) => {
       setData(result.data);
       setLive(result.live);
+      setMode(result.mode);
       setError(result.error);
     });
   }, []);
@@ -68,8 +72,9 @@ export default function FindingsPage() {
         eyebrow="Detection"
         title="Findings"
         description="Review asset changes, risky services, wireless anomalies, and AI-ready evidence."
-        action={<LiveState live={live} error={error} />}
+        action={<LiveState live={live} mode={mode} error={error} />}
       />
+      <DataStatePanel mode={mode} error={error} />
 
       <section className="rounded-lg border border-line bg-white shadow-panel">
         <div className="grid gap-3 border-b border-line p-4 xl:grid-cols-[1fr_12rem_12rem_12rem_auto]">

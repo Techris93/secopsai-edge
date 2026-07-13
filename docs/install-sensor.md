@@ -4,23 +4,31 @@ This guide installs a MacBook or Raspberry Pi/Linux machine as a SecOpsAI Edge s
 
 ## MacBook Cloud Pilot
 
-From the project folder:
+In the dashboard, select the customer workspace, open Sites, and click
+`Enroll sensor` on the target site. Copy the one-time installer command. It
+contains a 30-minute, single-use enrollment token and does not expose the
+platform administrator token.
+
+The copied command has this shape and does not require a repository clone:
 
 ```bash
-./scripts/install-secopsai-edge.sh \
+curl -fsSLO https://github.com/Techris93/secopsai-edge/releases/latest/download/bootstrap-secopsai-edge.sh
+bash bootstrap-secopsai-edge.sh \
   --cloud \
   --api-url https://secopsai-edge-api.onrender.com \
-  --admin-token <admin-token> \
-  --site-name "Main Office" \
+  --enrollment-token <one-time-token> \
   --sensor-name "MacBook Sensor"
 ```
 
 The installer:
 
+- downloads the current GitHub release over HTTPS
+- verifies the published SHA-256 checksum before extraction
 - checks Python dependencies
 - checks that Nmap is available
 - registers the sensor
-- saves `.cloud.env` and `.cloud-sensor.env`
+- exchanges the one-time enrollment token and saves only the resulting sensor
+  credential in `.cloud-sensor.env`
 - installs the worker as a launchd service
 - starts the worker
 
@@ -45,32 +53,44 @@ sudo apt-get update
 sudo apt-get install -y nmap python3 python3-venv nodejs npm
 ```
 
-Then run the same installer:
+Create the enrollment from the target customer workspace and run the same
+copied installer:
 
 ```bash
 ./scripts/install-secopsai-edge.sh \
   --cloud \
   --api-url https://secopsai-edge-api.onrender.com \
-  --admin-token <admin-token> \
-  --site-name "Branch Office" \
+  --enrollment-token <one-time-token> \
   --sensor-name "Pi Sensor"
 ```
 
 On Linux, the worker installs as a user `systemd` service.
 
+Use `--version 0.2.0` to pin a release. Use `--upgrade` for an existing
+installation; the bootstrap preserves credential files, keeps the previous
+installation as `.previous`, and restores it automatically if the new
+installer fails.
+
 ## Manual Onboarding
 
 ```bash
-./scripts/edge onboard --cloud --install-service --start-service
+./scripts/edge onboard --cloud --api-url https://<api> \
+  --enrollment-token <one-time-token> --install-service --start-service
 ```
 
 Optional first target preview:
 
 ```bash
-./scripts/edge onboard --cloud --cidr 192.168.1.0/24
+./scripts/edge onboard --cloud --api-url https://<api> \
+  --enrollment-token <one-time-token> --cidr 192.168.1.0/24
 ```
 
 Only preview or scan networks you own or are explicitly authorized to test.
+
+The legacy `--admin-token` registration path remains available for Default
+Workspace recovery and automation. Do not give that token to a pilot customer.
+Unused enrollments can be revoked from Sites; used, expired, and revoked tokens
+cannot register another sensor.
 
 ## Uninstall
 
