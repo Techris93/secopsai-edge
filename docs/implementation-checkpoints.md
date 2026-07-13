@@ -1779,6 +1779,78 @@ Known deployment boundary:
   Supabase database credential is available for the RLS migration and an
   invited operator is confirmed.
 
+## Checkpoint 034 - Canonical Core and Edge Operator Boundary
+
+Status: complete
+
+Branch and merge:
+
+- Dashboard PR: `#8` (`codex/canonical-core-edge-dashboard`)
+- Dashboard merge: `3c11eb9e9555b9e0069310099204e89ea0a72a62`
+- Dashboard security hotfix PR: `#9` (`codex/auth-disabled-fail-closed`)
+- Dashboard security hotfix merge: `3b90aa5f923938afd8442b393b6500d45e881ea9`
+- Dashboard release-hygiene PR: `#10` (`codex/dashboard-release-hygiene`)
+- Dashboard release-hygiene merge: `2fdf61af25992a393a23a1a22eed49b8310c5f73`
+- Cloudflare preview: `e9bcd48d-e44d-47d8-bef9-c0404933c8f3`
+- Cloudflare production: `e9f92716-4f1d-487c-9112-df44556f2e46`
+
+Completed changes:
+
+- Added a server-side `/api/secopsai/edge-workspace` aggregate that reads the
+  canonical Core workspace and live Edge operations without exposing Core,
+  Edge, or operator credentials to browser JavaScript.
+- Protected integration, SecOpsAI, run-output, and blog routes with the current
+  Supabase operator session. A deployment with protected backend configuration
+  now fails closed when dashboard authentication is disabled.
+- Kept separate server-only Core read and Edge operations credentials, enforced
+  HTTPS origins, rejected redirects, bounded responses, added upstream
+  timeouts, and sanitized downstream failures.
+- Fixed operator token refresh so a same-user `TOKEN_REFRESHED` event replaces
+  the expired session before the dashboard reuses it.
+- Scoped the Edge page to Edge-origin Core findings while retaining live Edge
+  sites, sensors, schedules, jobs, and integration-token health. Synced Core
+  graph nodes provide a fallback when the live Edge operations API is absent.
+- Documented the Worker environment and secure activation sequence. Advanced
+  the dashboard package to `1.2.1`.
+- Closed a production rollout defect found during browser QA: an auth-disabled
+  deployment could still initialize the configured Supabase client. The
+  Worker now omits Supabase browser credentials, the app shows a dedicated
+  locked deployment state, and no live workspace boot path runs while
+  authentication is disabled.
+- Ignored local `node_modules/` output created by Pages development tooling so
+  browser validation no longer dirties the dashboard worktree.
+
+Validation:
+
+- Dashboard `npm run check` and `npm test` passed; the Python dashboard suite
+  passed 41 tests and `git diff --check` passed.
+- Tests prove anonymous protected routes return 401, backend configuration
+  cannot be served with auth disabled, credentials stay out of returned JSON,
+  downstream credentials remain separated, redirects are rejected, and
+  refreshed operator sessions replace stale tokens.
+- Cloudflare Pages built preview source `5142dbc` successfully. Browser QA at
+  desktop and `390x844` showed the operator gate, a clean console, no framework
+  overlay, and no horizontal overflow.
+- Dashboard PR `#8` passed its Cloudflare Pages check and merged cleanly into
+  `main`.
+- Security hotfix PR `#9` passed Cloudflare Pages and merged. The auth-disabled
+  Worker state was tested locally and on production at desktop and `390x844`:
+  no Supabase browser configuration, no live workspace records, no console
+  errors, and no horizontal overflow.
+- Release-hygiene PR `#10` passed Cloudflare Pages and merged. Production
+  deployment `e9f92716-4f1d-487c-9112-df44556f2e46` serves final merge
+  `2fdf61a`.
+
+Known activation boundary:
+
+- The preview correctly reports that Supabase credentials are absent from the
+  preview environment. Production operator access remains gated on applying
+  the RLS migration, confirming an invited operator, and then enabling
+  `DASHBOARD_AUTH_REQUIRED`.
+- Hosted Core remains deploy-ready but unprovisioned because reliable SQLite
+  requires a paid Render persistent disk. The dashboard route and tests are
+  ready for that service when the cost is approved.
+
 ## Completion Rules
 
 A checkpoint is complete only when:
