@@ -101,6 +101,27 @@ Create and immediately verify an owner-only PostgreSQL custom archive:
 ./scripts/edge database verify --input backups/secopsai-edge-<timestamp>.dump
 ```
 
+For the hosted Render database, use the authenticated one-command workflow:
+
+```bash
+./scripts/edge cloud drift-check
+./scripts/edge cloud backup
+```
+
+The drift check validates `render.yaml`, the live API build/start/health
+contract, scheduler branch/commands/five-minute schedule, PostgreSQL status and
+major version, and free-database expiry. It reads no environment variables or
+secrets. Add `--json` for monitoring or `--fail-on-warning` when an expiring
+free database should fail an automation gate.
+
+The hosted backup command reads the database major from Render, pulls the
+matching official PostgreSQL client image, temporarily adds only the current
+public IP to the database allowlist, creates the archive, restores the original
+allowlist, verifies required tables, and writes a SHA-256 manifest. It never
+prints the connection URL. Docker and an authenticated Render CLI are required.
+The normal local backup/restore command also uses a matching PostgreSQL Docker
+client automatically when the host client major differs from the server.
+
 Restore is destructive and requires both an explicit target URL and the exact
 database name as a second confirmation:
 
@@ -119,6 +140,10 @@ practice a restore against the active production database.
 Pilot target: daily backup, RPO 24 hours, RTO 4 hours. Paid production target:
 managed point-in-time recovery, RPO 15 minutes or better, RTO 2 hours, and a
 quarterly documented restore drill.
+
+An archive is not considered recoverable until it has restored into a separate
+database on the same PostgreSQL major and schema/table counts have been checked.
+Never treat `pg_restore --list` alone as a restore test.
 
 ## Manage Approved Baselines
 

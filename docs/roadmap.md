@@ -4,7 +4,7 @@ This roadmap records product gaps, not historical aspirations. A capability is
 listed as complete only when it has implementation and test evidence in
 `docs/implementation-checkpoints.md`.
 
-## Current Product Baseline - v0.2.5
+## Current Product Baseline - v0.2.6
 
 The controlled-pilot baseline includes:
 
@@ -26,7 +26,8 @@ The controlled-pilot baseline includes:
   authenticated PDF export, HTML fallback, and browser print.
 - Email, Telegram, and signed-webhook notification endpoints.
 - Redacted support bundles, backup/restore tooling, release gates, verified
-  private release archives, Render API/PostgreSQL, and Cloudflare dashboard.
+  private release archives, Render API/PostgreSQL, Cloudflare dashboard,
+  Render configuration drift checks, and matching-major hosted backups.
 - Versioned Edge-to-Core graph/finding export and automated local Core sync.
 
 ## Immediate Pilot Hardening
@@ -38,9 +39,10 @@ without founder supervision:
    ingestion/helper service using the existing versioned bundle and scoped
    credentials. The main SecOpsAI dashboard must show Edge assets/findings
    without requiring a local Core repository.
-2. **Paid pilot infrastructure.** Move Render API/PostgreSQL from free demo
-   plans, enable managed backups or point-in-time recovery, define an uptime
-   target, and run a recorded restore exercise.
+2. **Paid pilot infrastructure.** A matching-major hosted export and isolated
+   restore drill now protect the current demo data. Move Render API/PostgreSQL
+   from free demo plans, enable managed backups or point-in-time recovery, and
+   define an uptime target before accepting paid-pilot data.
 3. **Browser end-to-end coverage.** Automate login, onboarding, enrollment,
    scan queue, schedule, finding triage, report generation/PDF download, and
    responsive accessibility checks against a disposable environment.

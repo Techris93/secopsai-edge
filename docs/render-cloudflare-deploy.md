@@ -41,7 +41,7 @@ The repository includes `render.yaml`.
 Expected response:
 
 ```json
-{"status":"ok","version":"0.2.5","commit":"<commit>"}
+{"status":"ok","version":"0.2.6","commit":"<commit>"}
 ```
 
 `/readyz` must return `status: ready` and schema revision
@@ -57,6 +57,29 @@ localhost CORS origins.
 The Blueprint still uses free plans to avoid silently creating paid resources.
 Free instances are suitable only for development/demo. Move the API and
 database to paid plans with managed backups before storing paid-pilot data.
+
+Check the checked-in Blueprint against the live Render resources after every
+infrastructure or dashboard change:
+
+```bash
+./scripts/edge cloud drift-check
+./scripts/edge cloud drift-check --json
+```
+
+The command fails on live build/start/health/branch/schedule/database-version
+drift and warns about a free database nearing expiry. A warning does not fail
+an interactive check unless `--fail-on-warning` is supplied.
+
+Create a verified pre-deploy export while the database is still on a free plan:
+
+```bash
+./scripts/edge cloud backup
+```
+
+This uses the signed-in Render CLI and Docker. It preserves the existing
+database IP allowlist, uses a PostgreSQL client matching Render's database
+major, verifies the custom archive, and writes a checksum. Restore drills must
+target a separate database; never restore over the active service database.
 
 ### Dashboard Login
 

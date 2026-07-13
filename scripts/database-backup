@@ -19,7 +19,9 @@ Usage:
   ./scripts/database-backup restore --input FILE --target-url URL --confirm-database NAME [--allow-remote]
 
 Restore is destructive. Remote targets are refused unless --allow-remote is
-present, and the exact target database name must be supplied separately.
+present, and the exact target database name must be supplied separately. When
+the host PostgreSQL client major does not match the server, a matching official
+PostgreSQL Docker client is used automatically.
 EOF
 }
 
@@ -50,6 +52,86 @@ require_tool() {
   command -v "$1" >/dev/null 2>&1 || fail "$1 is required"
 }
 
+tool_major() {
+  tool="$1"
+  version="$("$tool" --version | awk '{ for (i = 1; i <= NF; i++) if ($i ~ /^[0-9]+([.][0-9]+)*/) { split($i, parts, "."); print parts[1]; exit } }')"
+  case "$version" in
+    ''|*[!0-9]*) fail "Could not determine the $tool major version" ;;
+  esac
+  printf "%s" "$version"
+}
+
+server_major() {
+  database_url="$1"
+  require_tool psql
+  version_num="$(psql -X -A -t "$database_url" -c 'SHOW server_version_num')"
+  case "$version_num" in
+    ''|*[!0-9]*) fail "Could not determine the PostgreSQL server major version" ;;
+  esac
+  printf "%s" "$((version_num / 10000))"
+}
+
+docker_database_url() {
+  database_url="$1"
+  python3 - "$database_url" <<'PY'
+import sys
+from urllib.parse import urlsplit, urlunsplit
+
+parsed = urlsplit(sys.argv[1])
+if parsed.hostname not in {"localhost", "127.0.0.1", "::1"}:
+    print(sys.argv[1])
+    raise SystemExit(0)
+
+credentials = ""
+if parsed.username is not None:
+    credentials = parsed.username
+    if parsed.password is not None:
+        credentials += f":{parsed.password}"
+    credentials += "@"
+port = f":{parsed.port}" if parsed.port is not None else ""
+print(urlunsplit(parsed._replace(netloc=f"{credentials}host.docker.internal{port}")))
+PY
+}
+
+docker_available() {
+  command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1
+}
+
+run_pg_dump() {
+  database_url="$1"
+  output="$2"
+  server_version="$3"
+  client_version="$(tool_major pg_dump)"
+  if [ "$client_version" = "$server_version" ]; then
+    pg_dump --format=custom --compress=9 --no-owner --no-acl --file "$output" "$database_url"
+    return
+  fi
+  docker_available || fail "pg_dump major $client_version does not match server major $server_version and Docker is unavailable"
+  printf "Using PostgreSQL %s Docker client because host pg_dump is major %s\n" "$server_version" "$client_version" >&2
+  docker_url="$(docker_database_url "$database_url")"
+  if ! docker run --rm --add-host host.docker.internal:host-gateway "postgres:$server_version-alpine" \
+    pg_dump --format=custom --compress=9 --no-owner --no-acl "$docker_url" >"$output"; then
+    rm -f "$output"
+    fail "PostgreSQL Docker backup failed"
+  fi
+}
+
+run_pg_restore() {
+  input="$1"
+  target_url="$2"
+  server_version="$3"
+  client_version="$(tool_major pg_restore)"
+  if [ "$client_version" = "$server_version" ]; then
+    pg_restore --clean --if-exists --no-owner --no-acl --exit-on-error --dbname "$target_url" "$input"
+    return
+  fi
+  docker_available || fail "pg_restore major $client_version does not match server major $server_version and Docker is unavailable"
+  printf "Using PostgreSQL %s Docker client because host pg_restore is major %s\n" "$server_version" "$client_version" >&2
+  docker_url="$(docker_database_url "$target_url")"
+  docker run --rm -i --add-host host.docker.internal:host-gateway "postgres:$server_version-alpine" \
+    pg_restore --clean --if-exists --no-owner --no-acl --exit-on-error --dbname "$docker_url" <"$input"
+}
+
 create_backup() {
   database_url="${DATABASE_URL:-}"
   output=""
@@ -63,6 +145,7 @@ create_backup() {
   done
   [ -n "$database_url" ] || fail "DATABASE_URL or --database-url is required"
   require_tool pg_dump
+  require_tool python3
   database_url="$(normalize_url "$database_url")"
   if [ -z "$output" ]; then
     output="$ROOT_DIR/backups/secopsai-edge-$(date -u +%Y%m%dT%H%M%SZ).dump"
@@ -72,7 +155,8 @@ create_backup() {
     mkdir -p "$output_dir"
     chmod 700 "$output_dir"
   fi
-  pg_dump --format=custom --compress=9 --no-owner --no-acl --file "$output" "$database_url"
+  database_server_major="$(server_major "$database_url")"
+  run_pg_dump "$database_url" "$output" "$database_server_major"
   chmod 600 "$output"
   verify_backup --input "$output" >/dev/null
   printf "%s\n" "$output"
@@ -114,6 +198,7 @@ restore_backup() {
   [ -f "$input" ] || fail "Backup archive not found: $input"
   [ -n "$target_url" ] || fail "--target-url is required"
   require_tool pg_restore
+  require_tool python3
   target_url="$(normalize_url "$target_url")"
   database_name="$(url_field "$target_url" database)"
   hostname="$(url_field "$target_url" hostname)"
@@ -124,7 +209,8 @@ restore_backup() {
     *) [ "$allow_remote" = "yes" ] || fail "Remote restore refused; add --allow-remote after reviewing the target" ;;
   esac
   verify_backup --input "$input" >/dev/null
-  pg_restore --clean --if-exists --no-owner --no-acl --exit-on-error --dbname "$target_url" "$input"
+  database_server_major="$(server_major "$target_url")"
+  run_pg_restore "$input" "$target_url" "$database_server_major"
   printf "Restore completed: %s\n" "$database_name"
 }
 
