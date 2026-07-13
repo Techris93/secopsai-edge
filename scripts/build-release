@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+VERSION="${1:-}"
+OUTPUT_DIR="${2:-$ROOT_DIR/dist}"
+
+[ -n "$VERSION" ] || { echo "Usage: ./scripts/build-release <version> [output-dir]" >&2; exit 2; }
+case "$VERSION" in
+  v*) VERSION="${VERSION#v}" ;;
+esac
+
+api_version="$(PYTHONPATH="$ROOT_DIR/api" python3 -c 'from secopsai_api import __version__; print(__version__)')"
+agent_version="$(PYTHONPATH="$ROOT_DIR/agent" python3 -c 'from secopsai_agent import __version__; print(__version__)')"
+web_version="$(node -p "require('$ROOT_DIR/web/package.json').version")"
+for component in "$api_version" "$agent_version" "$web_version"; do
+  [ "$component" = "$VERSION" ] || {
+    echo "Release version $VERSION does not match component version $component" >&2
+    exit 1
+  }
+done
+
+mkdir -p "$OUTPUT_DIR"
+archive="$OUTPUT_DIR/secopsai-edge-$VERSION.tar.gz"
+checksum="$archive.sha256"
+
+git -C "$ROOT_DIR" archive \
+  --format=tar.gz \
+  --prefix="secopsai-edge-$VERSION/" \
+  --output="$archive" \
+  HEAD
+
+(
+  cd "$OUTPUT_DIR"
+  shasum -a 256 "$(basename "$archive")" > "$(basename "$checksum")"
+)
+
+git -C "$ROOT_DIR" show HEAD:scripts/bootstrap-secopsai-edge.sh > "$OUTPUT_DIR/bootstrap-secopsai-edge.sh"
+chmod 755 "$OUTPUT_DIR/bootstrap-secopsai-edge.sh"
+printf "%s\n%s\n" "$archive" "$checksum"

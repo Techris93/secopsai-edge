@@ -35,7 +35,7 @@ usage() {
 SecOpsAI Edge helper
 
 Usage:
-  ./scripts/edge setup                 Install local Python and web dependencies
+  ./scripts/edge setup [--sensor-only] Install dependencies (omit dashboard for appliances)
   ./scripts/edge onboard --cloud       Guided cloud setup, sensor enrollment, and worker setup
   ./scripts/edge dev                   Start Postgres, migrate DB, API, and dashboard
   ./scripts/edge db                    Start Postgres only
@@ -285,12 +285,22 @@ require_docker() {
 }
 
 setup() {
+  sensor_only="no"
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --sensor-only) sensor_only="yes" ;;
+      *) fail "Unknown setup option: $1" ;;
+    esac
+    shift || true
+  done
   ensure_env_file
   ensure_python_env
   info "Installing Python dependencies"
   "$PIP_BIN" install -r "$ROOT_DIR/requirements.lock"
-  info "Installing web dependencies"
-  (cd "$ROOT_DIR/web" && npm install)
+  if [ "$sensor_only" = "no" ]; then
+    info "Installing web dependencies"
+    (cd "$ROOT_DIR/web" && npm install)
+  fi
   info "Setup complete"
 }
 
@@ -1433,7 +1443,7 @@ main() {
 
   case "$command" in
     help|-h|--help) usage ;;
-    setup) setup ;;
+    setup) setup "$@" ;;
     onboard) onboard "$@" ;;
     dev) dev ;;
     db) start_db ;;

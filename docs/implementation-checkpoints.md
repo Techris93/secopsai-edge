@@ -1045,6 +1045,59 @@ Known risks:
   update bot and hash-generating lock workflow is a later supply-chain hardening
   improvement.
 
+## Checkpoint 022 - Verified Sensor Distribution and Upgrade
+
+Status: complete
+
+Branch:
+
+- Edge repo: `codex/pilot-hardening-foundation`
+
+Completed changes:
+
+- Added a committed-content release builder that requires API, agent, and web
+  versions to match and emits a versioned sensor archive plus SHA-256 manifest.
+- Added a standalone HTTPS bootstrap for first install and explicit upgrades.
+  It validates the exact checksum filename and digest, rejects traversal,
+  links, devices, FIFOs, and multi-root archives, then extracts into a private
+  temporary directory.
+- Preserved local sensor credential files across upgrades, retained the prior
+  installation for recovery, and added automatic rollback when the new
+  installer fails.
+- Changed appliance installation to skip dashboard dependencies while keeping
+  the developer setup unchanged. Hardened empty-array handling for the Bash
+  version shipped with older macOS releases.
+- Added a tag-only GitHub release workflow with full release-gate verification,
+  a default-branch ancestry check, versioned and `latest` assets, checksums,
+  and GitHub build-provenance attestations.
+- Changed the Sites enrollment action into a one-time, copyable bootstrap
+  command so a pilot user no longer clones or understands the repository.
+
+Validation:
+
+- Shell syntax checks passed for the helper, installer, bootstrap, builder,
+  and release gate.
+- Distribution tests passed for first install, argument forwarding,
+  credential-preserving upgrade, failed-upgrade rollback, and rejection of an
+  archive traversal entry.
+- Focused worker and Sites enrollment tests passed; the Next.js production
+  build and TypeScript validation passed.
+- The full release gate is rerun against the committed checkpoint before a tag
+  can be published, and the tag workflow repeats that gate on the exact release
+  commit.
+
+Known risks:
+
+- No downloadable `v0.2.0` asset exists until this branch is merged and the
+  verified tag workflow succeeds; the dashboard intentionally targets the
+  latest release endpoint that will become valid at that point.
+- This is a manual upgrade channel with rollback, not unattended fleet rollout
+  rings. Staged auto-update policy belongs after a paid pilot proves the sensor
+  recovery workflow.
+- GitHub and HTTPS are part of the sensor software-delivery trust boundary.
+  Checksums detect corruption or asset mismatch; build attestations provide
+  provenance for operators that enforce verification.
+
 ## Completion Rules
 
 A checkpoint is complete only when:

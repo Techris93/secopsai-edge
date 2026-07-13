@@ -29,10 +29,13 @@ The easiest hosted pilot path is:
 ./scripts/edge onboard --cloud --install-service --start-service
 ```
 
-Or use the installer wrapper:
+For a released sensor, use the one-time command copied from Sites. It downloads
+the standalone bootstrap, verifies the release checksum, and installs the
+background worker without cloning the repository:
 
 ```bash
-./scripts/install-secopsai-edge.sh --cloud --api-url https://<your-api>.onrender.com --enrollment-token <one-time-token>
+curl -fsSLO https://github.com/Techris93/secopsai-edge/releases/latest/download/bootstrap-secopsai-edge.sh
+bash bootstrap-secopsai-edge.sh --cloud --api-url https://<your-api>.onrender.com --enrollment-token <one-time-token>
 ```
 
 The local development path is:

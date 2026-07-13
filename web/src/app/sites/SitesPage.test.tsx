@@ -60,7 +60,7 @@ describe("SitesPage sensor enrollment", () => {
 
     await waitFor(() => expect(api.createSensorEnrollment).toHaveBeenCalledWith("site-alpha", "Alpha Office sensor"));
     expect(screen.getByText("One-time installer")).toBeInTheDocument();
-    expect(screen.getByText(/install-secopsai-edge\.sh/)).toHaveTextContent("--enrollment-token");
+    expect(screen.getByText(/bootstrap-secopsai-edge\.sh/)).toHaveTextContent("--enrollment-token");
     expect(screen.getByRole("button", { name: "Copy install command" })).toBeInTheDocument();
   });
 });

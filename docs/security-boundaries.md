@@ -59,3 +59,11 @@ Backups are PostgreSQL custom archives created with owner-only permissions;
 restore requires an exact database-name confirmation and refuses remote targets
 unless the operator explicitly opts in. Credential files and backup archives
 are excluded from Git.
+
+Sensor releases are built from committed Git content, version-matched across
+API/agent/dashboard, published with SHA-256 checksums, and receive GitHub build
+provenance attestations. The bootstrap requires HTTPS, verifies the checksum
+before extraction, refuses to overwrite an installation without `--upgrade`,
+preserves credentials, and rolls back the directory swap when installation
+fails. Release archives exclude ignored credentials, virtual environments,
+Node dependencies, and generated build output.

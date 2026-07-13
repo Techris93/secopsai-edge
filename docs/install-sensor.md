@@ -9,10 +9,11 @@ In the dashboard, select the customer workspace, open Sites, and click
 contains a 30-minute, single-use enrollment token and does not expose the
 platform administrator token.
 
-From the project folder, the copied command has this shape:
+The copied command has this shape and does not require a repository clone:
 
 ```bash
-./scripts/install-secopsai-edge.sh \
+curl -fsSLO https://github.com/Techris93/secopsai-edge/releases/latest/download/bootstrap-secopsai-edge.sh
+bash bootstrap-secopsai-edge.sh \
   --cloud \
   --api-url https://secopsai-edge-api.onrender.com \
   --enrollment-token <one-time-token> \
@@ -21,6 +22,8 @@ From the project folder, the copied command has this shape:
 
 The installer:
 
+- downloads the current GitHub release over HTTPS
+- verifies the published SHA-256 checksum before extraction
 - checks Python dependencies
 - checks that Nmap is available
 - registers the sensor
@@ -62,6 +65,11 @@ copied installer:
 ```
 
 On Linux, the worker installs as a user `systemd` service.
+
+Use `--version 0.2.0` to pin a release. Use `--upgrade` for an existing
+installation; the bootstrap preserves credential files, keeps the previous
+installation as `.previous`, and restores it automatically if the new
+installer fails.
 
 ## Manual Onboarding
 

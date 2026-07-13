@@ -50,7 +50,7 @@ jobs:
 
       - name: Validate scripts and Python syntax
         run: |
-          bash -n scripts/edge scripts/install-secopsai-edge.sh scripts/database-backup scripts/render-start-api
+          bash -n scripts/edge scripts/install-secopsai-edge.sh scripts/bootstrap-secopsai-edge.sh scripts/build-release scripts/database-backup scripts/render-start-api
           python -m py_compile scripts/render-run-due-schedules scripts/core-sync-runner.py
           PYTHONPATH=api:agent python -m compileall -q api/secopsai_api agent/secopsai_agent
 
@@ -66,6 +66,13 @@ jobs:
 
       - name: Audit Python dependencies
         run: pip-audit -r requirements.lock
+
+      - name: Build and inspect sensor release
+        run: |
+          ./scripts/build-release 0.2.0 /tmp/secopsai-release
+          (cd /tmp/secopsai-release && shasum -a 256 -c secopsai-edge-0.2.0.tar.gz.sha256)
+          tar -tzf /tmp/secopsai-release/secopsai-edge-0.2.0.tar.gz | grep -q '/scripts/edge$'
+          ! tar -tzf /tmp/secopsai-release/secopsai-edge-0.2.0.tar.gz | grep -Eq '/(\.env|\.cloud\.env|\.cloud-sensor\.env|\.sensor\.env|node_modules|\.venv)(/|$)'
 
       - name: Drill PostgreSQL backup and restore
         env:

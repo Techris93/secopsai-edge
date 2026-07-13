@@ -384,7 +384,8 @@ function EnrollmentSecretPanel({
   onClose: () => void;
 }) {
   const sensorName = `${enrollment.site_name} Edge Sensor`;
-  const command = `./scripts/install-secopsai-edge.sh --cloud --api-url ${shellQuote(apiBaseUrl())} --enrollment-token ${shellQuote(enrollment.enrollment_token)} --sensor-name ${shellQuote(sensorName)}`;
+  const bootstrapUrl = "https://github.com/Techris93/secopsai-edge/releases/latest/download/bootstrap-secopsai-edge.sh";
+  const command = `curl -fsSLO ${shellQuote(bootstrapUrl)} && bash bootstrap-secopsai-edge.sh --cloud --api-url ${shellQuote(apiBaseUrl())} --enrollment-token ${shellQuote(enrollment.enrollment_token)} --sensor-name ${shellQuote(sensorName)}`;
   const [copied, setCopied] = useState(false);
 
   async function copyCommand() {
