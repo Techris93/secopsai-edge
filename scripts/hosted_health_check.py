@@ -9,6 +9,20 @@ import urllib.error
 import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Mapping
+from urllib.parse import urlsplit, urlunsplit
+
+
+def _safe_url(url: str) -> str:
+    """Remove credentials and query material before writing an evidence record."""
+    parts = urlsplit(url)
+    hostname = parts.hostname or ""
+    if ":" in hostname and not hostname.startswith("["):
+        hostname = f"[{hostname}]"
+    netloc = hostname
+    if parts.port is not None:
+        netloc = f"{netloc}:{parts.port}"
+    return urlunsplit((parts.scheme, netloc, parts.path, "", ""))
 
 
 def _error_code(error: BaseException) -> str:
@@ -28,15 +42,25 @@ def _error_code(error: BaseException) -> str:
     return "check_failed"
 
 
-def check(url: str, *, expect_json_status: str | None = None, expect_text: str | None = None) -> dict[str, object]:
+def check(
+    url: str,
+    *,
+    expect_json_status: str | None = None,
+    expect_text: str | None = None,
+    expect_json: bool = False,
+    headers: Mapping[str, str] | None = None,
+) -> dict[str, object]:
     started = time.monotonic()
     try:
-        request = urllib.request.Request(url, headers={"User-Agent": "SecOpsAI-Edge-Health/1"})
+        request_headers = {"User-Agent": "SecOpsAI-Edge-Health/1"}
+        if headers:
+            request_headers.update(headers)
+        request = urllib.request.Request(url, headers=request_headers)
         with urllib.request.urlopen(request, timeout=20) as response:
             body = response.read(1_000_000).decode("utf-8", errors="replace")
             status_code = int(response.status)
         result: dict[str, object] = {
-            "url": url,
+            "url": _safe_url(url),
             "ok": 200 <= status_code < 300,
             "status_code": status_code,
             "latency_ms": round((time.monotonic() - started) * 1000),
@@ -48,13 +72,16 @@ def check(url: str, *, expect_json_status: str | None = None, expect_text: str |
             result["commit"] = payload.get("commit")
             result["schema_revision"] = payload.get("schema_revision")
             result["ok"] = bool(result["ok"] and payload.get("status") == expect_json_status)
+        elif expect_json:
+            json.loads(body)
+            result["json_valid"] = True
         if expect_text:
             result["expected_content"] = expect_text
             result["ok"] = bool(result["ok"] and expect_text in body)
         return result
     except urllib.error.HTTPError as exc:
         return {
-            "url": url,
+            "url": _safe_url(url),
             "ok": False,
             "latency_ms": round((time.monotonic() - started) * 1000),
             "error": type(exc).__name__,
@@ -63,7 +90,7 @@ def check(url: str, *, expect_json_status: str | None = None, expect_text: str |
         }
     except (urllib.error.URLError, TimeoutError, socket.timeout, json.JSONDecodeError) as exc:
         return {
-            "url": url,
+            "url": _safe_url(url),
             "ok": False,
             "latency_ms": round((time.monotonic() - started) * 1000),
             "error": type(exc).__name__,

@@ -125,3 +125,23 @@ def test_hosted_health_check_classifies_http_errors_without_reading_body(monkeyp
     assert result["error_code"] == "http_error"
     assert result["status_code"] == 503
     assert "body" not in result
+
+
+def test_hosted_health_check_redacts_url_credentials_and_query(monkeypatch) -> None:
+    class Response:
+        status = 200
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self, *_args):
+            return b"{}"
+
+    monkeypatch.setattr(hosted_health_check.urllib.request, "urlopen", lambda *_args, **_kwargs: Response())
+    result = hosted_health_check.check("https://user:secret@example.test/ready?token=secret", expect_json=True)
+
+    assert result["url"] == "https://example.test/ready"
+    assert "secret" not in str(result)

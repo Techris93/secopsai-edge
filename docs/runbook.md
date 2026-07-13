@@ -231,6 +231,20 @@ Create a redacted diagnostics bundle when a sensor needs support:
 
 The command records release, platform, dependency, API, worker-service, and recent worker-log status without copying credential files or printing tokens. The output is created with owner-only permissions. Review local paths and network ranges before sharing it.
 
+Before an external pilot, run the authenticated acceptance preflight with a
+real operator credential held only in the environment:
+
+```bash
+read -r -s SECOPSAI_PILOT_ACCESS_TOKEN
+export SECOPSAI_PILOT_ACCESS_TOKEN
+./scripts/edge pilot check --cloud --require-auth --output pilot-authenticated.json
+unset SECOPSAI_PILOT_ACCESS_TOKEN
+```
+
+This verifies the authenticated identity, system status, onboarding, sites,
+sensors, schedules, findings, and reports endpoints without writing the token,
+response body, or customer telemetry to the evidence file.
+
 The Core Integration panel defaults to `$HOME/secopsai-edge`, `$HOME/secopsai`,
 and the hosted Core API URL. Update those fields once if the repositories or
 API live elsewhere; the dashboard stores the preferences in that browser and

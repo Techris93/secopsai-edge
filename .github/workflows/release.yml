@@ -64,9 +64,16 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes \
-            dist/secopsai-edge-${GITHUB_REF_NAME#v}.tar.gz \
-            dist/secopsai-edge-${GITHUB_REF_NAME#v}.tar.gz.sha256 \
-            dist/secopsai-edge.tar.gz \
-            dist/secopsai-edge.tar.gz.sha256 \
-            dist/bootstrap-secopsai-edge.sh
+          assets=(
+            "dist/secopsai-edge-${GITHUB_REF_NAME#v}.tar.gz"
+            "dist/secopsai-edge-${GITHUB_REF_NAME#v}.tar.gz.sha256"
+            "dist/secopsai-edge.tar.gz"
+            "dist/secopsai-edge.tar.gz.sha256"
+            "dist/bootstrap-secopsai-edge.sh"
+          )
+          if gh release view "$GITHUB_REF_NAME" --json tagName >/dev/null 2>&1; then
+            echo "Release $GITHUB_REF_NAME already exists; refreshing verified assets."
+            gh release upload "$GITHUB_REF_NAME" --clobber "${assets[@]}"
+          else
+            gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes "${assets[@]}"
+          fi
