@@ -2038,6 +2038,55 @@ Activation boundaries:
   storage or an explicit backup/migration decision remains a controlled-pilot
   blocker and is not made durable by this checkpoint.
 
+## Checkpoint 037 - Accessibility And Browser Completion
+
+Status: implementation complete; release pending
+
+Completed changes:
+
+- Added automated axe-core WCAG 2.0/2.1 A and AA checks for all ten principal
+  operator routes in desktop Chromium and the Pixel 7 profile.
+- Added production-build browser workflows for one-time sensor enrollment,
+  installer command copy/dismiss/revoke, authenticated PDF download, keyboard
+  skip navigation, current-page semantics, responsive overflow, and explicit
+  empty, API-unavailable, and deployment-degraded states.
+- Added a keyboard-visible skip link, global focus treatment, current-page
+  navigation semantics, accessible names for operational controls, and
+  keyboard access to horizontally scrollable evidence and data tables.
+- Corrected medium-severity color contrast and removed the false no-data flash
+  that appeared before the first API response.
+- Added actionable empty states for assets, findings, Wi-Fi networks, reports,
+  and sites without confusing loading or unavailable states with empty data.
+- Kept browser tests on a disposable in-process API contract; no production
+  account, sensor, network scan, or raw telemetry is touched.
+- Advanced the current product and release baseline to `0.3.1`.
+
+Branch:
+
+- Edge: `codex/accessibility-browser-completion`
+
+Validation before PR:
+
+- `./scripts/edge test` passed with `107` backend/agent tests, `30` frontend
+  component tests, a successful static production build, all `24`
+  desktop/mobile browser workflows, and zero npm audit vulnerabilities.
+- Automated WCAG checks passed across Overview, Onboarding, Sites, Assets,
+  Wi-Fi, Findings, Schedules, Reports, Audit Log, and Settings in both browser
+  projects.
+- Focused `0.3.1` worker/release-distribution tests and all component tests
+  passed after the version advance.
+- `pip-audit -r requirements.lock` found zero known Python dependency
+  vulnerabilities.
+- `git diff --check` passed. Exact-commit release, CI, deployment, and deployed
+  browser evidence remain pending until the pull request is merged.
+
+Remaining boundary:
+
+- Automated checks reduce regression risk but do not replace a manual
+  assistive-technology review with VoiceOver/NVDA before broad commercial use.
+- Checkpoint `038` still owns durable hosted storage, backup/restore, retention,
+  uptime, and real operator recovery proof.
+
 ## Completion Rules
 
 A checkpoint is complete only when:

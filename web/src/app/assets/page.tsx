@@ -54,6 +54,7 @@ export default function AssetsPage() {
           <label className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" size={18} aria-hidden="true" />
             <input
+              aria-label="Search assets"
               className="focus-ring w-full rounded-md border border-line bg-white py-2 pl-10 pr-3 text-sm"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
@@ -61,6 +62,7 @@ export default function AssetsPage() {
             />
           </label>
           <select
+            aria-label="Status"
             className="focus-ring rounded-md border border-line bg-white px-3 py-2 text-sm"
             value={status}
             onChange={(event) => setStatus(event.target.value)}
@@ -85,7 +87,7 @@ export default function AssetsPage() {
           <FilterSelect label="OS" value={os} values={options.oses} onChange={setOs} />
           <FilterSelect label="Service" value={service} values={options.services} onChange={setService} />
         </div>
-        <div className="overflow-x-auto">
+        <div aria-label="Scrollable asset inventory table" className="focus-ring overflow-x-auto" role="region" tabIndex={0}>
           <table className="w-full min-w-[1120px] text-left text-sm">
             <thead className="bg-paper text-xs uppercase text-zinc-600">
               <tr>
@@ -145,6 +147,13 @@ export default function AssetsPage() {
                   </td>
                 </tr>
               ))}
+              {data && !assets.length ? (
+                <tr>
+                  <td className="px-4 py-8 text-center text-sm text-zinc-600" colSpan={9}>
+                    No assets match the current filters. Run an authorized scan or clear the filters.
+                  </td>
+                </tr>
+              ) : null}
             </tbody>
           </table>
         </div>

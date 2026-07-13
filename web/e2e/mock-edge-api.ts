@@ -8,6 +8,8 @@ export type MockEdgeApi = {
   data: DashboardData;
   requests: Array<{ method: string; path: string; body: unknown }>;
   requireMfa: boolean;
+  dashboardFailure: { status: number; detail: string } | null;
+  systemHealth: "ready" | "degraded";
 };
 
 export async function installOperatorSession(page: Page): Promise<void> {
@@ -20,7 +22,9 @@ export async function installEdgeApiMock(page: Page): Promise<MockEdgeApi> {
   const state: MockEdgeApi = {
     data: structuredClone(sampleData),
     requests: [],
-    requireMfa: false
+    requireMfa: false,
+    dashboardFailure: null,
+    systemHealth: "ready"
   };
 
   state.data.onboarding = {
@@ -106,13 +110,20 @@ async function handleRoute(route: Route, state: MockEdgeApi): Promise<void> {
   }
 
   const collection = collectionForPath(url.pathname, state.data);
-  if (method === "GET" && collection !== undefined) return json(route, collection);
+  if (method === "GET" && collection !== undefined) {
+    if (state.dashboardFailure) {
+      return json(route, { detail: state.dashboardFailure.detail }, state.dashboardFailure.status);
+    }
+    return json(route, collection);
+  }
+
+  if (method === "GET" && url.pathname === "/api/v1/audit-logs") return json(route, []);
 
   if (method === "GET" && url.pathname === "/api/v1/system/status") {
     return json(route, {
-      status: "ready",
+      status: state.systemHealth,
       environment: "test",
-      version: "0.3.0",
+      version: "0.3.1",
       commit: "browser-e2e",
       schema_revision: "0014_operator_access",
       expected_schema_revision: "0014_operator_access",
@@ -153,6 +164,46 @@ async function handleRoute(route: Route, state: MockEdgeApi): Promise<void> {
     };
     state.data.reports.unshift(report);
     return json(route, report, 201);
+  }
+  const reportMatch = url.pathname.match(/^\/api\/v1\/reports\/([^/]+)$/);
+  if (method === "GET" && reportMatch) {
+    const report = state.data.reports.find((item) => item.id === reportMatch[1]);
+    return report ? json(route, report) : json(route, { detail: "Report not found" }, 404);
+  }
+  const reportExportMatch = url.pathname.match(/^\/api\/v1\/reports\/([^/]+)\/export\.(pdf|html)$/);
+  if (method === "GET" && reportExportMatch) {
+    const [, reportId, format] = reportExportMatch;
+    const report = state.data.reports.find((item) => item.id === reportId);
+    if (!report) return json(route, { detail: "Report not found" }, 404);
+    const contentType = format === "pdf" ? "application/pdf" : "text/html; charset=utf-8";
+    const body = format === "pdf" ? "%PDF-1.4\n% SecOpsAI browser fixture\n%%EOF\n" : `<h1>${report.title}</h1>`;
+    return route.fulfill({ status: 200, contentType, body });
+  }
+  if (method === "POST" && url.pathname === "/api/v1/sensor-enrollments") {
+    const payload = body as { site_id: string; label: string };
+    const site = state.data.sites.find((item) => item.id === payload.site_id);
+    if (!site) return json(route, { detail: "Site not found" }, 404);
+    const enrollment = {
+      id: `enrollment-${state.data.sensorEnrollments.length + 1}`,
+      organization_id: site.organization_id ?? "organization-demo",
+      site_id: site.id,
+      site_name: site.name,
+      label: payload.label,
+      state: "active" as const,
+      enrollment_token: "secopsai_enroll.browser-one-time-token-with-safe-length",
+      expires_at: new Date(Date.now() + 30 * 60_000).toISOString(),
+      created_at: new Date().toISOString()
+    };
+    state.data.sensorEnrollments.unshift(enrollment);
+    return json(route, enrollment, 201);
+  }
+  const enrollmentMatch = url.pathname.match(/^\/api\/v1\/sensor-enrollments\/([^/]+)$/);
+  if (method === "DELETE" && enrollmentMatch) {
+    const enrollment = state.data.sensorEnrollments.find((item) => item.id === enrollmentMatch[1]);
+    if (!enrollment) return json(route, { detail: "Enrollment not found" }, 404);
+    enrollment.state = "revoked";
+    enrollment.revoked_at = new Date().toISOString();
+    return json(route, enrollment);
   }
   if (method === "POST" && url.pathname === "/api/v1/scan-schedules") {
     const payload = body as Omit<ScanSchedule, "id" | "created_at" | "updated_at">;

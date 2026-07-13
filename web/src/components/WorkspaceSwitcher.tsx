@@ -75,7 +75,7 @@ export function WorkspaceSwitcher({ compact = false }: { compact?: boolean }) {
       {!compact ? <p className="mt-1 text-xs text-zinc-500">{identity.role}</p> : null}
       {creating ? (
         <form className="mt-3 space-y-2" onSubmit={addWorkspace}>
-          <input className="focus-ring w-full rounded-md border border-line px-2 py-2 text-sm" value={name} onChange={(event) => setName(event.target.value)} maxLength={160} placeholder="Customer or workspace name" required autoFocus />
+          <input aria-label="Workspace name" className="focus-ring w-full rounded-md border border-line px-2 py-2 text-sm" value={name} onChange={(event) => setName(event.target.value)} maxLength={160} placeholder="Customer or workspace name" required autoFocus />
           <button className="focus-ring w-full rounded-md bg-sea px-3 py-2 text-sm font-semibold text-white disabled:bg-zinc-300" type="submit" disabled={busy || !name.trim()}>Create workspace</button>
         </form>
       ) : null}

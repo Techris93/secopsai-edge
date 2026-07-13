@@ -37,6 +37,12 @@ export function Shell({ children }: { children: ReactNode }) {
 
   return (
     <div className="min-h-screen bg-paper">
+      <a
+        className="focus-ring fixed left-4 top-4 z-50 -translate-y-24 rounded-md bg-ink px-4 py-2 text-sm font-semibold text-white transition focus:translate-y-0"
+        href="#main-content"
+      >
+        Skip to main content
+      </a>
       <aside className="fixed inset-y-0 left-0 hidden w-64 flex-col border-r border-line bg-white px-4 py-5 lg:flex">
         <Link href="/" className="flex items-center gap-3">
           <span className="grid h-10 w-10 place-items-center rounded-lg bg-sea text-white">
@@ -50,7 +56,7 @@ export function Shell({ children }: { children: ReactNode }) {
           </span>
         </Link>
         <WorkspaceSwitcher />
-        <nav className="mt-4 min-h-0 flex-1 space-y-1 overflow-y-auto py-1">
+        <nav aria-label="Primary navigation" className="mt-4 min-h-0 flex-1 space-y-1 overflow-y-auto py-1">
           {navItems.map((item) => {
             const active = pathname === item.href;
             const Icon = item.icon;
@@ -63,6 +69,7 @@ export function Shell({ children }: { children: ReactNode }) {
                     ? "bg-teal-50 text-sea"
                     : "text-zinc-600 hover:bg-zinc-100 hover:text-ink"
                 }`}
+                aria-current={active ? "page" : undefined}
               >
                 <Icon size={18} aria-hidden="true" />
                 {item.label}
@@ -92,7 +99,7 @@ export function Shell({ children }: { children: ReactNode }) {
               <WorkspaceSwitcher compact />
             </div>
           </div>
-          <nav className="mt-3 flex gap-1 overflow-x-auto pb-1">
+          <nav aria-label="Primary navigation" className="mt-3 flex gap-1 overflow-x-auto pb-1">
             {navItems.map((item) => {
               const active = pathname === item.href;
               const Icon = item.icon;
@@ -103,6 +110,7 @@ export function Shell({ children }: { children: ReactNode }) {
                   className={`flex min-w-fit items-center gap-2 rounded-md px-3 py-2 text-sm ${
                     active ? "bg-teal-50 text-sea" : "text-zinc-600"
                   }`}
+                  aria-current={active ? "page" : undefined}
                 >
                   <Icon size={16} aria-hidden="true" />
                   {item.label}
@@ -111,7 +119,13 @@ export function Shell({ children }: { children: ReactNode }) {
             })}
           </nav>
         </header>
-        <main className="mx-auto w-full min-w-0 max-w-7xl overflow-x-clip px-4 py-6 sm:px-6 lg:px-8">{children}</main>
+        <main
+          className="mx-auto w-full min-w-0 max-w-7xl overflow-x-clip px-4 py-6 sm:px-6 lg:px-8"
+          id="main-content"
+          tabIndex={-1}
+        >
+          {children}
+        </main>
       </div>
     </div>
   );

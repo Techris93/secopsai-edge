@@ -142,7 +142,7 @@ The bundle uses:
   "source_instance": {
     "product": "secopsai_edge",
     "api": "secopsai-edge-api",
-    "version": "0.3.0",
+    "version": "0.3.1",
     "organization_id": "<edge-workspace-id>"
   },
   "cursor": {

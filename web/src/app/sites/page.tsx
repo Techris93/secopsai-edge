@@ -96,6 +96,7 @@ export default function SitesPage() {
           </div>
           <form className="mt-4 grid gap-3 sm:grid-cols-[1fr_auto]" onSubmit={onCreateSite}>
             <input
+              aria-label="Site name"
               className="focus-ring rounded-md border border-line bg-white px-3 py-2 text-sm"
               value={siteName}
               onChange={(event) => setSiteName(event.target.value)}
@@ -143,6 +144,7 @@ export default function SitesPage() {
                 onEnrollment={setEnrollment}
               />
             ))}
+            {data && !sites.length ? <p className="p-6 text-center text-sm text-zinc-600">No sites created yet.</p> : null}
           </div>
         </section>
       </div>
@@ -212,6 +214,7 @@ function SiteRow({
             <MapPinned size={18} className="text-sea" aria-hidden="true" />
             {editing ? (
               <input
+                aria-label={`Site name for ${site.name}`}
                 className="focus-ring rounded-md border border-line bg-white px-2 py-1 text-sm font-semibold"
                 value={name}
                 onChange={(event) => setName(event.target.value)}
@@ -334,6 +337,7 @@ function SensorRow({
       <div className="grid gap-3 lg:grid-cols-[1fr_auto] lg:items-center">
         <div>
           <input
+            aria-label={`Sensor name for ${sensor.name}`}
             className="focus-ring w-full rounded-md border border-line bg-white px-3 py-2 text-sm font-semibold text-ink"
             value={name}
             onChange={(event) => setName(event.target.value)}

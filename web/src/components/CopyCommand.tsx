@@ -34,7 +34,7 @@ export function CopyCommand({ command, icon: Icon }: { command: string; icon: Lu
       type="button"
     >
       <Icon size={17} className="shrink-0 text-teal-200" aria-hidden="true" />
-      <code className="min-w-0 flex-1 overflow-x-auto whitespace-nowrap">{command}</code>
+      <code className="min-w-0 flex-1 truncate whitespace-nowrap text-left">{command}</code>
       {copyState === "copied" ? <Check size={16} className="shrink-0 text-teal-200" aria-hidden="true" /> : null}
       {copyState === "failed" ? <TriangleAlert size={16} className="shrink-0 text-rose-300" aria-hidden="true" /> : null}
       {copyState === "idle" ? <Copy size={16} className="shrink-0 text-zinc-300" aria-hidden="true" /> : null}

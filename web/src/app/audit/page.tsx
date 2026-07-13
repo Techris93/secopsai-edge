@@ -55,6 +55,7 @@ export default function AuditPage() {
             <Search className="pointer-events-none absolute left-3 top-2.5 text-zinc-400" size={17} aria-hidden="true" />
             <span className="sr-only">Search audit events</span>
             <input
+              aria-label="Search audit events"
               className="focus-ring w-full rounded-md border border-line bg-white py-2 pl-10 pr-3 text-sm"
               onChange={(event) => setQuery(event.target.value)}
               placeholder="Search actions, resources, and details"
@@ -72,7 +73,7 @@ export default function AuditPage() {
           </select>
         </div>
 
-        <div className="overflow-x-auto">
+        <div aria-label="Scrollable audit log table" className="focus-ring overflow-x-auto" role="region" tabIndex={0}>
           <table className="w-full min-w-[920px] text-left text-sm">
             <thead className="bg-paper text-xs uppercase text-zinc-600">
               <tr>

@@ -81,6 +81,7 @@ export default function FindingsPage() {
           <label className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" size={18} aria-hidden="true" />
             <input
+              aria-label="Search findings"
               className="focus-ring w-full rounded-md border border-line bg-white py-2 pl-10 pr-3 text-sm"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
@@ -88,6 +89,7 @@ export default function FindingsPage() {
             />
           </label>
           <select
+            aria-label="Finding severity"
             className="focus-ring rounded-md border border-line bg-white px-3 py-2 text-sm"
             value={severity}
             onChange={(event) => setSeverity(event.target.value)}
@@ -99,6 +101,7 @@ export default function FindingsPage() {
             <option value="low">Low</option>
           </select>
           <select
+            aria-label="Finding status"
             className="focus-ring rounded-md border border-line bg-white px-3 py-2 text-sm"
             value={status}
             onChange={(event) => setStatus(event.target.value)}
@@ -110,6 +113,7 @@ export default function FindingsPage() {
             <option value="false_positive">False positive</option>
           </select>
           <select
+            aria-label="Finding site"
             className="focus-ring rounded-md border border-line bg-white px-3 py-2 text-sm"
             value={site}
             onChange={(event) => setSite(event.target.value)}
@@ -157,7 +161,7 @@ export default function FindingsPage() {
                   </span>
                 </div>
                 <p className="mt-2 text-sm leading-6 text-zinc-600">{finding.summary}</p>
-                <pre className="mt-3 overflow-x-auto rounded-md bg-ink p-3 text-xs text-white">
+                <pre aria-label="Scrollable finding evidence" className="focus-ring mt-3 overflow-x-auto rounded-md bg-ink p-3 text-xs text-white" tabIndex={0}>
                   {JSON.stringify(finding.evidence, null, 2)}
                 </pre>
               </div>
@@ -178,9 +182,15 @@ export default function FindingsPage() {
               </div>
             </article>
           ))}
+          {data && !findings.length ? (
+            <div className="px-4 py-8 text-center">
+              <h2 className="text-base font-semibold text-ink">No findings match the current filters</h2>
+              <p className="mt-1 text-sm text-zinc-600">Clear the filters or wait for the next authorized scan.</p>
+            </div>
+          ) : null}
         </div>
       </section>
-      {message ? <p className="mt-4 rounded-md bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-800">{message}</p> : null}
+      {message ? <p className="mt-4 rounded-md bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-800" role="status">{message}</p> : null}
     </>
   );
 }
