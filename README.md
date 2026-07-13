@@ -1,6 +1,6 @@
 # SecOpsAI Edge Sensor
 
-Current pilot release: `v0.3.5` ([release artifacts](https://github.com/Techris93/secopsai-edge/releases/tag/v0.3.5)).
+Current pilot build: `v0.3.6` (release artifacts are published after the verified merge).
 
 Standalone MacBook-first MVP for an AI-assisted asset discovery and wireless intelligence sensor.
 
@@ -152,10 +152,12 @@ Cloud commands:
 ```bash
 ./scripts/edge cloud configure https://<your-render-api>.onrender.com
 ./scripts/edge cloud register
+./scripts/edge cloud rotate-sensor-token
 ./scripts/edge cloud drift-check
 ./scripts/edge cloud backup
 ./scripts/edge worker install-service --cloud
 ./scripts/edge worker start
+./scripts/edge worker restart
 ./scripts/edge worker --cloud
 ./scripts/edge scan 192.168.1.0/24 --cloud
 ./scripts/edge report --cloud
@@ -177,6 +179,19 @@ unset SECOPSAI_EDGE_CORE_TOKEN SECOPSAI_CORE_INGEST_TOKEN
 The hosted dashboard can also queue remote scan jobs. Keep the worker running locally so queued jobs
 execute on your MacBook/Raspberry Pi, where the LAN is actually reachable. The dashboard shows
 sensor online/offline status from worker heartbeats and provides cancel/retry controls for remote jobs.
+
+If a sensor credential is lost or suspected to be exposed, rotate it from the
+dashboard Sites page or from the local helper. The CLI asks for the hosted
+administrator credential without saving it, replaces `.cloud-sensor.env`
+atomically with owner-only permissions, and never prints the replacement token:
+
+```bash
+./scripts/edge cloud rotate-sensor-token
+./scripts/edge worker restart
+```
+
+Use `./scripts/edge cloud reauth <sensor-id>` when the saved sensor ID is not
+available. The old token stops working immediately after the API rotation.
 
 See [docs/architecture.md](docs/architecture.md) and [docs/runbook.md](docs/runbook.md) for implementation details.
 

@@ -316,7 +316,7 @@ Flow:
 6. Refresh the dashboard as the job moves through queued, claimed, running, and completed.
 7. Use Cancel for active jobs or Retry for failed/canceled jobs when needed.
 
-Remote jobs are limited to RFC1918 IPv4 CIDRs with `/24` or narrower ranges. Worker heartbeats update last-seen, version, OS, hostname, state, and active job while both waiting and scanning; stale claimed/running jobs are recovered so they do not remain stuck forever. Sites shows this runtime context. A disabled sensor can be re-enabled there without rotating its token; rotate the token separately if credential exposure is suspected.
+Remote jobs are limited to RFC1918 IPv4 CIDRs with `/24` or narrower ranges. Worker heartbeats update last-seen, version, OS, hostname, state, and active job while both waiting and scanning; stale claimed/running jobs are recovered so they do not remain stuck forever. Sites shows this runtime context. A disabled sensor can be re-enabled there without rotating its token; rotate the token separately if credential exposure is suspected. On the sensor host, `./scripts/edge cloud rotate-sensor-token` performs the same rotation through the hosted API and atomically replaces the owner-only `.cloud-sensor.env`; restart the worker afterward.
 
 ## Automatic Core Sync
 

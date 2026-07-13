@@ -20,6 +20,9 @@ test.beforeEach(async ({ page }) => {
 });
 
 test("principal operator routes pass automated WCAG A/AA checks", async ({ page }) => {
+  // Axe runs a full document analysis across ten routes; allow slower CI or
+  // constrained laptops without weakening the assertions themselves.
+  test.setTimeout(180_000);
   await installEdgeApiMock(page);
 
   for (const route of principalRoutes) {

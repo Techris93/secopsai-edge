@@ -4,7 +4,7 @@ This roadmap records product gaps, not historical aspirations. A capability is
 listed as complete only when it has implementation and test evidence in
 `docs/implementation-checkpoints.md`.
 
-## Current Product Baseline - v0.3.5
+## Current Product Baseline - v0.3.6
 
 The controlled-pilot baseline includes:
 
@@ -38,6 +38,8 @@ The controlled-pilot baseline includes:
   without exposing credentials or raw scanner output.
 - OpenClaw approval-gated Edge report generation and worker start/stop actions,
   constrained to allowlisted helper arguments and recorded in Core sessions.
+- CLI sensor-token recovery with atomic owner-only credential replacement and
+  a documented worker restart path.
 - OpenClaw research tools aligned with all twelve ecosystems supported by Core,
   including NuGet, Maven, Go, crates.io, Open VSX, and RubyGems.
 - Workspace retention policies, normalized customer export, owner-confirmed
@@ -73,7 +75,7 @@ without founder supervision:
 
 ## Controlled Pilot Completion Sequence
 
-Implementation checkpoints are complete through `046`. The remaining work is
+Implementation checkpoints are complete through `048`. The remaining work is
 external operator acceptance, not untracked feature development:
 
 1. **Checkpoint 040 - External pilot acceptance.** Complete fresh-machine
@@ -101,6 +103,9 @@ external operator acceptance, not untracked feature development:
 8. **Checkpoint 047 - Approval-gated Edge operations.** Report generation and
    worker start/stop are now approval-backed Core session actions with no raw
    helper output or credentials crossing into Core.
+9. **Checkpoint 048 - Sensor credential recovery CLI.** Sensor hosts can rotate
+   a hosted sensor credential and restart the worker without manual secret-file
+   editing or exposing the replacement token in command output.
 
 Commercial SaaS/MSP, billing, broad fleet automation, appliance imaging, and
 multi-ecosystem research automation remain subsequent product horizons rather

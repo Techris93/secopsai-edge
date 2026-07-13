@@ -108,7 +108,19 @@ workspace owner can choose `Reset MFA` for that operator in Users & Sessions.
 The action revokes the operator's sessions and is audit logged. A signed-in
 owner cannot reset their own MFA; keep a second owner account for recovery.
 
-Rotate a sensor token from the Sites page when credentials are lost or leaked. After rotating, update `.cloud-sensor.env` on the sensor and restart the worker.
+Rotate a sensor token from the Sites page when credentials are lost or leaked.
+For a sensor host where the operator has the hosted administrator credential,
+the equivalent recovery flow is:
+
+```bash
+./scripts/edge cloud rotate-sensor-token
+./scripts/edge worker restart
+```
+
+The helper replaces `.cloud-sensor.env` atomically with owner-only permissions,
+does not print the replacement token, and leaves the previous API credential
+invalid immediately after rotation. Use `./scripts/edge cloud reauth <sensor-id>`
+when the saved sensor ID is unavailable.
 
 Disable retired sensors from the Sites page. Queued jobs for disabled sensors are canceled.
 
