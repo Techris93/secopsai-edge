@@ -108,7 +108,8 @@ external operator acceptance, not untracked feature development:
    editing or exposing the replacement token in command output.
 10. **Checkpoint 050 - Hosted health failure diagnostics.** Hosted API and
     dashboard failures now produce stable non-secret error codes, and the
-    verified `v0.3.7` release records the release-gate evidence.
+    verified `v0.3.7` release records the release-gate evidence; the subsequent
+    `v0.3.8` release also verifies the corrected tag publication workflow.
 11. **Checkpoint 052 - Authenticated pilot evidence.** The acceptance preflight
     can require an operator credential and verify authenticated identity,
     system status, onboarding, sites, sensors, schedules, findings, and reports

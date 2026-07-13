@@ -2805,7 +2805,7 @@ Next checkpoint:
 
 ## Checkpoint 052 - Authenticated Pilot Evidence
 
-Status: implementation complete; release and external pilot acceptance pending
+Status: released; external pilot acceptance remains pending
 
 Scope:
 
@@ -2830,11 +2830,26 @@ Completed changes:
 - Corrected the roadmap baseline to `v0.3.8` and recorded that implementation
   checkpoints now continue through this checkpoint.
 
-Validation required before release:
+Validation:
 
-- Focused pilot-acceptance and hosted-health tests.
-- Full Edge release gate with the version-matched `v0.3.8` archive.
-- Release assets publish from the exact verified merge commit.
+- Focused pilot-acceptance and hosted-health tests passed: `9` tests.
+- Full local release gate passed at `550df01` with `132` backend/agent tests,
+  `32` frontend tests, production build, `28` desktop/mobile browser workflows,
+  npm audit, archive checksum, and credential-path checks.
+- PR `#44` passed hosted verification and merged to `main` at `b6a89cc`.
+- GitHub release workflow `29290748111` passed from tag `v0.3.8` at
+  `b6a89cc`, including the exact release gate and package publication.
+- Release [`v0.3.8`](https://github.com/Techris93/secopsai-edge/releases/tag/v0.3.8)
+  contains the versioned archive, latest archive, checksums, and bootstrap
+  installer.
+
+Release workflow correction:
+
+- The prior `v0.3.7` workflow failed only because the release had been created
+  manually before the tag workflow reached its publish step. The workflow now
+  detects an existing release and refreshes verified assets with `--clobber`,
+  while preserving the exact tag/main and release-gate checks. The `v0.3.8`
+  workflow exercised this path successfully for a new release.
 
 External boundary:
 
