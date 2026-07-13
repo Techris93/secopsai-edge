@@ -7,6 +7,7 @@ const API_PATTERN = "http://127.0.0.1:8000/api/v1/**";
 export type MockEdgeApi = {
   data: DashboardData;
   requests: Array<{ method: string; path: string; body: unknown }>;
+  requireMfa: boolean;
 };
 
 export async function installOperatorSession(page: Page): Promise<void> {
@@ -18,7 +19,8 @@ export async function installOperatorSession(page: Page): Promise<void> {
 export async function installEdgeApiMock(page: Page): Promise<MockEdgeApi> {
   const state: MockEdgeApi = {
     data: structuredClone(sampleData),
-    requests: []
+    requests: [],
+    requireMfa: false
   };
 
   state.data.onboarding = {
@@ -50,6 +52,16 @@ async function handleRoute(route: Route, state: MockEdgeApi): Promise<void> {
   state.requests.push({ method, path: `${url.pathname}${url.search}`, body });
 
   if (method === "POST" && url.pathname === "/api/v1/auth/login") {
+    if (state.requireMfa) {
+      return json(route, {
+        access_token: null,
+        token_type: "bearer",
+        expires_in: 300,
+        user: { ...operatorUser(), mfa_enabled: true },
+        mfa_required: true,
+        mfa_challenge: "browser-e2e-mfa-challenge"
+      });
+    }
     return json(route, {
       access_token: "browser-e2e-session",
       token_type: "bearer",
@@ -62,6 +74,17 @@ async function handleRoute(route: Route, state: MockEdgeApi): Promise<void> {
   }
   if (method === "POST" && url.pathname === "/api/v1/auth/password-reset/confirm") {
     return json(route, { status: "password_reset" });
+  }
+  if (method === "POST" && url.pathname === "/api/v1/user-invitations/accept") {
+    return json(route, { status: "invitation_accepted" });
+  }
+  if (method === "POST" && url.pathname === "/api/v1/auth/mfa/verify") {
+    return json(route, {
+      access_token: "browser-e2e-session",
+      token_type: "bearer",
+      expires_in: 28_800,
+      user: { ...operatorUser(), mfa_enabled: true }
+    });
   }
   if (method === "GET" && url.pathname === "/api/v1/auth/me") {
     return json(route, {
@@ -89,16 +112,17 @@ async function handleRoute(route: Route, state: MockEdgeApi): Promise<void> {
     return json(route, {
       status: "ready",
       environment: "test",
-      version: "0.2.9",
+      version: "0.3.0",
       commit: "browser-e2e",
-      schema_revision: "0013_account_recovery",
-      expected_schema_revision: "0013_account_recovery",
+      schema_revision: "0014_operator_access",
+      expected_schema_revision: "0014_operator_access",
       ai_provider: "mock",
       organization_id: "organization-demo",
       server_time: new Date().toISOString()
     });
   }
   if (method === "GET" && url.pathname === "/api/v1/users") return json(route, [operatorUser()]);
+  if (method === "GET" && url.pathname === "/api/v1/user-invitations") return json(route, []);
   if (method === "GET" && url.pathname === "/api/v1/account-access/deliveries") return json(route, []);
   if (method === "GET" && url.pathname === "/api/v1/integration-tokens") return json(route, []);
   if (method === "GET" && url.pathname === "/api/v1/notification-deliveries") return json(route, []);
@@ -182,6 +206,7 @@ function operatorUser() {
     email: "operator@example.com",
     role: "owner",
     active: true,
+    mfa_enabled: false,
     created_at: new Date().toISOString()
   };
 }

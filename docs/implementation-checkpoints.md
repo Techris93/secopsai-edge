@@ -1936,6 +1936,84 @@ Activation boundary:
 - Optional MFA, invitation acceptance, recovery codes, enrollment/PDF browser
   workflows, and automated accessibility checks remain subsequent checkpoints.
 
+## Checkpoint 036 - Operator Invitations And MFA
+
+Status: validation complete; merge, release, and deployment pending
+
+Branch:
+
+- Edge: `codex/operator-invitations-mfa`
+- Planned release: `v0.3.0`
+
+Implemented so far:
+
+- Replaced normal administrator-created temporary passwords with durable,
+  one-time operator invitations. New operators choose their own password;
+  existing operators prove their current password before gaining another
+  workspace membership.
+- Added pending-invitation listing/revocation, invitation delivery diagnostics,
+  supersession, expiry, one-time acceptance, audit events, and shared account
+  email retry processing.
+- Fixed disabled and not-yet-activated accounts so login fails before any
+  dashboard session is issued.
+- Made dashboard bootstrap create-once: deploys no longer overwrite an
+  existing password, promote a user, or reactivate a disabled account.
+- Added optional RFC 6238 TOTP MFA, short-lived signed login challenges,
+  encrypted TOTP secrets, replay protection, one-use hashed recovery codes,
+  recovery-code replacement, MFA disablement, and session revocation after
+  security-boundary changes.
+- Added row locking for one-time account links, login counters, TOTP replay
+  state, and recovery-code consumption. Existing MFA cannot be replaced without
+  first proving the current factor; a different workspace owner has an audited
+  reset action for genuine factor-loss recovery.
+- Separated the AES-GCM MFA encryption key from the dashboard session token
+  secret so an ordinary token-secret rotation cannot silently invalidate
+  enrolled authenticators.
+- Added shared lockout and audit handling for existing-account invitation
+  password attempts.
+- Added migration `0014_operator_access`, advanced the API, agent, dashboard,
+  installer, release checks, and documentation baseline to `0.3.0`, and added
+  the required Render invitation/MFA configuration contract.
+- Reworked Settings > Users & Sessions around invitations, pending delivery,
+  authenticator setup, one-time recovery-code display, and MFA status. Login
+  now completes the MFA challenge before persisting a browser session.
+- Expanded component and desktop/mobile browser workflows for invitation
+  acceptance and MFA challenge login.
+
+Validation recorded so far:
+
+- A real PostgreSQL migration upgraded `0013_account_recovery` to
+  `0014_operator_access`, passed `alembic check`, downgraded one revision, and
+  upgraded again successfully.
+- Focused invitation/MFA API tests, existing auth/account tests, frontend
+  component tests, the static Next.js build, and 12 desktop/mobile Playwright
+  workflow executions passed during implementation.
+- The final `./scripts/edge test` working-tree gate passed with `107`
+  backend/agent tests, `30` frontend component tests, the Next.js production
+  static build, all `12` desktop/mobile browser workflows, and zero npm audit
+  vulnerabilities.
+- `pip-audit -r requirements.lock` found zero known vulnerabilities after the
+  security review replaced vulnerable `cryptography 46.0.5` with the compatible
+  fixed `48.0.1` wheel.
+- The checked-in Render Blueprint passed provider validation. Live API,
+  scheduler, and PostgreSQL contracts have no drift; the free database expiry
+  on `2026-07-20` remains the only operational warning.
+- A targeted security diff review added transaction locks around one-use
+  account/MFA state, separated encryption/session key lifecycles, blocked MFA
+  replacement without the current factor, added owner-assisted audited
+  recovery, and made dashboard bootstrap create-once.
+
+Required before completion:
+
+- Commit the validated patch, run the clean-tree release gate, merge only after
+  PR CI, publish `v0.3.0`,
+  migrate Render to revision `0014_operator_access`, deploy the exact static
+  dashboard build, and verify browser/account truth states without exposing or
+  emailing credentials.
+- SMTP delivery remains inactive until an approved provider is configured.
+  The free Render PostgreSQL expiry remains a controlled-pilot blocker and is
+  not made durable by this checkpoint.
+
 ## Completion Rules
 
 A checkpoint is complete only when:

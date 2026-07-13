@@ -29,12 +29,19 @@ def test_production_configuration_rejects_development_secrets_and_origins() -> N
         replace(Settings(), environment="production")
 
 
+def test_mfa_encryption_key_has_an_independent_rotation_boundary() -> None:
+    settings = Settings()
+
+    assert settings.mfa_encryption_key != settings.token_secret
+
+
 def test_production_configuration_accepts_explicit_hardened_values() -> None:
     hardened = replace(
         Settings(),
         environment="production",
         admin_token="a" * 48,
         token_secret="b" * 48,
+        mfa_encryption_key="d" * 48,
         webhook_signing_secret="c" * 48,
         auto_create_tables=False,
         cors_origins=["https://edge.secopsai.dev"],
@@ -50,6 +57,7 @@ def test_production_smtp_requires_a_secure_reset_url() -> None:
         environment="production",
         admin_token="a" * 48,
         token_secret="b" * 48,
+        mfa_encryption_key="d" * 48,
         webhook_signing_secret="c" * 48,
         auto_create_tables=False,
         cors_origins=["https://edge.secopsai.dev"],
@@ -68,3 +76,8 @@ def test_production_smtp_requires_a_secure_reset_url() -> None:
         smtp_host="smtp.example.test",
         dashboard_reset_url="https://edge.secopsai.dev/settings",
     ).validate()
+
+
+def test_pilot_configuration_uses_the_same_secret_guardrails_as_production() -> None:
+    with pytest.raises(RuntimeError, match="Unsafe production configuration"):
+        replace(Settings(), environment="pilot")

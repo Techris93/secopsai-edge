@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import secrets
 import unicodedata
 from contextlib import asynccontextmanager
 from html import escape
@@ -9,7 +10,7 @@ from datetime import datetime, timedelta
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, Response
-from sqlalchemy import func, select, text
+from sqlalchemy import and_, func, or_, select, text
 from sqlalchemy.orm import Session
 
 from secopsai_api.ai import build_report
@@ -19,6 +20,9 @@ from secopsai_api.account_recovery import (
     consume_password_reset,
     process_due_account_access_deliveries,
     queue_password_reset,
+    queue_user_invitation,
+    validate_user_invitation,
+    USER_INVITATION_PURPOSE,
 )
 from secopsai_api.audit import write_audit
 from secopsai_api.baselines import (
@@ -58,6 +62,15 @@ from secopsai_api.models import (
     utcnow,
 )
 from secopsai_api.notifications import attempt_delivery, notify_event, process_due_deliveries, test_notification
+from secopsai_api.mfa import (
+    begin_mfa_setup,
+    create_mfa_challenge,
+    decode_mfa_challenge,
+    disable_mfa,
+    enable_mfa,
+    replace_recovery_codes,
+    verify_mfa_code,
+)
 from secopsai_api.report_pdf import render_report_pdf
 from secopsai_api.scheduling import compute_next_run_at, enqueue_due_schedules, normalize_frequency, pick_site_and_sensor
 from secopsai_api.schemas import (
@@ -71,6 +84,7 @@ from secopsai_api.schemas import (
     BaselineRuleUpdateRequest,
     DashboardLoginRequest,
     DashboardSessionResponse,
+    DashboardLoginResponse,
     DashboardUserLoginRequest,
     FindingDetailOut,
     FindingNoteCreateRequest,
@@ -120,7 +134,16 @@ from secopsai_api.schemas import (
     PasswordChangeRequest,
     PasswordResetConfirmRequest,
     PasswordResetRequest,
+    MfaChallengeRequest,
+    MfaCodeRequest,
+    MfaPasswordRequest,
+    MfaProtectedActionRequest,
+    MfaRecoveryCodesOut,
+    MfaSetupOut,
     UserCreateRequest,
+    UserInvitationAcceptRequest,
+    UserInvitationCreateRequest,
+    UserInvitationOut,
     UserOut,
     UserUpdateRequest,
     WorkspaceSwitchRequest,
@@ -178,14 +201,17 @@ def bootstrap_dashboard_admin(db: Session) -> None:
     if len(settings.dashboard_admin_password) < 12:
         raise RuntimeError("SECOPSAI_DASHBOARD_ADMIN_PASSWORD must be at least 12 characters")
     user = db.scalar(select(User).where(func.lower(User.email) == email))
-    password_hash = hash_password(settings.dashboard_admin_password)
-    if user is None or not user.active:
-        user = User(email=email, password_hash=password_hash, role="admin")
-        db.add(user)
-        db.flush()
-    else:
-        user.password_hash = password_hash
-        user.role = "admin"
+    if user is not None:
+        return
+    user = User(
+        email=email,
+        password_hash=hash_password(settings.dashboard_admin_password),
+        password_ready=True,
+        role="admin",
+        active=True,
+    )
+    db.add(user)
+    db.flush()
     membership = ensure_default_membership(db, user)
     membership.role = "admin"
     membership.active = True
@@ -805,10 +831,12 @@ def create_session(payload: DashboardLoginRequest) -> DashboardSessionResponse:
     )
 
 
-@app.post("/api/v1/auth/login", response_model=DashboardSessionResponse)
-def login_dashboard_user(payload: DashboardUserLoginRequest, db: Session = Depends(get_db)) -> DashboardSessionResponse:
+@app.post("/api/v1/auth/login", response_model=DashboardLoginResponse)
+def login_dashboard_user(payload: DashboardUserLoginRequest, db: Session = Depends(get_db)) -> DashboardLoginResponse:
     email = payload.email.strip().lower()
-    user = db.scalar(select(User).where(func.lower(User.email) == email))
+    user = db.scalar(
+        select(User).where(func.lower(User.email) == email).with_for_update()
+    )
     if user is None:
         verify_password(payload.password, DUMMY_PASSWORD_HASH)
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid email or password")
@@ -816,7 +844,8 @@ def login_dashboard_user(payload: DashboardUserLoginRequest, db: Session = Depen
         write_audit(db, "auth.login_blocked", user_id=user.id, resource_type="user", resource_id=user.id)
         db.commit()
         raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="Login temporarily unavailable")
-    if not verify_password(payload.password, user.password_hash):
+    password_valid = verify_password(payload.password, user.password_hash)
+    if not password_valid or not user.active or not user.password_ready:
         user.failed_login_count += 1
         action = "auth.login_failed"
         if user.failed_login_count >= settings.login_max_attempts:
@@ -831,15 +860,110 @@ def login_dashboard_user(payload: DashboardUserLoginRequest, db: Session = Depen
         )
         detail = "Login temporarily unavailable" if status_code == 429 else "Invalid email or password"
         raise HTTPException(status_code=status_code, detail=detail)
+
+    membership = membership_for_user(db, user.id)
+    if membership is None:
+        existing_membership = db.scalar(
+            select(OrganizationMembership).where(OrganizationMembership.user_id == user.id)
+        )
+        if existing_membership is not None:
+            write_audit(db, "auth.login_failed", user_id=user.id, resource_type="user", resource_id=user.id)
+            db.commit()
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid email or password")
+        membership = ensure_default_membership(db, user)
+
+    if user.mfa_enabled_at is not None:
+        write_audit(
+            db,
+            "auth.mfa_challenge_issued",
+            user_id=user.id,
+            organization_id=membership.organization_id,
+            resource_type="user",
+            resource_id=user.id,
+        )
+        db.commit()
+        return DashboardLoginResponse(
+            expires_in=settings.mfa_challenge_ttl_seconds,
+            user=user_out(user, membership.role, membership.active),
+            mfa_required=True,
+            mfa_challenge=create_mfa_challenge(user, membership.organization_id, settings),
+        )
+
     user.failed_login_count = 0
     user.locked_until = None
     user.last_login_at = utcnow()
-    membership = membership_for_user(db, user.id)
-    if membership is None:
-        membership = ensure_default_membership(db, user)
     write_audit(
         db,
         "auth.login",
+        user_id=user.id,
+        organization_id=membership.organization_id,
+        resource_type="user",
+        resource_id=user.id,
+    )
+    db.commit()
+    db.refresh(user)
+    return DashboardLoginResponse(
+        access_token=create_dashboard_session(
+            subject=user.email,
+            role=membership.role,
+            user_id=user.id,
+            session_version=user.session_version,
+            organization_id=membership.organization_id,
+        ),
+        expires_in=settings.dashboard_session_ttl_seconds,
+        user=user_out(user, membership.role, membership.active),
+    )
+
+
+@app.post("/api/v1/auth/mfa/verify", response_model=DashboardSessionResponse)
+def verify_dashboard_mfa(
+    payload: MfaChallengeRequest,
+    db: Session = Depends(get_db),
+) -> DashboardSessionResponse:
+    challenge = decode_mfa_challenge(payload.challenge, settings)
+    if challenge is None:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="MFA challenge is invalid or expired")
+    user = db.scalar(
+        select(User).where(User.id == str(challenge["uid"])).with_for_update()
+    )
+    organization_id = str(challenge["org"])
+    membership = membership_for_user(db, user.id, organization_id) if user else None
+    if (
+        user is None
+        or not user.active
+        or not user.password_ready
+        or membership is None
+        or int(challenge.get("ver", 0)) != user.session_version
+        or user.mfa_enabled_at is None
+    ):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="MFA challenge is invalid or expired")
+    if account_is_locked(user):
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="Login temporarily unavailable")
+    if not verify_mfa_code(db, user, payload.code, settings):
+        user.failed_login_count += 1
+        action = "auth.mfa_failed"
+        if user.failed_login_count >= settings.login_max_attempts:
+            user.locked_until = utcnow() + timedelta(seconds=settings.login_lockout_seconds)
+            action = "auth.login_locked"
+        write_audit(
+            db,
+            action,
+            user_id=user.id,
+            organization_id=membership.organization_id,
+            resource_type="user",
+            resource_id=user.id,
+        )
+        db.commit()
+        status_code = status.HTTP_429_TOO_MANY_REQUESTS if action == "auth.login_locked" else status.HTTP_403_FORBIDDEN
+        detail = "Login temporarily unavailable" if status_code == 429 else "Invalid authentication code"
+        raise HTTPException(status_code=status_code, detail=detail)
+
+    user.failed_login_count = 0
+    user.locked_until = None
+    user.last_login_at = utcnow()
+    write_audit(
+        db,
+        "auth.mfa_verified",
         user_id=user.id,
         organization_id=membership.organization_id,
         resource_type="user",
@@ -940,6 +1064,7 @@ def user_out(user: User, role: str, active: bool) -> UserOut:
         created_at=user.created_at,
         last_login_at=user.last_login_at,
         password_changed_at=user.password_changed_at,
+        mfa_enabled=user.mfa_enabled_at is not None,
     )
 
 
@@ -1021,7 +1146,11 @@ def logout_dashboard_user(
     auth_context: dict = Depends(get_dashboard_auth_context),
     db: Session = Depends(get_db),
 ) -> dict[str, str]:
-    user = db.get(User, auth_context.get("uid")) if auth_context.get("uid") else None
+    user = (
+        db.scalar(select(User).where(User.id == auth_context["uid"]).with_for_update())
+        if auth_context.get("uid")
+        else None
+    )
     if user is not None:
         user.session_version += 1
         write_audit(
@@ -1042,7 +1171,11 @@ def change_dashboard_password(
     auth_context: dict = Depends(get_dashboard_auth_context),
     db: Session = Depends(get_db),
 ) -> dict[str, str]:
-    user = db.get(User, auth_context.get("uid")) if auth_context.get("uid") else None
+    user = (
+        db.scalar(select(User).where(User.id == auth_context["uid"]).with_for_update())
+        if auth_context.get("uid")
+        else None
+    )
     if user is None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User login required")
     if not verify_password(payload.current_password, user.password_hash):
@@ -1062,6 +1195,132 @@ def change_dashboard_password(
     )
     db.commit()
     return {"status": "password_changed"}
+
+
+@app.post("/api/v1/auth/mfa/setup", response_model=MfaSetupOut)
+def setup_dashboard_mfa(
+    payload: MfaPasswordRequest,
+    auth_context: dict = Depends(get_dashboard_auth_context),
+    db: Session = Depends(get_db),
+) -> MfaSetupOut:
+    user = (
+        db.scalar(select(User).where(User.id == auth_context["uid"]).with_for_update())
+        if auth_context.get("uid")
+        else None
+    )
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User login required")
+    if user.mfa_enabled_at is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Disable existing MFA before enrolling a replacement authenticator",
+        )
+    if not verify_password(payload.current_password, user.password_hash):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Current password is incorrect")
+    secret, uri = begin_mfa_setup(user, settings)
+    write_audit(
+        db,
+        "auth.mfa_setup_started",
+        user_id=user.id,
+        organization_id=organization_id_from_context(auth_context),
+        resource_type="user",
+        resource_id=user.id,
+    )
+    db.commit()
+    return MfaSetupOut(
+        secret=secret,
+        provisioning_uri=uri,
+        expires_at=user.mfa_pending_expires_at,
+    )
+
+
+@app.post("/api/v1/auth/mfa/enable", response_model=MfaRecoveryCodesOut)
+def enable_dashboard_mfa(
+    payload: MfaCodeRequest,
+    auth_context: dict = Depends(get_dashboard_auth_context),
+    db: Session = Depends(get_db),
+) -> MfaRecoveryCodesOut:
+    user = (
+        db.scalar(select(User).where(User.id == auth_context["uid"]).with_for_update())
+        if auth_context.get("uid")
+        else None
+    )
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User login required")
+    recovery_codes = enable_mfa(db, user, payload.code, settings)
+    if recovery_codes is None:
+        db.commit()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Authentication code is invalid or setup expired")
+    write_audit(
+        db,
+        "auth.mfa_enabled",
+        user_id=user.id,
+        organization_id=organization_id_from_context(auth_context),
+        resource_type="user",
+        resource_id=user.id,
+    )
+    db.commit()
+    return MfaRecoveryCodesOut(recovery_codes=recovery_codes)
+
+
+@app.post("/api/v1/auth/mfa/recovery-codes", response_model=MfaRecoveryCodesOut)
+def regenerate_dashboard_mfa_recovery_codes(
+    payload: MfaProtectedActionRequest,
+    auth_context: dict = Depends(get_dashboard_auth_context),
+    db: Session = Depends(get_db),
+) -> MfaRecoveryCodesOut:
+    user = (
+        db.scalar(select(User).where(User.id == auth_context["uid"]).with_for_update())
+        if auth_context.get("uid")
+        else None
+    )
+    if user is None or user.mfa_enabled_at is None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="MFA is not enabled")
+    if not verify_password(payload.current_password, user.password_hash):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Current password is incorrect")
+    if not verify_mfa_code(db, user, payload.code, settings):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid authentication code")
+    recovery_codes = replace_recovery_codes(db, user, settings)
+    write_audit(
+        db,
+        "auth.mfa_recovery_codes_regenerated",
+        user_id=user.id,
+        organization_id=organization_id_from_context(auth_context),
+        resource_type="user",
+        resource_id=user.id,
+    )
+    db.commit()
+    return MfaRecoveryCodesOut(recovery_codes=recovery_codes)
+
+
+@app.post("/api/v1/auth/mfa/disable")
+def disable_dashboard_mfa(
+    payload: MfaProtectedActionRequest,
+    auth_context: dict = Depends(get_dashboard_auth_context),
+    db: Session = Depends(get_db),
+) -> dict[str, str]:
+    user = (
+        db.scalar(select(User).where(User.id == auth_context["uid"]).with_for_update())
+        if auth_context.get("uid")
+        else None
+    )
+    if user is None or user.mfa_enabled_at is None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="MFA is not enabled")
+    if not verify_password(payload.current_password, user.password_hash):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Current password is incorrect")
+    if not verify_mfa_code(db, user, payload.code, settings):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid authentication code")
+    disable_mfa(db, user)
+    write_audit(
+        db,
+        "auth.mfa_disabled",
+        user_id=user.id,
+        organization_id=organization_id_from_context(auth_context),
+        resource_type="user",
+        resource_id=user.id,
+    )
+    db.commit()
+    return {"status": "mfa_disabled"}
 
 
 @app.get("/api/v1/organizations", response_model=list[OrganizationOut])
@@ -1149,12 +1408,254 @@ def list_users(
     return [user_out(user, membership.role, membership.active) for user, membership in rows]
 
 
+def user_invitation_out(row: AccountAccessToken, email: str) -> UserInvitationOut:
+    now = utcnow()
+    comparison_now = now if row.expires_at.tzinfo else now.replace(tzinfo=None)
+    if row.delivery_detail == "Invitation accepted":
+        state = "accepted"
+    elif row.delivery_detail == "Invitation revoked":
+        state = "revoked"
+    elif row.expires_at <= comparison_now:
+        state = "expired"
+    elif row.used_at is not None:
+        state = "closed"
+    else:
+        state = "pending"
+    return UserInvitationOut(
+        id=row.id,
+        user_id=row.user_id,
+        organization_id=str(row.organization_id),
+        email=email,
+        role=str((row.context or {}).get("role") or "viewer"),
+        state=state,
+        delivery_status=row.delivery_status,
+        expires_at=row.expires_at,
+        created_at=row.created_at,
+    )
+
+
+@app.get("/api/v1/user-invitations", response_model=list[UserInvitationOut])
+def list_user_invitations(
+    auth_context: dict = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> list[UserInvitationOut]:
+    organization_id = organization_id_from_context(auth_context)
+    rows = db.execute(
+        select(AccountAccessToken, User.email)
+        .join(User, User.id == AccountAccessToken.user_id)
+        .where(
+            AccountAccessToken.organization_id == organization_id,
+            AccountAccessToken.purpose == USER_INVITATION_PURPOSE,
+        )
+        .order_by(AccountAccessToken.created_at.desc())
+    ).all()
+    return [user_invitation_out(row, email) for row, email in rows]
+
+
+@app.post("/api/v1/user-invitations", response_model=UserInvitationOut)
+def create_user_invitation(
+    payload: UserInvitationCreateRequest,
+    auth_context: dict = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> UserInvitationOut:
+    organization_id = organization_id_from_context(auth_context)
+    if payload.role == "owner" and auth_context.get("role") != "owner":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Owner role required")
+    email = payload.email.strip().lower()
+    user = db.scalar(select(User).where(func.lower(User.email) == email))
+    if user is None:
+        user = User(
+            email=email,
+            password_hash=hash_password(secrets.token_urlsafe(48)),
+            password_ready=False,
+            role=payload.role,
+            active=False,
+        )
+        db.add(user)
+        db.flush()
+    membership = db.scalar(
+        select(OrganizationMembership).where(
+            OrganizationMembership.organization_id == organization_id,
+            OrganizationMembership.user_id == user.id,
+        )
+    )
+    if membership is not None and membership.active:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="User already belongs to this workspace")
+    invitation = queue_user_invitation(
+        db,
+        user,
+        organization_id,
+        payload.role,
+        new_user=not user.password_ready,
+        settings=settings,
+    )
+    write_audit(
+        db,
+        "user.invited",
+        user_id=str(auth_context.get("uid")) if auth_context.get("uid") else None,
+        organization_id=organization_id,
+        resource_type="user_invitation",
+        resource_id=invitation.id,
+        details={"email": email, "role": payload.role},
+    )
+    db.commit()
+    db.refresh(invitation)
+    return user_invitation_out(invitation, user.email)
+
+
+@app.post("/api/v1/user-invitations/accept")
+def accept_user_invitation(
+    payload: UserInvitationAcceptRequest,
+    db: Session = Depends(get_db),
+) -> dict[str, str]:
+    validated = validate_user_invitation(db, payload.token, settings=settings)
+    if validated is None:
+        db.commit()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invitation is invalid or expired")
+    invitation, user = validated
+    organization = db.get(Organization, invitation.organization_id)
+    if organization is None or not organization.active:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invitation is invalid or expired")
+    if user.password_ready:
+        if account_is_locked(user):
+            write_audit(
+                db,
+                "auth.invitation_password_blocked",
+                user_id=user.id,
+                organization_id=str(invitation.organization_id),
+                resource_type="user_invitation",
+                resource_id=invitation.id,
+            )
+            db.commit()
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Invitation acceptance temporarily unavailable",
+            )
+        if not verify_password(payload.password, user.password_hash):
+            user.failed_login_count += 1
+            action = "auth.invitation_password_failed"
+            if user.failed_login_count >= settings.login_max_attempts:
+                user.locked_until = utcnow() + timedelta(seconds=settings.login_lockout_seconds)
+                action = "auth.invitation_password_locked"
+            write_audit(
+                db,
+                action,
+                user_id=user.id,
+                organization_id=str(invitation.organization_id),
+                resource_type="user_invitation",
+                resource_id=invitation.id,
+            )
+            db.commit()
+            status_code = (
+                status.HTTP_429_TOO_MANY_REQUESTS
+                if action == "auth.invitation_password_locked"
+                else status.HTTP_403_FORBIDDEN
+            )
+            detail = (
+                "Invitation acceptance temporarily unavailable"
+                if status_code == status.HTTP_429_TOO_MANY_REQUESTS
+                else "Current password is incorrect"
+            )
+            raise HTTPException(status_code=status_code, detail=detail)
+        user.failed_login_count = 0
+        user.locked_until = None
+    else:
+        user.password_hash = hash_password(payload.password)
+        user.password_ready = True
+        user.password_changed_at = utcnow()
+    role = str((invitation.context or {}).get("role") or "viewer")
+    membership = db.scalar(
+        select(OrganizationMembership).where(
+            OrganizationMembership.organization_id == invitation.organization_id,
+            OrganizationMembership.user_id == user.id,
+        )
+    )
+    if membership is None:
+        membership = OrganizationMembership(
+            organization_id=str(invitation.organization_id),
+            user_id=user.id,
+            role=role,
+            active=True,
+        )
+        db.add(membership)
+    else:
+        membership.role = role
+        membership.active = True
+        touch_membership(membership)
+    now = utcnow()
+    user.active = True
+    user.session_version += 1
+    for active in db.scalars(
+        select(AccountAccessToken).where(
+            AccountAccessToken.user_id == user.id,
+            AccountAccessToken.organization_id == invitation.organization_id,
+            AccountAccessToken.purpose == USER_INVITATION_PURPOSE,
+            AccountAccessToken.used_at.is_(None),
+        )
+    ).all():
+        active.used_at = now
+        active.delivery_status = "delivered"
+        active.delivery_detail = "Invitation accepted"
+    write_audit(
+        db,
+        "user.invitation_accepted",
+        user_id=user.id,
+        organization_id=str(invitation.organization_id),
+        resource_type="user_invitation",
+        resource_id=invitation.id,
+        details={"role": role},
+    )
+    db.commit()
+    return {"status": "invitation_accepted"}
+
+
+@app.delete("/api/v1/user-invitations/{invitation_id}", response_model=UserInvitationOut)
+def revoke_user_invitation(
+    invitation_id: str,
+    auth_context: dict = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> UserInvitationOut:
+    organization_id = organization_id_from_context(auth_context)
+    result = db.execute(
+        select(AccountAccessToken, User.email)
+        .join(User, User.id == AccountAccessToken.user_id)
+        .where(
+            AccountAccessToken.id == invitation_id,
+            AccountAccessToken.organization_id == organization_id,
+            AccountAccessToken.purpose == USER_INVITATION_PURPOSE,
+        )
+    ).first()
+    if result is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invitation not found")
+    invitation, email = result
+    if invitation.used_at is None:
+        invitation.used_at = utcnow()
+    invitation.delivery_status = "failed"
+    invitation.delivery_detail = "Invitation revoked"
+    write_audit(
+        db,
+        "user.invitation_revoked",
+        user_id=str(auth_context.get("uid")) if auth_context.get("uid") else None,
+        organization_id=organization_id,
+        resource_type="user_invitation",
+        resource_id=invitation.id,
+    )
+    db.commit()
+    db.refresh(invitation)
+    return user_invitation_out(invitation, email)
+
+
 @app.post("/api/v1/users", response_model=UserOut)
 def create_user(
     payload: UserCreateRequest,
     auth_context: dict = Depends(require_admin),
     db: Session = Depends(get_db),
 ) -> UserOut:
+    if not auth_context.get("legacy"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Use one-time user invitations for dashboard accounts",
+        )
     organization_id = organization_id_from_context(auth_context)
     if payload.role == "owner" and auth_context.get("role") != "owner":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Owner role required")
@@ -1234,6 +1735,11 @@ def update_user(
         membership.active = payload.active
         security_changed = True
     if payload.password is not None:
+        if not auth_context.get("legacy"):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Use self-service password recovery for dashboard accounts",
+            )
         membership_count = db.scalar(
             select(func.count(OrganizationMembership.id)).where(
                 OrganizationMembership.user_id == user.id,
@@ -1275,6 +1781,47 @@ def update_user(
     db.commit()
     db.refresh(user)
     return user_out(user, membership.role, membership.active)
+
+
+@app.post("/api/v1/users/{user_id}/mfa-reset")
+def reset_user_mfa(
+    user_id: str,
+    auth_context: dict = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> dict[str, str]:
+    organization_id = organization_id_from_context(auth_context)
+    if not auth_context.get("legacy") and auth_context.get("role") != "owner":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Owner role required")
+    if not auth_context.get("legacy") and auth_context.get("uid") == user_id:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Another owner must reset your MFA",
+        )
+    membership = db.scalar(
+        select(OrganizationMembership)
+        .where(
+            OrganizationMembership.organization_id == organization_id,
+            OrganizationMembership.user_id == user_id,
+        )
+        .with_for_update()
+    )
+    user = db.scalar(select(User).where(User.id == user_id).with_for_update())
+    if user is None or membership is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    if user.mfa_enabled_at is None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="MFA is not enabled")
+    disable_mfa(db, user)
+    write_audit(
+        db,
+        "user.mfa_reset",
+        user_id=str(auth_context.get("uid")) if auth_context.get("uid") else None,
+        organization_id=organization_id,
+        resource_type="user",
+        resource_id=user.id,
+        details={"target_email": user.email},
+    )
+    db.commit()
+    return {"status": "mfa_reset"}
 
 
 @app.get("/api/v1/sites", response_model=list[SiteOut])
@@ -3061,8 +3608,19 @@ def list_account_access_deliveries(
     rows = db.execute(
         select(AccountAccessToken, User.email)
         .join(User, User.id == AccountAccessToken.user_id)
-        .join(OrganizationMembership, OrganizationMembership.user_id == User.id)
-        .where(OrganizationMembership.organization_id == organization_id)
+        .outerjoin(
+            OrganizationMembership,
+            and_(
+                OrganizationMembership.user_id == User.id,
+                OrganizationMembership.organization_id == organization_id,
+            ),
+        )
+        .where(
+            or_(
+                AccountAccessToken.organization_id == organization_id,
+                OrganizationMembership.organization_id == organization_id,
+            )
+        )
         .order_by(AccountAccessToken.created_at.desc())
         .limit(limit)
     ).all()
@@ -3082,10 +3640,19 @@ def retry_account_access_delivery(
     result = db.execute(
         select(AccountAccessToken, User.email)
         .join(User, User.id == AccountAccessToken.user_id)
-        .join(OrganizationMembership, OrganizationMembership.user_id == User.id)
+        .outerjoin(
+            OrganizationMembership,
+            and_(
+                OrganizationMembership.user_id == User.id,
+                OrganizationMembership.organization_id == organization_id,
+            ),
+        )
         .where(
             AccountAccessToken.id == delivery_id,
-            OrganizationMembership.organization_id == organization_id,
+            or_(
+                AccountAccessToken.organization_id == organization_id,
+                OrganizationMembership.organization_id == organization_id,
+            ),
         )
     ).first()
     if result is None:

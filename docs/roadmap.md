@@ -4,7 +4,7 @@ This roadmap records product gaps, not historical aspirations. A capability is
 listed as complete only when it has implementation and test evidence in
 `docs/implementation-checkpoints.md`.
 
-## Current Product Baseline - v0.2.9
+## Current Product Baseline - v0.3.0
 
 The controlled-pilot baseline includes:
 
@@ -53,6 +53,35 @@ without founder supervision:
 5. **Notification delivery operations.** Delivery attempts, retries, terminal
    failure state, and operator-visible diagnostics are implemented for email,
    Telegram, webhooks, and password-reset email.
+
+## Controlled Pilot Completion Sequence
+
+The checkpoint ledger is complete through `035`. The remaining controlled-pilot
+sequence is deliberately bounded and should be completed in this order:
+
+1. **Checkpoint 036 - Operator invitations and MFA.** One-time invitation
+   acceptance, disabled-login correctness, TOTP MFA, one-use recovery codes,
+   migration, browser workflows, release, and deployed verification.
+2. **Checkpoint 037 - Accessibility and browser completion.** Automated WCAG
+   checks plus enrollment, PDF download, keyboard, responsive, empty, error,
+   and degraded-state workflows against the production build.
+3. **Checkpoint 038 - Durable pilot infrastructure and recovery proof.** Paid
+   database/API decision, managed backups or equivalent, restore drill,
+   retention/deletion controls, uptime target, and operator recovery exercise.
+4. **Checkpoint 039 - Research and wireless operational boundary.** First
+   narrowly scoped package-research workflow, reproducible evidence export,
+   Linux/Raspberry Pi wireless validation, and explicit unsupported-platform
+   messaging.
+5. **Checkpoint 040 - External pilot acceptance.** Fresh-machine installation,
+   seven-day soak, schedule/notification/offline-sensor exercises, support SLO,
+   uninstall, and pilot exit checklist.
+6. **Checkpoint 041 - Controlled-pilot release closeout.** Exact-build deploy,
+   release artifacts, public docs alignment, final security review, known-risk
+   register, and a signed pilot go/no-go record.
+
+Commercial SaaS/MSP, billing, broad fleet automation, appliance imaging, and
+multi-ecosystem research automation remain subsequent product horizons rather
+than hidden requirements of the controlled-pilot release.
 
 ## Paid Pilot Readiness
 

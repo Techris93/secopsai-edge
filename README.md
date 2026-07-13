@@ -8,6 +8,8 @@ Standalone MacBook-first MVP for an AI-assisted asset discovery and wireless int
 - FastAPI backend with PostgreSQL, workspace isolation, role-based auth, audit logs, approved baselines, findings, reports, and Splunk HEC export hooks.
 - Next.js/Tailwind dashboard for onboarding, sites, assets, Wi-Fi networks, findings, schedules, reports, notifications, and sensor settings.
 - Guided onboarding, launchd/systemd worker service installation, scheduled scans, sensor token rotation, and client-ready PDF/HTML report export.
+- One-time operator invitations, self-service account recovery, optional TOTP MFA,
+  one-use recovery codes, session revocation, and account-delivery diagnostics.
 - Scoped Core/dashboard credentials with advance expiry warnings and overlap-safe rotation.
 - Docker Compose for local PostgreSQL.
 - Tests for scan safety, Nmap parsing, detection rules, and AI payload redaction.
@@ -64,7 +66,9 @@ The dashboard shows one of three data states:
 Authenticated users can switch among their assigned workspaces from the global selector. Sites,
 sensors, assets, findings, schedules, reports, notifications, audit records, and Core exports are
 restricted to the active workspace. Owners can create another customer workspace; administrators
-manage sites and members, while viewers have read-only access.
+manage sites and invite members, while viewers have read-only access. Invited operators choose
+their own password from a one-time link. They can then enable authenticator-app MFA and store the
+one-use recovery codes from Settings; no administrator needs to share a temporary password.
 
 In another terminal, register this MacBook as a sensor:
 

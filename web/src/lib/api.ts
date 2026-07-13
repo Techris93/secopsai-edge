@@ -24,11 +24,13 @@ import type {
   Site,
   SystemStatus,
   User,
+  UserInvitation,
   WifiNetwork
 } from "./types";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000";
 const SESSION_TOKEN_KEY = "secopsai_dashboard_session";
+const SESSION_CHANGED_EVENT = "secopsai-session-changed";
 const DEMO_FALLBACK_ENABLED = process.env.NEXT_PUBLIC_SECOPSAI_DEMO_MODE === "true";
 
 export type DashboardDataMode = "live" | "demo" | "blocked";
@@ -83,6 +85,12 @@ export function hasDashboardSession(): boolean {
 export function clearDashboardSession(): void {
   if (typeof window === "undefined") return;
   window.sessionStorage.removeItem(SESSION_TOKEN_KEY);
+  window.dispatchEvent(new Event(SESSION_CHANGED_EVENT));
+}
+
+function storeDashboardSession(accessToken: string): void {
+  window.sessionStorage.setItem(SESSION_TOKEN_KEY, accessToken);
+  window.dispatchEvent(new Event(SESSION_CHANGED_EVENT));
 }
 
 export async function logoutDashboard(): Promise<void> {
@@ -106,6 +114,21 @@ export async function listAccountAccessDeliveries(limit = 25): Promise<AccountAc
   return requestJson<AccountAccessDelivery[]>(`/api/v1/account-access/deliveries?limit=${limit}`);
 }
 
+export async function listUserInvitations(): Promise<UserInvitation[]> {
+  return requestJson<UserInvitation[]>("/api/v1/user-invitations");
+}
+
+export async function createUserInvitation(payload: { email: string; role: string }): Promise<UserInvitation> {
+  return requestJson<UserInvitation>("/api/v1/user-invitations", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function revokeUserInvitation(invitationId: string): Promise<UserInvitation> {
+  return requestJson<UserInvitation>(`/api/v1/user-invitations/${invitationId}`, { method: "DELETE" });
+}
+
 export async function retryAccountAccessDelivery(deliveryId: string): Promise<AccountAccessDelivery> {
   return requestJson<AccountAccessDelivery>(`/api/v1/account-access/deliveries/${deliveryId}/retry`, {
     method: "POST"
@@ -123,6 +146,12 @@ export async function updateUser(
   return requestJson<User>(`/api/v1/users/${userId}`, { method: "PATCH", body: JSON.stringify(payload) });
 }
 
+export async function resetUserMfa(userId: string): Promise<void> {
+  await requestJson<{ status: string }>(`/api/v1/users/${userId}/mfa-reset`, {
+    method: "POST"
+  });
+}
+
 export async function loginDashboard(adminToken: string): Promise<void> {
   const response = await fetch(`${API_BASE_URL}/api/v1/auth/session`, {
     method: "POST",
@@ -136,10 +165,14 @@ export async function loginDashboard(adminToken: string): Promise<void> {
   }
 
   const payload = (await response.json()) as { access_token: string };
-  window.sessionStorage.setItem(SESSION_TOKEN_KEY, payload.access_token);
+  storeDashboardSession(payload.access_token);
 }
 
-export async function loginDashboardUser(email: string, password: string): Promise<User | null> {
+export async function loginDashboardUser(email: string, password: string): Promise<{
+  user: User | null;
+  mfaRequired: boolean;
+  mfaChallenge: string | null;
+}> {
   const response = await fetch(`${API_BASE_URL}/api/v1/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -151,9 +184,80 @@ export async function loginDashboardUser(email: string, password: string): Promi
     throw await responseError(response);
   }
 
+  const payload = (await response.json()) as {
+    access_token?: string | null;
+    user?: User | null;
+    mfa_required?: boolean;
+    mfa_challenge?: string | null;
+  };
+  if (payload.access_token) storeDashboardSession(payload.access_token);
+  return {
+    user: payload.user ?? null,
+    mfaRequired: Boolean(payload.mfa_required),
+    mfaChallenge: payload.mfa_challenge ?? null
+  };
+}
+
+export async function verifyDashboardMfa(challenge: string, code: string): Promise<User | null> {
+  const response = await fetch(`${API_BASE_URL}/api/v1/auth/mfa/verify`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ challenge, code }),
+    cache: "no-store"
+  });
+  if (!response.ok) throw await responseError(response);
   const payload = (await response.json()) as { access_token: string; user?: User | null };
-  window.sessionStorage.setItem(SESSION_TOKEN_KEY, payload.access_token);
+  storeDashboardSession(payload.access_token);
   return payload.user ?? null;
+}
+
+export async function acceptUserInvitation(token: string, password: string): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/api/v1/user-invitations/accept`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token, password }),
+    cache: "no-store"
+  });
+  if (!response.ok) throw await responseError(response);
+}
+
+export async function beginDashboardMfa(currentPassword: string): Promise<{
+  secret: string;
+  provisioning_uri: string;
+  expires_at: string;
+}> {
+  return requestJson("/api/v1/auth/mfa/setup", {
+    method: "POST",
+    body: JSON.stringify({ current_password: currentPassword })
+  });
+}
+
+export async function enableDashboardMfa(code: string): Promise<string[]> {
+  const result = await requestJson<{ recovery_codes: string[] }>("/api/v1/auth/mfa/enable", {
+    method: "POST",
+    body: JSON.stringify({ code })
+  });
+  clearDashboardSession();
+  return result.recovery_codes;
+}
+
+export async function regenerateDashboardMfaRecoveryCodes(
+  currentPassword: string,
+  code: string
+): Promise<string[]> {
+  const result = await requestJson<{ recovery_codes: string[] }>("/api/v1/auth/mfa/recovery-codes", {
+    method: "POST",
+    body: JSON.stringify({ current_password: currentPassword, code })
+  });
+  return result.recovery_codes;
+}
+
+export async function disableDashboardMfa(currentPassword: string, code: string): Promise<void> {
+  await requestJson<{ status: string }>("/api/v1/auth/mfa/disable", {
+    method: "POST",
+    body: JSON.stringify({ current_password: currentPassword, code })
+  });
+  clearDashboardSession();
 }
 
 export async function requestDashboardPasswordReset(email: string): Promise<void> {
@@ -190,7 +294,7 @@ export async function switchWorkspace(organizationId: string): Promise<void> {
     method: "POST",
     body: JSON.stringify({ organization_id: organizationId })
   });
-  window.sessionStorage.setItem(SESSION_TOKEN_KEY, payload.access_token);
+  storeDashboardSession(payload.access_token);
 }
 
 export async function createOrganization(name: string): Promise<Organization> {

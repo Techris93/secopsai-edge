@@ -167,6 +167,7 @@ class UserOut(BaseModel):
     created_at: datetime
     last_login_at: datetime | None = None
     password_changed_at: datetime | None = None
+    mfa_enabled: bool = False
 
 
 class OrganizationOut(BaseModel):
@@ -198,6 +199,28 @@ class UserCreateRequest(BaseModel):
     role: str = Field(default="viewer", pattern="^(owner|admin|viewer)$")
 
 
+class UserInvitationCreateRequest(BaseModel):
+    email: str = Field(min_length=3, max_length=255)
+    role: str = Field(default="viewer", pattern="^(owner|admin|viewer)$")
+
+
+class UserInvitationAcceptRequest(BaseModel):
+    token: str = Field(min_length=32, max_length=512)
+    password: str = Field(min_length=12, max_length=512)
+
+
+class UserInvitationOut(BaseModel):
+    id: str
+    user_id: str
+    organization_id: str
+    email: str
+    role: str
+    state: str
+    delivery_status: str
+    expires_at: datetime
+    created_at: datetime
+
+
 class UserUpdateRequest(BaseModel):
     role: str | None = Field(default=None, pattern="^(owner|admin|viewer)$")
     active: bool | None = None
@@ -216,6 +239,34 @@ class PasswordResetRequest(BaseModel):
 class PasswordResetConfirmRequest(BaseModel):
     token: str = Field(min_length=32, max_length=512)
     new_password: str = Field(min_length=12, max_length=512)
+
+
+class MfaChallengeRequest(BaseModel):
+    challenge: str = Field(min_length=32, max_length=2048)
+    code: str = Field(min_length=6, max_length=64)
+
+
+class MfaPasswordRequest(BaseModel):
+    current_password: str = Field(min_length=1, max_length=512)
+
+
+class MfaCodeRequest(BaseModel):
+    code: str = Field(min_length=6, max_length=64)
+
+
+class MfaProtectedActionRequest(BaseModel):
+    current_password: str = Field(min_length=1, max_length=512)
+    code: str = Field(min_length=6, max_length=64)
+
+
+class MfaSetupOut(BaseModel):
+    secret: str
+    provisioning_uri: str
+    expires_at: datetime
+
+
+class MfaRecoveryCodesOut(BaseModel):
+    recovery_codes: list[str]
 
 
 class AccountAccessRunResponse(BaseModel):
@@ -246,6 +297,15 @@ class DashboardSessionResponse(BaseModel):
     token_type: str = "bearer"
     expires_in: int
     user: UserOut | None = None
+
+
+class DashboardLoginResponse(BaseModel):
+    access_token: str | None = None
+    token_type: str = "bearer"
+    expires_in: int
+    user: UserOut | None = None
+    mfa_required: bool = False
+    mfa_challenge: str | None = None
 
 
 class AuthMeOut(BaseModel):
