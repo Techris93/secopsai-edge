@@ -1596,14 +1596,16 @@ Known risks and next actions:
 
 ## Checkpoint 031 - Clipboard Resilience And Deployed Browser QA
 
-Status: in progress
+Status: complete
 
 Branch and release target:
 
-- Edge implementation branch: `codex/copy-command-resilience`
-- Target release: `v0.2.7`
+- Edge implementation PR: `#13` (`codex/copy-command-resilience`)
+- Edge merge commit: `b14e89229cb5ef3c254941d9dfadc129353dd609`
+- Published release: `v0.2.7`
+- Release workflow: `29236074750`
 
-Completed changes to date:
+Completed changes:
 
 - Ran the deployed Edge console through the in-app browser on desktop and at
   `390x844`. Overview and Settings rendered meaningful content with no console
@@ -1619,11 +1621,29 @@ Completed changes to date:
 - Advanced the package to `0.2.7` so the deployed UI and private sensor archive
   retain one traceable version identity.
 
-Remaining before completion:
+Validation:
 
-- Run the full release gate, merge the PR after CI, publish `v0.2.7`, deploy
-  Render/Cloudflare at the exact merge, and repeat the copy interaction and
-  desktop/mobile browser smoke checks.
+- Post-merge `main` workflow `29235924658` passed migrations, 92 backend/agent
+  tests, Python/Node audits, package inspection, PostgreSQL backup/restore, 24
+  frontend tests, the static production build, and generated-state checks.
+- Release checksums passed, latest/versioned archives were byte-identical, the
+  standalone bootstrap matched the archive, and API/agent/web versions all
+  reported `0.2.7`.
+- Render deployment `dep-d9aa67mk1jcs73freob0` serves exact merge `b14e892`;
+  `/healthz` reports `0.2.7` and the matching commit.
+- Cloudflare production deployment `28587756-ecdf-4c05-95ea-922fbf8a4d27`
+  serves exact merge `b14e892` with demo mode disabled.
+- A local browser permission-denial test confirmed the same copy action moved
+  to its accessible `Copied` state through the synchronous fallback. The
+  deployed Settings page was then rechecked at `1440x1000` and `390x844`: the
+  operations commands were present, the console was clean, and the mobile page
+  had no horizontal overflow (`clientWidth == scrollWidth == 390`).
+
+Known limitations:
+
+- Browser clipboard behavior is permission-dependent. The UI now reports
+  success or failure explicitly and keeps the command visible for manual
+  selection when both browser copy mechanisms are unavailable.
 
 ## Completion Rules
 
