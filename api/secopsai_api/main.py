@@ -7,11 +7,12 @@ from datetime import datetime, timedelta
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
-from sqlalchemy import func, select
+from fastapi.responses import HTMLResponse, JSONResponse
+from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
 from secopsai_api.ai import build_report
+from secopsai_api import __version__
 from secopsai_api.audit import write_audit
 from secopsai_api.baselines import (
     ALLOWED_FINDING_TYPES,
@@ -179,7 +180,7 @@ async def lifespan(_: FastAPI):
     yield
 
 
-app = FastAPI(title="SecOpsAI Edge API", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="SecOpsAI Edge API", version=settings.release_version, lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
@@ -191,7 +192,56 @@ app.add_middleware(
 
 @app.get("/healthz")
 def healthz() -> dict[str, str]:
-    return {"status": "ok"}
+    return {
+        "status": "ok",
+        "version": settings.release_version,
+        "commit": settings.release_commit[:12],
+    }
+
+
+@app.get("/readyz")
+def readyz(db: Session = Depends(get_db)) -> JSONResponse:
+    try:
+        db.execute(text("SELECT 1"))
+        revision = db.execute(text("SELECT version_num FROM alembic_version")).scalar_one_or_none()
+    except Exception:
+        return JSONResponse(status_code=503, content={"status": "not_ready", "reason": "database_unavailable"})
+    if revision != settings.expected_schema_revision:
+        return JSONResponse(
+            status_code=503,
+            content={
+                "status": "not_ready",
+                "reason": "schema_out_of_date",
+                "schema_revision": revision,
+                "expected_revision": settings.expected_schema_revision,
+            },
+        )
+    return JSONResponse(
+        content={
+            "status": "ready",
+            "schema_revision": revision,
+            "version": settings.release_version,
+        }
+    )
+
+
+@app.get("/api/v1/system/status")
+def system_status(
+    auth_context: dict = Depends(require_operator),
+    db: Session = Depends(get_db),
+) -> dict[str, object]:
+    revision = db.execute(text("SELECT version_num FROM alembic_version")).scalar_one_or_none()
+    return {
+        "status": "ready" if revision == settings.expected_schema_revision else "degraded",
+        "environment": settings.environment,
+        "version": settings.release_version,
+        "commit": settings.release_commit,
+        "schema_revision": revision,
+        "expected_schema_revision": settings.expected_schema_revision,
+        "ai_provider": settings.ai_provider,
+        "organization_id": organization_id_from_context(auth_context),
+        "server_time": utcnow().isoformat(),
+    }
 
 
 def normalize_scan_job_target(target_cidr: str) -> str:

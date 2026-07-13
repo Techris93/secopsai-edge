@@ -3,6 +3,8 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 
+from secopsai_api import __version__
+
 
 def _bool_env(name: str, default: bool) -> bool:
     raw = os.getenv(name)
@@ -32,6 +34,14 @@ class Settings:
         "DATABASE_URL",
         "postgresql+psycopg://secopsai:secopsai@127.0.0.1:5432/secopsai_edge",
     )
+    environment: str = os.getenv("SECOPSAI_ENVIRONMENT", "development").strip().lower()
+    release_version: str = os.getenv("SECOPSAI_RELEASE_VERSION", __version__)
+    release_commit: str = (
+        os.getenv("SECOPSAI_RELEASE_COMMIT")
+        or os.getenv("RENDER_GIT_COMMIT")
+        or "local"
+    )
+    expected_schema_revision: str = "0011_schema_alignment"
     admin_token: str = os.getenv("SECOPSAI_ADMIN_TOKEN", "dev-admin-token")
     token_secret: str = os.getenv("SECOPSAI_TOKEN_SECRET", "dev-token-secret")
     dashboard_admin_email: str | None = os.getenv("SECOPSAI_DASHBOARD_ADMIN_EMAIL") or None
@@ -64,11 +74,35 @@ class Settings:
     notification_batch_size: int = int(os.getenv("SECOPSAI_NOTIFICATION_BATCH_SIZE", "50"))
 
     def __post_init__(self) -> None:
-        object.__setattr__(
-            self,
-            "cors_origins",
-            _list_env("SECOPSAI_CORS_ORIGINS", ["http://127.0.0.1:3000", "http://localhost:3000"]),
-        )
+        if self.cors_origins is None:
+            object.__setattr__(
+                self,
+                "cors_origins",
+                _list_env("SECOPSAI_CORS_ORIGINS", ["http://127.0.0.1:3000", "http://localhost:3000"]),
+            )
+        self.validate()
+
+    def validate(self) -> None:
+        if self.environment != "production":
+            return
+        problems: list[str] = []
+        if self.admin_token == "dev-admin-token" or len(self.admin_token) < 32:
+            problems.append("SECOPSAI_ADMIN_TOKEN must be a random 32+ character value")
+        if self.token_secret == "dev-token-secret" or len(self.token_secret) < 32:
+            problems.append("SECOPSAI_TOKEN_SECRET must be a random 32+ character value")
+        if len(self.webhook_signing_secret) < 32:
+            problems.append("SECOPSAI_WEBHOOK_SIGNING_SECRET must contain at least 32 characters")
+        if self.auto_create_tables:
+            problems.append("SECOPSAI_AUTO_CREATE_TABLES must be false; use Alembic migrations")
+        if not self.cors_origins or any(
+            origin.startswith("http://localhost") or origin.startswith("http://127.0.0.1")
+            for origin in self.cors_origins
+        ):
+            problems.append("SECOPSAI_CORS_ORIGINS must contain only deployed origins")
+        if self.dashboard_admin_password and len(self.dashboard_admin_password) < 16:
+            problems.append("SECOPSAI_DASHBOARD_ADMIN_PASSWORD must contain at least 16 characters")
+        if problems:
+            raise RuntimeError("Unsafe production configuration: " + "; ".join(problems))
 
 
 def get_settings() -> Settings:

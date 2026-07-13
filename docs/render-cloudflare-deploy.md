@@ -35,15 +35,28 @@ The repository includes `render.yaml`.
 
    ```bash
    curl https://<your-render-api>.onrender.com/healthz
+   curl https://<your-render-api>.onrender.com/readyz
    ```
 
 Expected response:
 
 ```json
-{"status":"ok"}
+{"status":"ok","version":"0.2.0","commit":"<commit>"}
 ```
 
-The Render start script runs Alembic migrations before starting Uvicorn.
+`/readyz` must return `status: ready` and schema revision
+`0011_schema_alignment`. Settings > System Health exposes the same safe
+release/schema context to an authenticated operator.
+
+The Render start script runs Alembic migrations before starting Uvicorn. Keep
+`SECOPSAI_ENVIRONMENT=pilot` for the current controlled pilot. Before a public
+production deployment, set it to `production`; startup then rejects default or
+short administrator/session/webhook secrets, automatic table creation, and
+localhost CORS origins.
+
+The Blueprint still uses free plans to avoid silently creating paid resources.
+Free instances are suitable only for development/demo. Move the API and
+database to paid plans with managed backups before storing paid-pilot data.
 
 ### Dashboard Login
 
@@ -97,10 +110,12 @@ Configure the hosted API URL:
 ./scripts/edge cloud configure https://<your-render-api>.onrender.com
 ```
 
-Register the local sensor against the hosted API:
+Create a one-time enrollment from Sites in the selected workspace, then run the
+copied installer. The equivalent manual flow is:
 
 ```bash
-./scripts/edge cloud register
+./scripts/edge onboard --cloud --api-url https://<your-render-api>.onrender.com \
+  --enrollment-token <one-time-token> --install-service --start-service
 ```
 
 Run a scan and submit it to Render:
@@ -164,7 +179,8 @@ time, and reject stale timestamps. Do not parse and reserialize the body before 
 
 ## Verification Checklist
 
-- Render `/healthz` returns `{"status":"ok"}`.
+- Render `/healthz` returns liveness/build identity and `/readyz` reports the
+  expected schema revision.
 - Cloudflare dashboard loads from the Pages URL.
 - Settings > API Connection accepts the dashboard admin user login.
 - Assets/Findings/Reports switch from `API not connected` to `Live API data` after connection.

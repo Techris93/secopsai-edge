@@ -19,6 +19,7 @@ import type {
   SensorEnrollment,
   SensorEnrollmentSecret,
   Site,
+  SystemStatus,
   User,
   WifiNetwork
 } from "./types";
@@ -144,6 +145,10 @@ export async function loginDashboardUser(email: string, password: string): Promi
 
 export async function fetchAuthIdentity(): Promise<AuthIdentity> {
   return requestJson<AuthIdentity>("/api/v1/auth/me");
+}
+
+export async function fetchSystemStatus(): Promise<SystemStatus> {
+  return requestJson<SystemStatus>("/api/v1/system/status");
 }
 
 export async function switchWorkspace(organizationId: string): Promise<void> {

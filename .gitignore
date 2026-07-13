@@ -28,4 +28,5 @@ coverage/
 htmlcov/
 *.log
 agent/raw_scans/
+backups/
 secopsai-edge-support-*.txt

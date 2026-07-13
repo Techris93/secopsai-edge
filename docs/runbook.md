@@ -57,6 +57,55 @@ Use the dashboard Reports page or run:
 
 This runs backend and agent tests, frontend tests, a production dashboard build, and a frontend dependency audit.
 
+Before a tagged release or deployment, run the broader gate:
+
+```bash
+./scripts/edge release-check
+```
+
+It also checks the single Alembic head, Python/shell syntax, tracked credential
+files, diff hygiene, and the full product test command. GitHub Actions repeats
+the gate on PostgreSQL 16, checks model/schema drift, audits locked Python and
+Node dependencies, and performs a real backup/restore drill.
+
+## Health And Build Identity
+
+- `/healthz` is process liveness and returns release/commit identity without
+  touching PostgreSQL.
+- `/readyz` performs a database round trip and requires the exact Alembic head.
+- Settings > System Health is the authenticated operator view of environment,
+  release, commit, schema, and AI provider.
+
+Do not route pilot traffic to an API whose `/readyz` response is not `200`.
+
+## Backup And Restore
+
+Create and immediately verify an owner-only PostgreSQL custom archive:
+
+```bash
+./scripts/edge database backup
+./scripts/edge database verify --input backups/secopsai-edge-<timestamp>.dump
+```
+
+Restore is destructive and requires both an explicit target URL and the exact
+database name as a second confirmation:
+
+```bash
+./scripts/edge database restore \
+  --input backups/secopsai-edge-<timestamp>.dump \
+  --target-url postgresql://user:password@127.0.0.1:5432/secopsai_edge_restore \
+  --confirm-database secopsai_edge_restore
+```
+
+Remote restores are refused unless `--allow-remote` is deliberately added.
+For hosted production, prefer the provider's point-in-time restore into a new
+database, validate `/readyz` and tenant counts, then switch the service. Never
+practice a restore against the active production database.
+
+Pilot target: daily backup, RPO 24 hours, RTO 4 hours. Paid production target:
+managed point-in-time recovery, RPO 15 minutes or better, RTO 2 hours, and a
+quarterly documented restore drill.
+
 ## Manage Approved Baselines
 
 1. Open Assets and select an asset.
@@ -85,14 +134,28 @@ The Core Integration panel defaults to `$HOME/secopsai-edge` and `$HOME/secopsai
 After deploying the API to Render and the dashboard to Cloudflare Pages:
 
 ```bash
-./scripts/edge cloud configure https://<your-render-api>.onrender.com
-./scripts/edge cloud register
+./scripts/edge onboard --cloud --api-url https://<your-render-api>.onrender.com \
+  --enrollment-token <one-time-token> --install-service --start-service
 ./scripts/edge scan 192.168.1.0/24 --cloud
 ./scripts/edge report --cloud
 ```
 
 Use the dashboard Settings page to connect to the hosted API with the dashboard admin email and
 password. The admin token remains available only for automation, cron, Core sync, and recovery.
+
+## Release And Rollback
+
+1. Run `./scripts/edge release-check` and require green CI.
+2. Create a verified database backup or provider recovery point.
+3. Deploy the API; `scripts/render-start-api` applies migrations before Uvicorn.
+4. Require `/readyz`, Settings > System Health, login, one read workflow, and
+   one sensor heartbeat before declaring success.
+5. Deploy the static dashboard and run the same smoke workflow.
+
+Roll back application code only when it is compatible with the migrated schema.
+If a schema rollback is unavoidable, stop writers, restore the pre-deploy backup
+into a new database, point the previous API release at it, validate readiness,
+then resume workers. Do not run blind Alembic downgrades on live customer data.
 
 ## Remote Scan Jobs
 

@@ -6,6 +6,8 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from secopsai_api import __version__
+
 from secopsai_api.models import (
     Asset,
     AssetObservation,
@@ -181,7 +183,7 @@ def build_core_export(db: Session, organization_id: str | None = None) -> dict[s
         "source_instance": {
             "product": "secopsai_edge",
             "api": "secopsai-edge-api",
-            "version": "0.1.0",
+            "version": __version__,
             "organization_id": organization_id,
         },
         "cursor": _cursor(scans, findings),

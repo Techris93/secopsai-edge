@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+PYTHON_BIN="$ROOT_DIR/.venv/bin/python"
+ALEMBIC_BIN="$ROOT_DIR/.venv/bin/alembic"
+
+cd "$ROOT_DIR"
+git diff --check
+bash -n scripts/edge scripts/install-secopsai-edge.sh scripts/database-backup scripts/render-start-api
+python3 -m py_compile scripts/render-run-due-schedules scripts/core-sync-runner.py
+
+[ -x "$PYTHON_BIN" ] || { echo "Run ./scripts/edge setup first" >&2; exit 1; }
+[ -x "$ALEMBIC_BIN" ] || { echo "Alembic is not installed in .venv" >&2; exit 1; }
+
+heads="$(PYTHONPATH=api "$ALEMBIC_BIN" -c api/alembic.ini heads | awk '{print $1}')"
+[ "$heads" = "0011_schema_alignment" ] || {
+  echo "Unexpected Alembic head: $heads" >&2
+  exit 1
+}
+
+for forbidden in .env .sensor.env .cloud.env .cloud-sensor.env; do
+  if git ls-files --error-unmatch "$forbidden" >/dev/null 2>&1; then
+    echo "Tracked credential file detected: $forbidden" >&2
+    exit 1
+  fi
+done
+
+PYTHONPATH=api:agent "$PYTHON_BIN" -m compileall -q api/secopsai_api agent/secopsai_agent
+./scripts/edge test
+
+echo "Release gate passed at $(git rev-parse --short HEAD)"

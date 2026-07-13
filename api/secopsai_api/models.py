@@ -107,6 +107,10 @@ class ScanRun(Base):
 
 class ScanJob(Base):
     __tablename__ = "scan_jobs"
+    __table_args__ = (
+        Index("ix_scan_jobs_sensor_status", "sensor_id", "status"),
+        Index("ix_scan_jobs_schedule", "schedule_id"),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     site_id: Mapped[str] = mapped_column(ForeignKey("sites.id"), nullable=False)
@@ -127,6 +131,7 @@ class ScanJob(Base):
 
 class ScanSchedule(Base):
     __tablename__ = "scan_schedules"
+    __table_args__ = (Index("ix_scan_schedules_enabled_next_run", "enabled", "next_run_at"),)
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     site_id: Mapped[str] = mapped_column(ForeignKey("sites.id"), nullable=False)
@@ -259,6 +264,7 @@ class Finding(Base):
 
 class FindingNote(Base):
     __tablename__ = "finding_notes"
+    __table_args__ = (Index("ix_finding_notes_finding", "finding_id"),)
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     finding_id: Mapped[str] = mapped_column(ForeignKey("findings.id"), nullable=False)

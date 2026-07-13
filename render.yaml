@@ -3,9 +3,9 @@ services:
     name: secopsai-edge-api
     runtime: python
     plan: free
-    buildCommand: pip install -r api/requirements.txt -r agent/requirements.txt
+    buildCommand: pip install -r requirements.lock
     startCommand: ./scripts/render-start-api
-    healthCheckPath: /healthz
+    healthCheckPath: /readyz
     envVars:
       - key: DATABASE_URL
         fromDatabase:
@@ -13,6 +13,8 @@ services:
           property: connectionString
       - key: SECOPSAI_AUTO_CREATE_TABLES
         value: "false"
+      - key: SECOPSAI_ENVIRONMENT
+        value: "pilot"
       - key: SECOPSAI_CORS_ORIGINS
         sync: false
       - key: SECOPSAI_ADMIN_TOKEN
@@ -45,7 +47,7 @@ services:
     name: secopsai-edge-scheduler
     runtime: python
     schedule: "*/5 * * * *"
-    buildCommand: pip install -r api/requirements.txt -r agent/requirements.txt
+    buildCommand: pip install -r requirements.lock
     startCommand: ./scripts/render-run-due-schedules
     envVars:
       - key: SECOPSAI_EDGE_API_HOSTPORT

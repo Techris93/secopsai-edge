@@ -8,6 +8,7 @@ import { CoreIntegrationPanel } from "@/components/CoreIntegrationPanel";
 import { CopyCommand } from "@/components/CopyCommand";
 import { NotificationPanel } from "@/components/NotificationPanel";
 import { PageHeader } from "@/components/PageHeader";
+import { SystemHealthPanel } from "@/components/SystemHealthPanel";
 
 const envRows = [
   ["API URL", process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000"],
@@ -28,6 +29,7 @@ export default function SettingsPage() {
 
       <div className="grid min-w-0 grid-cols-1 gap-6 xl:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
         <ApiConnectionPanel />
+        <SystemHealthPanel />
 
         <section className="min-w-0 rounded-lg border border-line bg-white p-4 shadow-panel">
           <div className="flex items-center gap-2">

@@ -31,6 +31,13 @@ FastAPI owns ingestion, inventory merge logic, finding generation, reporting, an
 
 The dashboard exposes the append-only audit stream for pilot operations. The local helper can create an owner-readable diagnostics bundle containing release, dependency, API, worker, and redacted log state for support recovery.
 
+Process liveness (`/healthz`) is independent of PostgreSQL. Readiness
+(`/readyz`) requires a successful database query and exact Alembic head, so a
+deployment with stale schema cannot be treated as usable. The authenticated
+system-status surface reports safe build, environment, schema, and AI-provider
+metadata. Release builds use a locked Python dependency set and CI validates
+schema drift against PostgreSQL before deployment.
+
 Core tables:
 
 - `organizations`

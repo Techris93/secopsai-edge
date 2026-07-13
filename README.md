@@ -97,6 +97,8 @@ Replace `192.168.1.0/24` with your own authorized local network.
 ./scripts/edge status
 ./scripts/edge support-bundle --cloud
 ./scripts/edge test
+./scripts/edge release-check
+./scripts/edge database backup
 ./scripts/edge worker status
 ./scripts/edge worker logs
 ./scripts/edge schedules run-due --cloud

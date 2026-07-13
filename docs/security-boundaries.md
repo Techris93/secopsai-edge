@@ -49,3 +49,13 @@ is backfilled into `Default Workspace` during migration `0009_organizations`.
 ## Baseline Boundary
 
 Approved baselines are scoped to one site and a stable entity identifier. The API rejects empty or broad matchers, restricts each baseline kind to compatible finding types, records changes in the audit log, and reopens baseline-acknowledged findings when a rule is disabled. Trusting a BSSID does not approve weak or open encryption unless an operator deliberately creates that separate policy through the API.
+
+## Production Configuration Boundary
+
+`SECOPSAI_ENVIRONMENT=production` fails startup when administrator/session or
+webhook secrets are short/default, automatic schema creation is enabled, or
+localhost CORS origins remain. Database schema is managed only by Alembic.
+Backups are PostgreSQL custom archives created with owner-only permissions;
+restore requires an exact database-name confirmation and refuses remote targets
+unless the operator explicitly opts in. Credential files and backup archives
+are excluded from Git.

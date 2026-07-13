@@ -991,6 +991,60 @@ Known risks:
 - Enrollment is deliberately an installation credential, not a general API
   token; it cannot be refreshed or used for dashboard access.
 
+## Checkpoint 021 - Operational Release Gates
+
+Status: complete
+
+Branch:
+
+- Edge repo: `codex/pilot-hardening-foundation`
+
+Completed changes:
+
+- Split liveness and readiness: `/healthz` returns process/build identity;
+  `/readyz` verifies PostgreSQL and exact Alembic head. Added an authenticated
+  safe system-status endpoint and clickable Settings health panel with Refresh.
+- Added deployment environment, release version/commit, schema head, database
+  pool timeout/recycle, and fail-closed production configuration validation.
+- Reconciled pre-existing ORM/migration index drift and added revision
+  `0011_schema_alignment`; `alembic check` now reports no upgrade operations.
+- Added locked Python dependencies, Python/Node vulnerability audit gates, a
+  PostgreSQL 16 GitHub Actions service, migration upgrade/downgrade, full test
+  suites, static build, tracked-output checks, and backup/restore CI drill.
+- Added `./scripts/edge release-check` for a repeatable local release gate and
+  switched Render/local setup to the locked dependency set.
+- Added guarded PostgreSQL custom-archive create/verify/restore commands,
+  owner-only output, required-table verification, exact target-name
+  confirmation, remote-target opt-in, RPO/RTO targets, and rollback runbook.
+- Changed Render health routing to `/readyz` while retaining `/healthz` for
+  process diagnostics. The Blueprint remains explicitly `pilot` and free-tier
+  so paid infrastructure is never created silently.
+- Aligned API, agent, dashboard, and Edge bundle versions at `0.2.0`.
+
+Validation:
+
+- Python dependency audit reported no known vulnerabilities; npm audit remains
+  clean at the configured moderate threshold.
+- API tests cover liveness identity, exact-schema readiness, authenticated safe
+  system status, and production configuration rejection/acceptance.
+- The health panel interaction test covers load and Refresh; full TypeScript
+  and static Next.js build pass.
+- Against an isolated PostgreSQL 14 cluster, the complete migration chain
+  reached `0011_schema_alignment`, `alembic check` found no drift, downgrade and
+  re-upgrade passed, and a custom backup restored into a second database with
+  the expected schema revision. All temporary state was removed.
+
+Known risks:
+
+- The checked-in Render Blueprint remains free-tier demo infrastructure. A paid
+  pilot must move API/PostgreSQL to paid plans with provider-managed backups and
+  an external uptime check.
+- CI is defined locally but will not protect the default branch until this
+  branch is pushed and repository branch protection requires the workflow.
+- The lock file is exact but not hash-locked; adding a controlled dependency
+  update bot and hash-generating lock workflow is a later supply-chain hardening
+  improvement.
+
 ## Completion Rules
 
 A checkpoint is complete only when:

@@ -67,6 +67,11 @@ Usage:
   ./scripts/edge test                  Run backend, frontend, build, and audit checks
   ./scripts/edge support-bundle [--cloud]
                                       Create a redacted diagnostics bundle for support
+  ./scripts/edge database backup [--output FILE]
+  ./scripts/edge database verify --input FILE
+  ./scripts/edge database restore --input FILE --target-url URL --confirm-database NAME
+                                      Create, verify, or restore PostgreSQL backups
+  ./scripts/edge release-check        Run the complete local release gate
   ./scripts/edge status [--cloud]      Check local or hosted API status
   ./scripts/edge stop-db               Stop Postgres
 
@@ -164,7 +169,7 @@ ensure_python_tools() {
   ensure_python_env
   if [ ! -x "$UVICORN_BIN" ] || [ ! -x "$ALEMBIC_BIN" ]; then
     info "Installing Python dependencies"
-    "$PIP_BIN" install -r "$ROOT_DIR/api/requirements.txt" -r "$ROOT_DIR/agent/requirements.txt"
+    "$PIP_BIN" install -r "$ROOT_DIR/requirements.lock"
   fi
 }
 
@@ -283,7 +288,7 @@ setup() {
   ensure_env_file
   ensure_python_env
   info "Installing Python dependencies"
-  "$PIP_BIN" install -r "$ROOT_DIR/api/requirements.txt" -r "$ROOT_DIR/agent/requirements.txt"
+  "$PIP_BIN" install -r "$ROOT_DIR/requirements.lock"
   info "Installing web dependencies"
   (cd "$ROOT_DIR/web" && npm install)
   info "Setup complete"
@@ -827,6 +832,7 @@ run_tests() {
   ensure_python_tools
   info "Checking Render scheduler script"
   python3 -m py_compile "$ROOT_DIR/scripts/render-run-due-schedules"
+  bash -n "$ROOT_DIR/scripts/database-backup"
 
   info "Running backend and agent tests"
   (cd "$ROOT_DIR" && PYTHONPATH="$ROOT_DIR/api:$ROOT_DIR/agent" "$PYTHON_BIN" -m pytest tests)
@@ -839,6 +845,19 @@ run_tests() {
 
   info "Checking frontend audit"
   (cd "$ROOT_DIR/web" && npm audit --audit-level=moderate)
+}
+
+database_command() {
+  subcommand="${1:-help}"
+  shift || true
+  load_env
+  case "$subcommand" in
+    backup) "$ROOT_DIR/scripts/database-backup" create "$@" ;;
+    verify) "$ROOT_DIR/scripts/database-backup" verify "$@" ;;
+    restore) "$ROOT_DIR/scripts/database-backup" restore "$@" ;;
+    help|-h|--help) "$ROOT_DIR/scripts/database-backup" help ;;
+    *) fail "Unknown database command: $subcommand" ;;
+  esac
 }
 
 core_export() {
@@ -1300,6 +1319,11 @@ support_bundle() {
       if [ -n "${SECOPSAI_CLOUD_API_URL:-}" ]; then
         if curl -fsS "${SECOPSAI_CLOUD_API_URL%/}/healthz" >/dev/null 2>&1; then
           printf "API:       running at %s\n" "${SECOPSAI_CLOUD_API_URL%/}"
+          if curl -fsS "${SECOPSAI_CLOUD_API_URL%/}/readyz" >/dev/null 2>&1; then
+            printf "Readiness: ready\n"
+          else
+            printf "Readiness: degraded (database or schema)\n"
+          fi
         else
           printf "API:       not responding at %s\n" "${SECOPSAI_CLOUD_API_URL%/}"
         fi
@@ -1341,6 +1365,11 @@ status() {
 
   if curl -fsS "$target_api_url/healthz" >/dev/null 2>&1; then
     printf "API:       running at %s\n" "$target_api_url"
+    if curl -fsS "$target_api_url/readyz" >/dev/null 2>&1; then
+      printf "Readiness: ready\n"
+    else
+      printf "Readiness: degraded (database or schema)\n"
+    fi
   else
     printf "API:       not responding at %s\n" "$target_api_url"
   fi
@@ -1422,6 +1451,8 @@ main() {
     core) core "$@" ;;
     test) run_tests ;;
     support-bundle) support_bundle "$@" ;;
+    database) database_command "$@" ;;
+    release-check) "$ROOT_DIR/scripts/release-gate" ;;
     status) status "$@" ;;
     *) usage; fail "Unknown command: $command" ;;
   esac

@@ -161,6 +161,18 @@ export type AuthIdentity = {
   user?: User | null;
 };
 
+export type SystemStatus = {
+  status: "ready" | "degraded" | string;
+  environment: string;
+  version: string;
+  commit: string;
+  schema_revision?: string | null;
+  expected_schema_revision: string;
+  ai_provider: string;
+  organization_id: string;
+  server_time: string;
+};
+
 export type User = {
   id: string;
   email: string;
