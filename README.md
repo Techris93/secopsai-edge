@@ -124,6 +124,7 @@ Replace `192.168.1.0/24` with your own authorized local network.
 ./scripts/edge cloud drift-check
 ./scripts/edge cloud backup
 ./scripts/edge cloud uptime-check --output hosted-health.jsonl
+./scripts/edge pilot check --cloud --output pilot-acceptance.json
 ./scripts/edge worker status
 ./scripts/edge worker logs
 ./scripts/edge schedules run-due --cloud
@@ -172,6 +173,7 @@ Pilot docs:
 
 - [docs/install-sensor.md](docs/install-sensor.md)
 - [docs/pilot-guide.md](docs/pilot-guide.md)
+- [docs/pilot-acceptance.md](docs/pilot-acceptance.md)
 - [docs/demo-script.md](docs/demo-script.md)
 - [docs/security-boundaries.md](docs/security-boundaries.md)
 - [docs/msp-pilot.md](docs/msp-pilot.md)

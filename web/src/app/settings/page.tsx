@@ -62,6 +62,7 @@ export default function SettingsPage() {
             <CopyCommand command="./scripts/edge cloud drift-check" icon={Radar} />
             <CopyCommand command="./scripts/edge cloud backup" icon={Database} />
             <CopyCommand command="./scripts/edge cloud uptime-check --output hosted-health.jsonl" icon={Radar} />
+            <CopyCommand command="./scripts/edge pilot check --cloud --output pilot-acceptance.json" icon={ShieldCheck} />
             <CopyCommand command="gh variable set SECOPSAI_ENABLE_HOSTED_MONITOR --body true" icon={Terminal} />
             <CopyCommand command="./scripts/edge wifi status" icon={Radar} />
             <CopyCommand command="./scripts/edge preview 192.168.1.0/24" icon={ShieldCheck} />

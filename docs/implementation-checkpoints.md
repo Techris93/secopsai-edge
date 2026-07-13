@@ -2215,7 +2215,7 @@ A checkpoint is complete only when:
 
 ## Checkpoint 039 - Research And Wireless Operational Boundary
 
-Status: implementation complete; merge, release, and physical pilot validation pending
+Status: complete; external pilot activation remains gated
 
 Scope:
 
@@ -2272,12 +2272,71 @@ Known boundaries:
   tested by fixture-only parser coverage.
 - The macOS `airport` path is a legacy metadata inventory boundary. A modern
   macOS passive/monitor-mode sensor is not claimed by this checkpoint.
-- External release/deployment evidence, paid Render storage, independent
-  uptime monitoring, and pilot operator exercises remain checkpoint 040/041
-  work.
+- Paid Render storage, independent uptime monitoring, and pilot operator
+  exercises remain checkpoint 040/041 work.
 
 Next checkpoint:
 
 - Execute the external pilot acceptance matrix, including a real Linux sensor
   validation where hardware is available, hosted recovery/backup proof, and
   independent availability evidence.
+
+## Checkpoint 040 - External Pilot Acceptance Preparation
+
+Status: implementation complete; external operator acceptance pending
+
+Scope:
+
+- Turn the acceptance matrix into a repeatable, non-destructive command and
+  evidence record.
+- Make the remaining external boundaries explicit instead of allowing a green
+  local test suite to imply paid hosting, hardware, notification, or recovery
+  validation.
+
+Completed changes:
+
+- Added `./scripts/edge pilot check [--cloud] [--output FILE]` and the JSON
+  schema `secopsai.edge.pilot-acceptance.v1`.
+- Required checks cover Nmap/Python, hosted liveness/readiness, dashboard
+  reachability, and the local worker service. Wi-Fi capability is an advisory
+  unless `--require-wifi` is selected.
+- The acceptance record stores only status, latency, release/schema identity,
+  and error types. It excludes HTTP bodies, tokens, notification payloads,
+  package contents, and scan output.
+- Added the Settings copy-command button, pilot acceptance documentation, and
+  the operator matrix for fresh install, schedule, notifications, recovery,
+  support, seven-day soak, and pilot exit.
+
+Validation:
+
+- `./scripts/edge test`: `121` backend/agent tests, `32` frontend tests,
+  production static build, `28` desktop/mobile browser workflows, accessibility
+  checks, and zero npm audit vulnerabilities passed.
+- Focused pilot acceptance tests passed (`4`), including hosted readiness
+  failure handling and the no-response-body boundary.
+- Release gate passed on Edge merge `9084569`; tag `v0.3.3` release workflow
+  `29273025383` completed successfully.
+- Live hosted API check reported Edge `0.3.3`, commit `9084569708bb`, readiness
+  schema `0016_wifi_provenance`, and HTTP 200 for `/healthz` and `/readyz`.
+- The current host has Nmap and Python available. No matching TL-WN722N USB
+  device was visible in the read-only USB inventory check.
+
+External acceptance still required:
+
+- Switch Render API/PostgreSQL to paid plans and perform a provider PITR
+  restore into a separate database.
+- Configure and exercise one approved notification provider and destination.
+- Enroll a second real workspace owner and complete MFA/recovery/reset proof.
+- Install the release on a fresh authorized host, keep the worker running for a
+  seven-day soak, and perform the schedule/offline-sensor/change-detection
+  exercises.
+- Validate TL-WN722N V4 on the actual supported Linux/Raspberry Pi host if
+  wireless inventory is part of the pilot scope.
+- Resolve the current shell DNS timeout for the `pages.dev` dashboard or record
+  an independent monitor that can reach the canonical Pages URL. The API is
+  healthy; this is not being treated as dashboard availability proof.
+
+Next checkpoint:
+
+- Complete the external operator matrix and produce a signed pilot go/no-go
+  record, then perform checkpoint 041 release closeout.
