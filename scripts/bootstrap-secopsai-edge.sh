@@ -6,6 +6,7 @@ REPOSITORY="${SECOPSAI_EDGE_GITHUB_REPOSITORY:-Techris93/secopsai-edge}"
 VERSION="latest"
 INSTALL_DIR="${SECOPSAI_EDGE_INSTALL_DIR:-$HOME/.local/share/secopsai-edge}"
 UPGRADE="no"
+DOWNLOAD_METHOD="${SECOPSAI_EDGE_DOWNLOAD_METHOD:-auto}"
 INSTALL_ARGS=()
 
 fail() { printf "error: %s\n" "$*" >&2; exit 1; }
@@ -15,7 +16,7 @@ usage() {
 Bootstrap SecOpsAI Edge from a verified GitHub release.
 
 Usage:
-  bash bootstrap-secopsai-edge.sh [--version 0.2.1] [--install-dir PATH]
+  bash bootstrap-secopsai-edge.sh [--version 0.2.2] [--install-dir PATH]
     --cloud --api-url URL --enrollment-token TOKEN [installer options]
 
 Options consumed by bootstrap:
@@ -38,10 +39,20 @@ while [ "$#" -gt 0 ]; do
   shift || true
 done
 
-command -v curl >/dev/null 2>&1 || fail "curl is required"
 command -v shasum >/dev/null 2>&1 || fail "shasum is required"
 command -v python3 >/dev/null 2>&1 || fail "python3 is required"
 case "$VERSION" in v*) VERSION="${VERSION#v}" ;; esac
+case "$DOWNLOAD_METHOD" in
+  auto)
+    if command -v gh >/dev/null 2>&1 && gh auth status --hostname github.com >/dev/null 2>&1; then
+      DOWNLOAD_METHOD="gh"
+    else
+      DOWNLOAD_METHOD="curl"
+    fi
+    ;;
+  gh|curl) ;;
+  *) fail "SECOPSAI_EDGE_DOWNLOAD_METHOD must be auto, gh, or curl" ;;
+esac
 
 if [ "$VERSION" = "latest" ]; then
   base_url="https://github.com/$REPOSITORY/releases/latest/download"
@@ -71,8 +82,24 @@ cleanup() {
 }
 trap cleanup EXIT
 
-curl -fL --retry 3 --connect-timeout 15 --max-time 600 --proto '=https' --proto-redir '=https' --tlsv1.2 "$base_url/$archive_name" -o "$work_dir/$archive_name"
-curl -fL --retry 3 --connect-timeout 15 --max-time 60 --proto '=https' --proto-redir '=https' --tlsv1.2 "$base_url/$archive_name.sha256" -o "$work_dir/$archive_name.sha256"
+if [ "$DOWNLOAD_METHOD" = "gh" ]; then
+  command -v gh >/dev/null 2>&1 || fail "GitHub CLI is required for an authenticated release download"
+  gh auth status --hostname github.com >/dev/null 2>&1 || fail "Run 'gh auth login' with access to $REPOSITORY"
+  gh_args=(release download)
+  if [ "$VERSION" != "latest" ]; then
+    gh_args+=("v$VERSION")
+  fi
+  gh_args+=(--repo "$REPOSITORY" --pattern "$archive_name" --pattern "$archive_name.sha256" --dir "$work_dir")
+  gh "${gh_args[@]}"
+else
+  command -v curl >/dev/null 2>&1 || fail "curl is required for a public release download"
+  if ! curl -fL --retry 3 --connect-timeout 15 --max-time 600 --proto '=https' --proto-redir '=https' --tlsv1.2 "$base_url/$archive_name" -o "$work_dir/$archive_name"; then
+    fail "release download failed; for a private repository install GitHub CLI, run 'gh auth login', and retry"
+  fi
+  if ! curl -fL --retry 3 --connect-timeout 15 --max-time 60 --proto '=https' --proto-redir '=https' --tlsv1.2 "$base_url/$archive_name.sha256" -o "$work_dir/$archive_name.sha256"; then
+    fail "release checksum download failed; for a private repository authenticate GitHub CLI and retry"
+  fi
+fi
 expected_checksum="$(CHECKSUM_FILE="$work_dir/$archive_name.sha256" ARCHIVE_NAME="$archive_name" python3 - <<'PY'
 import os
 import re

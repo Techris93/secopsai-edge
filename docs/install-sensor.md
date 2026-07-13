@@ -12,7 +12,8 @@ platform administrator token.
 The copied command has this shape and does not require a repository clone:
 
 ```bash
-curl -fsSLO https://github.com/Techris93/secopsai-edge/releases/latest/download/bootstrap-secopsai-edge.sh
+gh auth login
+gh release download --repo Techris93/secopsai-edge --pattern bootstrap-secopsai-edge.sh --clobber
 bash bootstrap-secopsai-edge.sh \
   --cloud \
   --api-url https://secopsai-edge-api.onrender.com \
@@ -20,9 +21,15 @@ bash bootstrap-secopsai-edge.sh \
   --sensor-name "MacBook Sensor"
 ```
 
+The pilot repository is private. The installer therefore needs GitHub
+collaborator access and an authenticated GitHub CLI. `gh auth login` stores the
+GitHub credential outside the copied install command; the command contains only
+the short-lived, single-use sensor enrollment token. When the repository is
+public, the bootstrap can also be downloaded directly over HTTPS.
+
 The installer:
 
-- downloads the current GitHub release over HTTPS
+- downloads the current GitHub release through authenticated GitHub CLI or HTTPS
 - verifies the published SHA-256 checksum before extraction
 - checks Python dependencies
 - checks that Nmap is available
@@ -66,7 +73,7 @@ copied installer:
 
 On Linux, the worker installs as a user `systemd` service.
 
-Use `--version 0.2.1` to pin a release. Use `--upgrade` for an existing
+Use `--version 0.2.2` to pin a release. Use `--upgrade` for an existing
 installation; the bootstrap preserves credential files, keeps the previous
 installation as `.previous`, and restores it automatically if the new
 installer fails.

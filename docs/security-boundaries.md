@@ -70,7 +70,9 @@ are excluded from Git.
 Sensor releases are built from committed Git content, version-matched across
 API/agent/dashboard, and published with SHA-256 checksums. Public repositories
 also receive GitHub build-provenance attestations; GitHub does not offer that
-feature to user-owned private repositories. The bootstrap requires HTTPS, verifies the checksum
+feature to user-owned private repositories. Private pilot installers use an
+authenticated GitHub CLI and require repository collaborator access; public
+releases may use HTTPS directly. The bootstrap verifies the checksum
 before extraction, refuses to overwrite an installation without `--upgrade`,
 preserves credentials, and rolls back the directory swap when installation
 fails. Release archives exclude ignored credentials, virtual environments,

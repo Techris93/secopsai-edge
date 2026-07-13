@@ -60,7 +60,11 @@ describe("SitesPage sensor enrollment", () => {
 
     await waitFor(() => expect(api.createSensorEnrollment).toHaveBeenCalledWith("site-alpha", "Alpha Office sensor"));
     expect(screen.getByText("One-time installer")).toBeInTheDocument();
-    expect(screen.getByText(/bootstrap-secopsai-edge\.sh/)).toHaveTextContent("--enrollment-token");
+    const command = screen.getByText(/bootstrap-secopsai-edge\.sh/);
+    expect(command).toHaveTextContent("gh release download");
+    expect(command).toHaveTextContent("curl -fsSLO");
+    expect(command).toHaveTextContent("--enrollment-token");
+    expect(screen.getByText(/Private pilots need GitHub CLI access/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Copy install command" })).toBeInTheDocument();
   });
 });

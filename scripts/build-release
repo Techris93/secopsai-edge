@@ -10,9 +10,26 @@ case "$VERSION" in
   v*) VERSION="${VERSION#v}" ;;
 esac
 
-api_version="$(PYTHONPATH="$ROOT_DIR/api" python3 -c 'from secopsai_api import __version__; print(__version__)')"
-agent_version="$(PYTHONPATH="$ROOT_DIR/agent" python3 -c 'from secopsai_agent import __version__; print(__version__)')"
-web_version="$(node -p "require('$ROOT_DIR/web/package.json').version")"
+read_committed_python_version() {
+  git -C "$ROOT_DIR" show "HEAD:$1" | python3 -c '
+import ast
+import sys
+
+module = ast.parse(sys.stdin.read())
+for statement in module.body:
+    if isinstance(statement, ast.Assign):
+        for target in statement.targets:
+            if isinstance(target, ast.Name) and target.id == "__version__":
+                if isinstance(statement.value, ast.Constant) and isinstance(statement.value.value, str):
+                    print(statement.value.value)
+                    raise SystemExit(0)
+raise SystemExit("committed component has no literal __version__")
+'
+}
+
+api_version="$(read_committed_python_version api/secopsai_api/__init__.py)"
+agent_version="$(read_committed_python_version agent/secopsai_agent/__init__.py)"
+web_version="$(git -C "$ROOT_DIR" show HEAD:web/package.json | python3 -c 'import json, sys; print(json.load(sys.stdin)["version"])')"
 for component in "$api_version" "$agent_version" "$web_version"; do
   [ "$component" = "$VERSION" ] || {
     echo "Release version $VERSION does not match component version $component" >&2

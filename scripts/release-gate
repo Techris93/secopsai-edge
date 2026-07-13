@@ -7,6 +7,10 @@ ALEMBIC_BIN="$ROOT_DIR/.venv/bin/alembic"
 
 cd "$ROOT_DIR"
 git diff --check
+if ! git diff --quiet || ! git diff --cached --quiet; then
+  echo "Release gate requires a clean committed worktree" >&2
+  exit 1
+fi
 bash -n scripts/edge scripts/install-secopsai-edge.sh scripts/bootstrap-secopsai-edge.sh scripts/build-release scripts/database-backup scripts/render-start-api
 python3 -m py_compile scripts/render-run-due-schedules scripts/core-sync-runner.py
 
