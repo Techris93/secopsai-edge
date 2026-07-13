@@ -1938,14 +1938,17 @@ Activation boundary:
 
 ## Checkpoint 036 - Operator Invitations And MFA
 
-Status: validation complete; merge, release, and deployment pending
+Status: complete
 
-Branch:
+Branch, merge, and release:
 
 - Edge: `codex/operator-invitations-mfa`
-- Planned release: `v0.3.0`
+- Pull request: `#21`
+- Feature commit: `e84db3d9b368ffea7abbaaa277b30036264cb6be`
+- Merge commit: `90ab7223ed26fc1e03cfe4156b25b934639f45d9`
+- Release: `v0.3.0`
 
-Implemented so far:
+Completed changes:
 
 - Replaced normal administrator-created temporary passwords with durable,
   one-time operator invitations. New operators choose their own password;
@@ -1980,7 +1983,7 @@ Implemented so far:
 - Expanded component and desktop/mobile browser workflows for invitation
   acceptance and MFA challenge login.
 
-Validation recorded so far:
+Validation:
 
 - A real PostgreSQL migration upgraded `0013_account_recovery` to
   `0014_operator_access`, passed `alembic check`, downgraded one revision, and
@@ -2002,17 +2005,38 @@ Validation recorded so far:
   account/MFA state, separated encryption/session key lifecycles, blocked MFA
   replacement without the current factor, added owner-assisted audited
   recovery, and made dashboard bootstrap create-once.
+- Pull-request CI runs `29260678514` and `29260697479` passed before merge.
+  Main CI run `29260973779` then repeated migrations, `107` backend/agent
+  tests, dependency audits, release inspection, PostgreSQL backup/restore, the
+  dashboard build, `30` component tests, all `12` desktop/mobile browser
+  workflows, and generated-state verification on the exact merge commit.
+- Release workflow `29261200368` rebuilt and verified the tag before publishing
+  the versioned/stable archives, bootstrap, and SHA-256 manifests at
+  `https://github.com/Techris93/secopsai-edge/releases/tag/v0.3.0`.
 
-Required before completion:
+Deployment evidence:
 
-- Commit the validated patch, run the clean-tree release gate, merge only after
-  PR CI, publish `v0.3.0`,
-  migrate Render to revision `0014_operator_access`, deploy the exact static
-  dashboard build, and verify browser/account truth states without exposing or
-  emailing credentials.
-- SMTP delivery remains inactive until an approved provider is configured.
-  The free Render PostgreSQL expiry remains a controlled-pilot blocker and is
-  not made durable by this checkpoint.
+- Render API deployment `dep-d9afurj7uimc73fkibr0` and scheduler deployment
+  `dep-d9afurr7uimc73fkic2g` are live on exact merge `90ab7223`. Public health
+  reports API `0.3.0`, commit `90ab7223ed26`, and readiness schema
+  `0014_operator_access`.
+- Cloudflare Pages production deployment
+  `b9e2aa7f-29d9-4209-ad55-b812b506644c` serves source `90ab722` with the
+  hosted Render API and dashboard demo mode disabled.
+- Deployed Settings browser QA confirmed the correct hosted API, explicit
+  disconnected state, no demo banner, no framework error, no desktop
+  horizontal overflow, and a clean console. The exact-build mobile Chromium
+  project covers the invitation and MFA login workflows.
+
+Activation boundaries:
+
+- SMTP invitation/reset delivery remains inactive until an approved provider
+  is configured and exercised without exposing credentials.
+- A second owner account, stored recovery codes, and an owner-assisted MFA
+  reset exercise are required before external pilot access.
+- The free Render PostgreSQL database expires on `2026-07-20`; durable paid
+  storage or an explicit backup/migration decision remains a controlled-pilot
+  blocker and is not made durable by this checkpoint.
 
 ## Completion Rules
 
