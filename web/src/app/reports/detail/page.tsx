@@ -1,11 +1,11 @@
 "use client";
 
-import { Clipboard, Download, Printer } from "lucide-react";
+import { Clipboard, Download, FileText, Printer } from "lucide-react";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { PageHeader } from "@/components/PageHeader";
 import { SeverityBadge } from "@/components/SeverityBadge";
-import { downloadReportHtml, getReport } from "@/lib/api";
+import { downloadReportHtml, downloadReportPdf, getReport } from "@/lib/api";
 import { timeAgo } from "@/lib/format";
 import type { Finding, Report } from "@/lib/types";
 
@@ -31,6 +31,17 @@ function ReportDetail() {
   }, [reportId]);
 
   const findings = useMemo(() => (report?.content.findings ?? []) as Finding[], [report]);
+  const metrics = report?.content.metrics;
+  const metricItems = metrics ? [
+    ["Assets", metrics.assets_total],
+    ["New devices", metrics.new_devices],
+    ["Risky services", metrics.risky_services],
+    ["Wi-Fi risks", metrics.wifi_security_findings],
+    ["Open findings", metrics.open_findings],
+    ["Acknowledged", metrics.acknowledged_findings],
+    ["Resolved", metrics.resolved_findings],
+    ["Scans completed", metrics.scans_completed]
+  ] : [];
 
   async function copySummary() {
     if (!report) return;
@@ -60,6 +71,22 @@ function ReportDetail() {
     }
   }
 
+  async function downloadPdf() {
+    if (!report) return;
+    try {
+      const blob = await downloadReportPdf(report.id);
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `${report.title.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}.pdf`;
+      anchor.click();
+      URL.revokeObjectURL(url);
+      setMessage("PDF report downloaded");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to download PDF report");
+    }
+  }
+
   return (
     <>
       <PageHeader
@@ -74,10 +101,15 @@ function ReportDetail() {
           <p className="text-sm text-zinc-600">{message ?? "Loading report..."}</p>
         </section>
       ) : (
-        <article className="rounded-lg border border-line bg-white p-5 shadow-panel print:border-0 print:shadow-none">
+        <article className="border-y border-line bg-white py-5 print:border-0">
           <div className="flex flex-col gap-3 border-b border-line pb-4 md:flex-row md:items-start md:justify-between">
             <div>
-              <p className="text-sm font-medium text-zinc-500">Generated {timeAgo(report.created_at)}</p>
+              <p className="text-sm font-medium text-zinc-500">
+                Generated {timeAgo(report.created_at)}
+                {report.period_start && report.period_end
+                  ? ` · ${new Date(report.period_start).toLocaleDateString()} to ${new Date(report.period_end).toLocaleDateString()}`
+                  : ""}
+              </p>
               <h2 className="mt-2 text-2xl font-semibold text-ink">{report.title}</h2>
               <p className="mt-3 max-w-4xl text-sm leading-6 text-zinc-700">{report.summary}</p>
             </div>
@@ -90,9 +122,13 @@ function ReportDetail() {
                 <Clipboard size={16} aria-hidden="true" />
                 Copy Brief
               </button>
-              <button className="ButtonSecondary" onClick={downloadHtml} type="button">
+              <button className="ButtonSecondary" onClick={downloadPdf} type="button">
                 <Download size={16} aria-hidden="true" />
-                Download Report
+                Download PDF
+              </button>
+              <button className="ButtonSecondary" onClick={downloadHtml} type="button">
+                <FileText size={16} aria-hidden="true" />
+                Download HTML
               </button>
               <button className="ButtonSecondary" onClick={() => window.print()} type="button">
                 <Printer size={16} aria-hidden="true" />
@@ -100,6 +136,20 @@ function ReportDetail() {
               </button>
             </div>
           </div>
+
+          {metricItems.length ? (
+            <section className="mt-5">
+              <h3 className="text-lg font-semibold text-ink">Executive Metrics</h3>
+              <div className="mt-3 grid overflow-hidden rounded-md border border-line sm:grid-cols-2 lg:grid-cols-4">
+                {metricItems.map(([label, value]) => (
+                  <div key={String(label)} className="border-b border-line px-3 py-3 last:border-b-0 sm:border-r lg:[&:nth-child(4n)]:border-r-0">
+                    <p className="text-xs font-medium text-zinc-500">{label}</p>
+                    <p className="mt-1 text-xl font-semibold text-ink">{value}</p>
+                  </div>
+                ))}
+              </div>
+            </section>
+          ) : null}
 
           <section className="mt-5">
             <h3 className="text-lg font-semibold text-ink">Recommended Actions</h3>
@@ -128,7 +178,7 @@ function ReportDetail() {
             </div>
           </section>
 
-          <section className="mt-6 grid gap-3 md:grid-cols-3">
+          <section className="mt-6 grid overflow-hidden rounded-md border border-line md:grid-cols-3">
             <Meta label="Provider" value={String(report.content.provider ?? "unknown")} />
             <Meta label="Model" value={String(report.content.model ?? "n/a")} />
             <Meta label="Risk" value={report.risk_level} />
@@ -142,7 +192,7 @@ function ReportDetail() {
 
 function Meta({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-md bg-paper p-3">
+    <div className="border-b border-line bg-paper p-3 last:border-b-0 md:border-b-0 md:border-r md:last:border-r-0">
       <p className="text-sm text-zinc-600">{label}</p>
       <p className="mt-1 font-mono text-sm text-ink">{value}</p>
     </div>

@@ -129,10 +129,27 @@ export type Report = {
   title: string;
   summary: string;
   risk_level: Severity;
+  period_start?: string | null;
+  period_end?: string | null;
   content: {
     findings?: Finding[];
     recommended_actions?: string[];
     provider?: string;
+    model?: string;
+    technical_notes?: string[];
+    period?: { start: string; end: string };
+    metrics?: {
+      assets_total: number;
+      assets_active?: number;
+      new_devices: number;
+      risky_services: number;
+      wifi_security_findings: number;
+      open_findings: number;
+      acknowledged_findings: number;
+      resolved_findings: number;
+      scans_completed: number;
+      severity: Record<string, number>;
+    };
   } & Record<string, unknown>;
   created_at: string;
 };

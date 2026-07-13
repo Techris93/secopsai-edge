@@ -23,7 +23,7 @@ SecOpsAI Edge discovers internal network assets, records service exposure, monit
 7. Add notes and mark findings acknowledged/resolved/false positive.
 8. Approve known assets, accepted services, and trusted BSSIDs to establish the site baseline.
 9. Generate a report.
-10. Open the report detail page, copy the executive summary or client brief, print, or download the report.
+10. Open the report detail page, verify the frozen reporting period and metrics, then copy the executive summary/client brief or download the client-ready PDF.
 11. Configure webhook/email/Telegram notifications.
 12. Install automatic Edge-to-Core sync and confirm its status/logs.
 13. Confirm important operator actions appear in Audit Log.
@@ -66,6 +66,18 @@ The pilot operator must have permission to scan the target LAN. Discovery is lim
 - raw telemetry history
 
 Sensitive evidence fields such as MAC address, BSSID, and hostnames are redacted in report payloads.
+
+## Share A Report
+
+Generate the report only after the latest scheduled or manual scan completes.
+The report captures a seven-day period, current asset totals, new devices,
+risky services, Wi-Fi risks, finding status counts, completed scans, severity,
+recommended actions, and the normalized findings included at that moment.
+
+Use `Download PDF` for the client/boss artifact. Use `Download HTML` for an
+editable browser copy, `Print` for the operating system print dialog, or `Copy
+Brief` for a short handoff. Raw Nmap output, packet data, scan logs, and finding
+evidence objects are excluded from the PDF.
 
 ## Recovery
 

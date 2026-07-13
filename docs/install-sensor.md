@@ -73,7 +73,7 @@ copied installer:
 
 On Linux, the worker installs as a user `systemd` service.
 
-Use `--version 0.2.4` to pin a release. Use `--upgrade` for an existing
+Use `--version 0.2.5` to pin a release. Use `--upgrade` for an existing
 installation; the bootstrap preserves credential files, keeps the previous
 installation as `.previous`, and restores it automatically if the new
 installer fails.

@@ -1,5 +1,5 @@
 from collections.abc import Generator
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, select
@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from secopsai_api.database import get_db
-from secopsai_api.main import app
+from secopsai_api.main import app, report_export_filename
 from secopsai_api.models import Asset, AuditLog, Base, Finding, NotificationEndpoint, Report, ScanJob, ScanRun, ScanSchedule, Sensor, Site, utcnow
 from secopsai_api.security import hash_secret
 
@@ -268,3 +268,148 @@ def test_report_html_export_requires_admin_and_returns_branded_report() -> None:
     assert "Pilot Office" in response.text
     assert "Verify device ownership." in response.text
     assert "secret raw scan" not in response.text
+
+
+def test_report_pdf_export_requires_auth_and_excludes_raw_scan_fields() -> None:
+    db = make_session()
+    sensor = seed_sensor(db)
+    now = utcnow()
+    report = Report(
+        site_id=sensor.site_id,
+        title="Weekly Edge Risk Summary",
+        period_start=now - timedelta(days=7),
+        period_end=now,
+        summary="A new unmanaged device exposed SSH.",
+        risk_level="high",
+        content={
+            "provider": "mock",
+            "model": "deterministic",
+            "metrics": {
+                "assets_total": 14,
+                "new_devices": 1,
+                "risky_services": 1,
+                "wifi_security_findings": 0,
+                "open_findings": 1,
+                "acknowledged_findings": 0,
+                "resolved_findings": 2,
+                "scans_completed": 7,
+                "severity": {"critical": 0, "high": 1, "medium": 0, "low": 0, "info": 0},
+            },
+            "recommended_actions": ["Verify device ownership.", "Review SSH authentication logs."],
+            "findings": [
+                {
+                    "type": "risky_open_port",
+                    "severity": "high",
+                    "status": "open",
+                    "title": "SSH exposed internally",
+                    "summary": "192.168.1.42 exposes tcp/22.",
+                    "raw_nmap": "<host>secret raw scan</host>",
+                }
+            ],
+        },
+    )
+    db.add(report)
+    db.commit()
+    client = make_client(db)
+
+    unauthorized = client.get(f"/api/v1/reports/{report.id}/export.pdf")
+    response = client.get(f"/api/v1/reports/{report.id}/export.pdf", headers=admin_headers())
+
+    assert unauthorized.status_code == 401
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/pdf"
+    assert response.headers["content-disposition"].endswith('weekly-edge-risk-summary.pdf"')
+    assert response.content.startswith(b"%PDF-")
+    assert len(response.content) > 10_000
+    assert b"secret raw scan" not in response.content
+
+
+def test_report_export_filename_is_ascii_safe() -> None:
+    report = Report(
+        site_id="site-alpha",
+        title="İstanbul Güvenlik Özeti 🔒",
+        summary="Summary",
+        risk_level="low",
+        content={},
+    )
+
+    filename = report_export_filename(report, "pdf")
+
+    assert filename == "istanbul-guvenlik-ozeti.pdf"
+    assert filename.isascii()
+
+
+def test_report_generation_freezes_period_and_operational_metrics() -> None:
+    db = make_session()
+    sensor = seed_sensor(db)
+    now = utcnow()
+    db.add_all(
+        [
+            Asset(site_id=sensor.site_id, ip_address="192.168.1.10", status="active"),
+            Asset(site_id=sensor.site_id, ip_address="192.168.1.11", status="missing"),
+            Finding(
+                site_id=sensor.site_id,
+                type="new_device",
+                severity="medium",
+                status="open",
+                title="New device",
+                summary="A new asset appeared.",
+                created_at=now - timedelta(days=1),
+                updated_at=now - timedelta(days=1),
+            ),
+            Finding(
+                site_id=sensor.site_id,
+                type="risky_open_port",
+                severity="high",
+                status="acknowledged",
+                title="SSH exposed",
+                summary="An administrative service is exposed.",
+                created_at=now - timedelta(days=2),
+                updated_at=now - timedelta(days=2),
+            ),
+            Finding(
+                site_id=sensor.site_id,
+                type="vendor_unknown",
+                severity="low",
+                status="resolved",
+                title="Vendor resolved",
+                summary="The device owner was confirmed.",
+                created_at=now - timedelta(days=3),
+                updated_at=now - timedelta(hours=2),
+            ),
+            ScanRun(
+                site_id=sensor.site_id,
+                sensor_id=sensor.id,
+                status="completed",
+                completed_at=now - timedelta(hours=4),
+            ),
+        ]
+    )
+    db.commit()
+    client = make_client(db)
+
+    response = client.post(
+        f"/api/v1/reports/generate?site_id={sensor.site_id}",
+        headers=admin_headers(),
+    )
+
+    assert response.status_code == 200
+    report = response.json()
+    metrics = report["content"]["metrics"]
+    assert report["period_start"] is not None
+    assert report["period_end"] is not None
+    content_start = datetime.fromisoformat(report["content"]["period"]["start"])
+    stored_start = datetime.fromisoformat(report["period_start"])
+    assert content_start.replace(tzinfo=None) == stored_start.replace(tzinfo=None)
+    assert metrics == {
+        "assets_total": 2,
+        "assets_active": 1,
+        "new_devices": 1,
+        "risky_services": 1,
+        "wifi_security_findings": 0,
+        "open_findings": 1,
+        "acknowledged_findings": 1,
+        "resolved_findings": 1,
+        "scans_completed": 1,
+        "severity": {"critical": 0, "high": 1, "medium": 1, "low": 0, "info": 0},
+    }

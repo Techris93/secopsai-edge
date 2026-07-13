@@ -379,6 +379,8 @@ class ReportOut(BaseModel):
     title: str
     summary: str
     risk_level: str
+    period_start: datetime | None = None
+    period_end: datetime | None = None
     content: dict[str, Any]
     created_at: datetime
 
