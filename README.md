@@ -34,9 +34,14 @@ the standalone bootstrap, verifies the release checksum, and installs the
 background worker without cloning the repository:
 
 ```bash
-curl -fsSLO https://github.com/Techris93/secopsai-edge/releases/latest/download/bootstrap-secopsai-edge.sh
+gh auth login
+gh release download --repo Techris93/secopsai-edge --pattern bootstrap-secopsai-edge.sh --clobber
 bash bootstrap-secopsai-edge.sh --cloud --api-url https://<your-api>.onrender.com --enrollment-token <one-time-token>
 ```
+
+The repository is private during the pilot, so installers need collaborator
+access and an authenticated GitHub CLI. A future public release can use the
+same bootstrap through the unauthenticated HTTPS download URL.
 
 The local development path is:
 
