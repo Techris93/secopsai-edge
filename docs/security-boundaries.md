@@ -77,3 +77,11 @@ before extraction, refuses to overwrite an installation without `--upgrade`,
 preserves credentials, and rolls back the directory swap when installation
 fails. Release archives exclude ignored credentials, virtual environments,
 Node dependencies, and generated build output.
+
+Workspace integration credentials are scope-separated. `core:export` can read
+only the normalized Core bundle. `operations:read` can read only sites,
+sensors, scan schedules, and scan jobs for its workspace. Neither token can
+mutate Edge state or access assets, findings, reports, users, audit logs, or
+another workspace. The canonical dashboard helper must use
+`SECOPSAI_EDGE_OPERATIONS_TOKEN`; the legacy administrator-token fallback is a
+temporary migration path and must not be exposed to browser configuration.

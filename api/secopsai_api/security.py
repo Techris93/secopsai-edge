@@ -21,7 +21,9 @@ from secopsai_api.tenancy import ensure_default_membership, ensure_default_tenan
 
 bearer = HTTPBearer(auto_error=False)
 DASHBOARD_SESSION_PREFIX = "secopsai_session"
-INTEGRATION_TOKEN_PREFIX = "secopsai_core_"
+INTEGRATION_TOKEN_PREFIX = "secopsai_integration_"
+LEGACY_INTEGRATION_TOKEN_PREFIX = "secopsai_core_"
+INTEGRATION_TOKEN_PREFIXES = (INTEGRATION_TOKEN_PREFIX, LEGACY_INTEGRATION_TOKEN_PREFIX)
 PASSWORD_HASH_PREFIX = "pbkdf2_sha256"
 PASSWORD_HASH_ITERATIONS = 260_000
 DUMMY_PASSWORD_HASH = f"{PASSWORD_HASH_PREFIX}${PASSWORD_HASH_ITERATIONS}$secopsai-dummy$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
@@ -153,39 +155,59 @@ def require_core_export_access(
     if not credentials or credentials.scheme.lower() != "bearer":
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing bearer token")
     credential = credentials.credentials
-    if credential.startswith(INTEGRATION_TOKEN_PREFIX):
-        token = db.scalar(
-            select(IntegrationToken).where(IntegrationToken.token_hash == hash_secret(credential))
-        )
-        now = utcnow()
-        if token is None:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid integration token")
-        comparison_now = now
-        if token.expires_at.tzinfo is None:
-            comparison_now = now.replace(tzinfo=None)
-        organization = db.get(Organization, token.organization_id)
-        if (
-            token.revoked_at is not None
-            or token.expires_at <= comparison_now
-            or "core:export" not in (token.scopes or [])
-            or organization is None
-            or not organization.active
-        ):
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid integration token")
-        token.last_used_at = now
-        db.commit()
-        return {
-            "sub": f"integration-token:{token.id}",
-            "role": "integration",
-            "org": token.organization_id,
-            "scopes": list(token.scopes or []),
-            "integration_token_id": token.id,
-        }
+    if credential.startswith(INTEGRATION_TOKEN_PREFIXES):
+        return authenticate_integration_token(db, credential, "core:export")
 
     context = get_dashboard_auth_context(credentials, db)
     if str(context.get("role") or "").lower() not in {"owner", "admin"}:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Administrator role required")
     return context
+
+
+def require_operations_read_access(
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    if not credentials or credentials.scheme.lower() != "bearer":
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing bearer token")
+    credential = credentials.credentials
+    if credential.startswith(INTEGRATION_TOKEN_PREFIXES):
+        return authenticate_integration_token(db, credential, "operations:read")
+    return get_dashboard_auth_context(credentials, db)
+
+
+def authenticate_integration_token(
+    db: Session,
+    credential: str,
+    required_scope: str,
+) -> dict[str, Any]:
+    token = db.scalar(
+        select(IntegrationToken).where(IntegrationToken.token_hash == hash_secret(credential))
+    )
+    now = utcnow()
+    if token is None:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid integration token")
+    comparison_now = now
+    if token.expires_at.tzinfo is None:
+        comparison_now = now.replace(tzinfo=None)
+    organization = db.get(Organization, token.organization_id)
+    if (
+        token.revoked_at is not None
+        or token.expires_at <= comparison_now
+        or required_scope not in (token.scopes or [])
+        or organization is None
+        or not organization.active
+    ):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid integration token")
+    token.last_used_at = now
+    db.commit()
+    return {
+        "sub": f"integration-token:{token.id}",
+        "role": "integration",
+        "org": token.organization_id,
+        "scopes": list(token.scopes or []),
+        "integration_token_id": token.id,
+    }
 
 
 def get_dashboard_auth_context(

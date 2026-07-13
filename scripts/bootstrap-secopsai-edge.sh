@@ -16,7 +16,7 @@ usage() {
 Bootstrap SecOpsAI Edge from a verified GitHub release.
 
 Usage:
-  bash bootstrap-secopsai-edge.sh [--version 0.2.2] [--install-dir PATH]
+  bash bootstrap-secopsai-edge.sh [--version 0.2.3] [--install-dir PATH]
     --cloud --api-url URL --enrollment-token TOKEN [installer options]
 
 Options consumed by bootstrap:

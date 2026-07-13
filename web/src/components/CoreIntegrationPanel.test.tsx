@@ -89,7 +89,7 @@ test("updates copied commands from operator-configured install paths", async () 
   expect(window.localStorage.getItem("secopsai_edge_root")).toBe("/opt/secopsai-edge");
 });
 
-test("creates a one-time workspace Core token and offers revocation", async () => {
+test("creates scoped workspace tokens and offers revocation", async () => {
   const created = {
     id: "token-alpha",
     organization_id: "org-alpha",
@@ -98,7 +98,7 @@ test("creates a one-time workspace Core token and offers revocation", async () =
     state: "active",
     expires_at: "2026-10-01T00:00:00Z",
     created_at: "2026-07-01T00:00:00Z",
-    access_token: "secopsai_core_one-time-secret"
+    access_token: "secopsai_integration_one-time-secret"
   };
   vi.mocked(api.createIntegrationToken).mockResolvedValue(created);
   vi.mocked(api.revokeIntegrationToken).mockResolvedValue({
@@ -108,11 +108,33 @@ test("creates a one-time workspace Core token and offers revocation", async () =
   });
 
   render(React.createElement(CoreIntegrationPanel));
-  fireEvent.click(await screen.findByRole("button", { name: "Create token" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Create Core token" }));
 
-  expect(await screen.findByText("secopsai_core_one-time-secret")).toBeInTheDocument();
-  expect(api.createIntegrationToken).toHaveBeenCalledOnce();
+  expect(await screen.findByText("secopsai_integration_one-time-secret")).toBeInTheDocument();
+  expect(api.createIntegrationToken).toHaveBeenCalledWith("SecOpsAI Core sync", ["core:export"]);
   fireEvent.click(screen.getByRole("button", { name: "Revoke SecOpsAI Core sync" }));
   await waitFor(() => expect(api.revokeIntegrationToken).toHaveBeenCalledWith("token-alpha"));
-  expect(await screen.findByText("Core export token revoked")).toBeInTheDocument();
+  expect(await screen.findByText("Integration token revoked")).toBeInTheDocument();
+});
+
+test("creates a read-only operator dashboard token", async () => {
+  vi.mocked(api.createIntegrationToken).mockResolvedValue({
+    id: "token-operations",
+    organization_id: "org-alpha",
+    name: "SecOpsAI operator dashboard",
+    scopes: ["operations:read"],
+    state: "active",
+    expires_at: "2026-10-01T00:00:00Z",
+    created_at: "2026-07-01T00:00:00Z",
+    access_token: "secopsai_integration_operations-secret"
+  });
+
+  render(React.createElement(CoreIntegrationPanel));
+  fireEvent.click(await screen.findByRole("button", { name: "Create dashboard token" }));
+
+  expect(await screen.findByText("secopsai_integration_operations-secret")).toBeInTheDocument();
+  expect(api.createIntegrationToken).toHaveBeenCalledWith(
+    "SecOpsAI operator dashboard",
+    ["operations:read"]
+  );
 });

@@ -158,15 +158,19 @@ export function CoreIntegrationPanel() {
     }
   }
 
-  async function createToken() {
-    setBusyAction("create-token");
+  async function createToken(scope: "core:export" | "operations:read") {
+    setBusyAction(`create-token:${scope}`);
     try {
-      const created = await createIntegrationToken();
+      const isCore = scope === "core:export";
+      const created = await createIntegrationToken(
+        isCore ? "SecOpsAI Core sync" : "SecOpsAI operator dashboard",
+        [scope]
+      );
       setNewToken(created);
       setTokens((current) => [created, ...current.filter((item) => item.id !== created.id)]);
-      setMessage("Core export token created. Copy it now; it will not be shown again.");
+      setMessage("Integration token created. Copy it now; it will not be shown again.");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Unable to create Core export token");
+      setMessage(error instanceof Error ? error.message : "Unable to create integration token");
     } finally {
       setBusyAction(null);
     }
@@ -178,9 +182,9 @@ export function CoreIntegrationPanel() {
       const revoked = await revokeIntegrationToken(tokenId);
       setTokens((current) => current.map((item) => (item.id === revoked.id ? revoked : item)));
       if (newToken?.id === tokenId) setNewToken(null);
-      setMessage("Core export token revoked");
+      setMessage("Integration token revoked");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Unable to revoke Core export token");
+      setMessage(error instanceof Error ? error.message : "Unable to revoke integration token");
     } finally {
       setBusyAction(null);
     }
@@ -212,19 +216,30 @@ export function CoreIntegrationPanel() {
           <div>
             <h3 className="flex items-center gap-2 text-sm font-semibold text-ink">
               <KeyRound size={16} className="text-sea" aria-hidden={true} />
-              Workspace Core export tokens
+              Workspace integration tokens
             </h3>
-            <p className="mt-1 text-xs leading-5 text-zinc-600">Revocable, 90-day credentials limited to normalized Core export.</p>
+            <p className="mt-1 text-xs leading-5 text-zinc-600">Revocable, 90-day credentials with separate Core export and read-only operations scopes.</p>
           </div>
-          {canManageTokens ? <button
-            type="button"
-            onClick={createToken}
-            disabled={busyAction !== null}
-            className="focus-ring inline-flex h-9 items-center justify-center gap-2 rounded-md border border-line bg-white px-3 text-sm font-semibold text-ink hover:border-sea disabled:cursor-wait disabled:opacity-60"
-          >
-            <KeyRound size={15} aria-hidden={true} />
-            Create token
-          </button> : null}
+          {canManageTokens ? <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => void createToken("core:export")}
+              disabled={busyAction !== null}
+              className="focus-ring inline-flex h-9 items-center justify-center gap-2 rounded-md border border-line bg-white px-3 text-sm font-semibold text-ink hover:border-sea disabled:cursor-wait disabled:opacity-60"
+            >
+              <KeyRound size={15} aria-hidden={true} />
+              Create Core token
+            </button>
+            <button
+              type="button"
+              onClick={() => void createToken("operations:read")}
+              disabled={busyAction !== null}
+              className="focus-ring inline-flex h-9 items-center justify-center gap-2 rounded-md border border-line bg-white px-3 text-sm font-semibold text-ink hover:border-sea disabled:cursor-wait disabled:opacity-60"
+            >
+              <KeyRound size={15} aria-hidden={true} />
+              Create dashboard token
+            </button>
+          </div> : null}
         </div>
 
         {newToken ? (
@@ -248,7 +263,8 @@ export function CoreIntegrationPanel() {
           ) : tokens.map((token) => (
             <div key={token.id} className="grid gap-2 py-3 text-sm sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
               <div className="min-w-0">
-                <p className="truncate font-semibold text-ink">{token.name}</p>
+              <p className="truncate font-semibold text-ink">{token.name}</p>
+              <p className="mt-1 font-mono text-xs text-zinc-600">{token.scopes.join(", ")}</p>
                 <p className="mt-1 text-xs text-zinc-600">
                   {token.state} · expires {new Date(token.expires_at).toLocaleDateString()}
                   {token.last_used_at ? ` · last used ${new Date(token.last_used_at).toLocaleString()}` : " · never used"}

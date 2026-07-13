@@ -71,12 +71,18 @@ The canonical SecOpsAI dashboard reads network assets, graph changes, and
 Edge-origin findings from Core. Its local/helper service can optionally enrich
 that view with live sites, sensors, schedules, and scan jobs from the Edge API.
 
-Keep `SECOPSAI_EDGE_ACCESS_TOKEN` on the helper host only. The credential can
-read only the normalized Core bundle for its workspace; it cannot manage
-scans, sensors, users, or settings. The browser receives normalized workspace
-data and never receives the token after its one-time creation response. Scan
-and sensor administration remains in the Edge dashboard; Core remains
-canonical for finding triage and graph context.
+Use two separate helper-host credentials:
+
+- `SECOPSAI_EDGE_ACCESS_TOKEN` has `core:export` and can read only the
+  normalized Core bundle for its workspace.
+- `SECOPSAI_EDGE_OPERATIONS_TOKEN` has `operations:read` and can read only
+  sites, sensors, schedules, and scan-job status for its workspace.
+
+Create each credential from Dashboard > Settings > SecOpsAI Core Integration.
+The browser receives normalized workspace data and never receives either token
+after its one-time creation response. Neither scope can mutate scans, sensors,
+users, or settings. Scan and sensor administration remains in the Edge
+dashboard; Core remains canonical for finding triage and graph context.
 
 ## Contract
 
@@ -89,7 +95,7 @@ The bundle uses:
   "source_instance": {
     "product": "secopsai_edge",
     "api": "secopsai-edge-api",
-    "version": "0.2.2"
+    "version": "0.2.3"
   },
   "cursor": {
     "mode": "full",

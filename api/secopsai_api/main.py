@@ -124,6 +124,7 @@ from secopsai_api.security import (
     DUMMY_PASSWORD_HASH,
     require_admin,
     require_core_export_access,
+    require_operations_read_access,
     require_operator,
     require_sensor_for_path,
     verify_password,
@@ -150,7 +151,7 @@ PRIVATE_SCAN_RANGES = tuple(
 TERMINAL_SCAN_JOB_STATUSES = {"completed", "failed", "canceled"}
 SENSOR_OFFLINE_AFTER = timedelta(minutes=3)
 STALE_SCAN_JOB_AFTER = timedelta(minutes=15)
-ALLOWED_INTEGRATION_TOKEN_SCOPES = {"core:export"}
+ALLOWED_INTEGRATION_TOKEN_SCOPES = {"core:export", "operations:read"}
 
 def bootstrap_dashboard_admin(db: Session) -> None:
     ensure_default_organization(db)
@@ -1207,7 +1208,7 @@ def update_user(
 
 @app.get("/api/v1/sites", response_model=list[SiteOut])
 def list_sites(
-    auth_context: dict = Depends(require_operator),
+    auth_context: dict = Depends(require_operations_read_access),
     db: Session = Depends(get_db),
 ) -> list[Site]:
     organization_id = organization_id_from_context(auth_context)
@@ -1624,11 +1625,10 @@ def heartbeat(
 @app.get("/api/v1/sensors", response_model=list[SensorOut])
 def list_sensors(
     site_id: str | None = None,
-    auth_context: dict = Depends(require_operator),
+    auth_context: dict = Depends(require_operations_read_access),
     db: Session = Depends(get_db),
 ) -> list[SensorOut]:
     organization_id = organization_id_from_context(auth_context)
-    recover_stale_scan_jobs(db)
     query = (
         select(Sensor)
         .join(Site, Site.id == Sensor.site_id)
@@ -1639,9 +1639,7 @@ def list_sensors(
         get_site_or_404(db, site_id, organization_id)
         query = query.where(Sensor.site_id == site_id)
     sensors = list(db.scalars(query).all())
-    result = [sensor_out(db, sensor) for sensor in sensors]
-    db.commit()
-    return result
+    return [sensor_out(db, sensor) for sensor in sensors]
 
 
 @app.patch("/api/v1/sensors/{sensor_id}", response_model=SensorOut)
@@ -1772,7 +1770,7 @@ def list_scan_jobs(
     status_filter: str | None = None,
     sensor_id: str | None = None,
     site_id: str | None = None,
-    auth_context: dict = Depends(require_operator),
+    auth_context: dict = Depends(require_operations_read_access),
     db: Session = Depends(get_db),
 ) -> list[ScanJob]:
     organization_id = organization_id_from_context(auth_context)
@@ -1848,7 +1846,7 @@ def retry_scan_job(
 @app.get("/api/v1/scan-schedules", response_model=list[ScanScheduleOut])
 def list_scan_schedules(
     site_id: str | None = None,
-    auth_context: dict = Depends(require_operator),
+    auth_context: dict = Depends(require_operations_read_access),
     db: Session = Depends(get_db),
 ) -> list[ScanSchedule]:
     organization_id = organization_id_from_context(auth_context)

@@ -431,10 +431,13 @@ export async function listIntegrationTokens(): Promise<IntegrationToken[]> {
   return requestJson<IntegrationToken[]>("/api/v1/integration-tokens");
 }
 
-export async function createIntegrationToken(name = "SecOpsAI Core sync"): Promise<IntegrationTokenSecret> {
+export async function createIntegrationToken(
+  name = "SecOpsAI Core sync",
+  scopes: string[] = ["core:export"]
+): Promise<IntegrationTokenSecret> {
   return requestJson<IntegrationTokenSecret>("/api/v1/integration-tokens", {
     method: "POST",
-    body: JSON.stringify({ name, scopes: ["core:export"], expires_in_days: 90 })
+    body: JSON.stringify({ name, scopes, expires_in_days: 90 })
   });
 }
 
