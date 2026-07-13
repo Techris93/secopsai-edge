@@ -42,7 +42,7 @@ class Settings:
         or os.getenv("RENDER_GIT_COMMIT")
         or "local"
     )
-    expected_schema_revision: str = "0014_operator_access"
+    expected_schema_revision: str = "0015_data_lifecycle"
     admin_token: str = os.getenv("SECOPSAI_ADMIN_TOKEN", "dev-admin-token")
     token_secret: str = os.getenv("SECOPSAI_TOKEN_SECRET", "dev-token-secret")
     dashboard_admin_email: str | None = os.getenv("SECOPSAI_DASHBOARD_ADMIN_EMAIL") or None

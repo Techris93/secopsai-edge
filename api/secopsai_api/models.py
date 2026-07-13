@@ -36,6 +36,24 @@ class Organization(Base):
     sites: Mapped[list["Site"]] = relationship(back_populates="organization")
 
 
+class DataLifecyclePolicy(Base):
+    __tablename__ = "data_lifecycle_policies"
+
+    organization_id: Mapped[str] = mapped_column(
+        ForeignKey("organizations.id"), primary_key=True
+    )
+    observation_days: Mapped[int] = mapped_column(Integer, default=90, nullable=False)
+    scan_history_days: Mapped[int] = mapped_column(Integer, default=180, nullable=False)
+    notification_delivery_days: Mapped[int] = mapped_column(Integer, default=90, nullable=False)
+    account_access_days: Mapped[int] = mapped_column(Integer, default=30, nullable=False)
+    credential_history_days: Mapped[int] = mapped_column(Integer, default=90, nullable=False)
+    report_days: Mapped[int] = mapped_column(Integer, default=365, nullable=False)
+    audit_log_days: Mapped[int] = mapped_column(Integer, default=365, nullable=False)
+    last_run_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
 class Site(Base):
     __tablename__ = "sites"
     __table_args__ = (UniqueConstraint("organization_id", "name", name="uq_site_org_name"),)

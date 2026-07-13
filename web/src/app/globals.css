@@ -44,6 +44,10 @@ textarea:focus-visible,
 }
 
 @layer components {
+  .ButtonPrimary {
+    @apply focus-ring inline-flex h-10 items-center justify-center gap-2 rounded-md bg-sea px-3 text-sm font-semibold text-white transition hover:bg-teal-800 disabled:cursor-not-allowed disabled:bg-zinc-300;
+  }
+
   .ButtonSecondary {
     @apply focus-ring inline-flex h-10 items-center justify-center gap-2 rounded-md border border-line bg-white px-3 text-sm font-semibold text-ink transition hover:border-sea hover:text-sea disabled:cursor-not-allowed disabled:opacity-50;
   }

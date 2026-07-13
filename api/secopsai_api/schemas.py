@@ -139,6 +139,13 @@ class SiteUpdateRequest(BaseModel):
     name: str = Field(min_length=1, max_length=160)
 
 
+class SiteDeleteRequest(BaseModel):
+    confirmation: str = Field(min_length=1, max_length=160)
+    current_password: str = Field(min_length=1, max_length=512)
+    code: str | None = Field(default=None, min_length=6, max_length=64)
+    acknowledge_permanent: bool = False
+
+
 class SiteOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -146,6 +153,32 @@ class SiteOut(BaseModel):
     organization_id: str
     name: str
     created_at: datetime
+
+
+class DataLifecyclePolicyUpdateRequest(BaseModel):
+    observation_days: int = Field(ge=7, le=3650)
+    scan_history_days: int = Field(ge=7, le=3650)
+    notification_delivery_days: int = Field(ge=7, le=730)
+    account_access_days: int = Field(ge=1, le=365)
+    credential_history_days: int = Field(ge=7, le=730)
+    report_days: int = Field(ge=30, le=3650)
+    audit_log_days: int = Field(ge=90, le=3650)
+
+
+class DataLifecyclePolicyOut(DataLifecyclePolicyUpdateRequest):
+    model_config = ConfigDict(from_attributes=True)
+
+    organization_id: str
+    last_run_at: datetime | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class DataLifecycleRunOut(BaseModel):
+    organizations: int
+    skipped: int
+    deleted: dict[str, int]
+    run_at: datetime
 
 
 class DashboardLoginRequest(BaseModel):

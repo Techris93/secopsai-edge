@@ -123,10 +123,10 @@ async function handleRoute(route: Route, state: MockEdgeApi): Promise<void> {
     return json(route, {
       status: state.systemHealth,
       environment: "test",
-      version: "0.3.1",
+      version: "0.3.2",
       commit: "browser-e2e",
-      schema_revision: "0014_operator_access",
-      expected_schema_revision: "0014_operator_access",
+      schema_revision: "0015_data_lifecycle",
+      expected_schema_revision: "0015_data_lifecycle",
       ai_provider: "mock",
       organization_id: "organization-demo",
       server_time: new Date().toISOString()
@@ -137,6 +137,61 @@ async function handleRoute(route: Route, state: MockEdgeApi): Promise<void> {
   if (method === "GET" && url.pathname === "/api/v1/account-access/deliveries") return json(route, []);
   if (method === "GET" && url.pathname === "/api/v1/integration-tokens") return json(route, []);
   if (method === "GET" && url.pathname === "/api/v1/notification-deliveries") return json(route, []);
+  if (method === "GET" && url.pathname === "/api/v1/data-lifecycle") {
+    return json(route, {
+      organization_id: "organization-demo",
+      observation_days: 90,
+      scan_history_days: 180,
+      notification_delivery_days: 90,
+      account_access_days: 30,
+      credential_history_days: 90,
+      report_days: 365,
+      audit_log_days: 365,
+      last_run_at: null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    });
+  }
+  if (method === "PATCH" && url.pathname === "/api/v1/data-lifecycle") {
+    return json(route, {
+      organization_id: "organization-demo",
+      ...(body as Record<string, number>),
+      last_run_at: null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    });
+  }
+  if (method === "POST" && url.pathname === "/api/v1/data-lifecycle/run-now") {
+    return json(route, {
+      organizations: 1,
+      skipped: 0,
+      deleted: { asset_observations: 2, scan_jobs: 1 },
+      run_at: new Date().toISOString()
+    });
+  }
+
+  const siteExportMatch = url.pathname.match(/^\/api\/v1\/sites\/([^/]+)\/export$/);
+  if (method === "GET" && siteExportMatch) {
+    const site = state.data.sites.find((item) => item.id === siteExportMatch[1]);
+    if (!site) return json(route, { detail: "Site not found" }, 404);
+    return route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      headers: { "Content-Disposition": `attachment; filename="${site.name.toLowerCase().replaceAll(" ", "-")}-export.json"` },
+      body: JSON.stringify({ schema_version: "secopsai.edge.site-export.v1", site })
+    });
+  }
+  const siteMatch = url.pathname.match(/^\/api\/v1\/sites\/([^/]+)$/);
+  if (method === "DELETE" && siteMatch) {
+    const index = state.data.sites.findIndex((item) => item.id === siteMatch[1]);
+    if (index < 0) return json(route, { detail: "Site not found" }, 404);
+    state.data.sites.splice(index, 1);
+    return json(route, {
+      status: "deleted",
+      site_id: siteMatch[1],
+      deleted: { sites: 1 }
+    });
+  }
 
   if (method === "POST" && url.pathname === "/api/v1/scan-jobs") {
     const payload = body as { target_cidr: string; include_wifi: boolean };

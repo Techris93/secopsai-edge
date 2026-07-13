@@ -1,6 +1,6 @@
 "use client";
 
-import { Copy, KeyRound, MapPinned, Pencil, Plus, PowerOff, Save, UserPlus, X } from "lucide-react";
+import { AlertTriangle, Copy, Download, KeyRound, MapPinned, Pencil, Plus, PowerOff, Save, Trash2, UserPlus, X } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { DataStatePanel } from "@/components/DataStatePanel";
 import { LiveState } from "@/components/LiveState";
@@ -9,7 +9,9 @@ import {
   apiBaseUrl,
   createSite,
   createSensorEnrollment,
+  deleteSite,
   disableSensor,
+  downloadSiteExport,
   enableSensor,
   fetchDashboardData,
   rotateSensorToken,
@@ -173,6 +175,7 @@ function SiteRow({
 }) {
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(site.name);
+  const [deleting, setDeleting] = useState(false);
 
   async function saveSite() {
     try {
@@ -206,6 +209,21 @@ function SiteRow({
     }
   }
 
+  async function exportData() {
+    try {
+      const blob = await downloadSiteExport(site.id);
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `${site.name.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}-secopsai-edge.json`;
+      anchor.click();
+      URL.revokeObjectURL(url);
+      onMessage("Site export downloaded");
+    } catch (error) {
+      onMessage(error instanceof Error ? error.message : "Unable to export site data");
+    }
+  }
+
   return (
     <article className="p-4">
       <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
@@ -226,6 +244,10 @@ function SiteRow({
           <p className="mt-1 text-sm text-zinc-500">Created {timeAgo(site.created_at)}</p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <button className="ButtonSecondary" disabled={!live} onClick={() => void exportData()} type="button">
+            <Download size={16} aria-hidden="true" />
+            Export
+          </button>
           <button className="ButtonSecondary" disabled={!live} onClick={() => void enrollSensor()} type="button">
             <UserPlus size={16} aria-hidden="true" />
             Enroll sensor
@@ -241,8 +263,24 @@ function SiteRow({
               Edit
             </button>
           )}
+          <button className="ButtonDanger" disabled={!live} onClick={() => setDeleting((value) => !value)} type="button">
+            <Trash2 size={16} aria-hidden="true" />
+            Delete
+          </button>
         </div>
       </div>
+      {deleting ? (
+        <SiteDeletionPanel
+          site={site}
+          onCancel={() => setDeleting(false)}
+          onDeleted={async () => {
+            setDeleting(false);
+            onMessage("Site data permanently deleted");
+            await onChanged();
+          }}
+          onMessage={onMessage}
+        />
+      ) : null}
       {enrollments.some((item) => item.state === "active") ? (
         <div className="mt-4 rounded-md border border-line bg-white p-3">
           <p className="text-xs font-semibold uppercase text-zinc-500">Pending enrollment</p>
@@ -273,6 +311,103 @@ function SiteRow({
         {!sensors.length ? <p className="rounded-md bg-paper p-3 text-sm text-zinc-600">No sensors registered for this site.</p> : null}
       </div>
     </article>
+  );
+}
+
+function SiteDeletionPanel({
+  site,
+  onCancel,
+  onDeleted,
+  onMessage
+}: {
+  site: Site;
+  onCancel: () => void;
+  onDeleted: () => Promise<void>;
+  onMessage: (value: string) => void;
+}) {
+  const [confirmation, setConfirmation] = useState("");
+  const [password, setPassword] = useState("");
+  const [code, setCode] = useState("");
+  const [acknowledged, setAcknowledged] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const ready = confirmation === site.name && Boolean(password) && acknowledged;
+
+  async function remove() {
+    if (!ready) return;
+    setBusy(true);
+    try {
+      await deleteSite(site.id, {
+        confirmation,
+        current_password: password,
+        code: code || undefined,
+        acknowledge_permanent: acknowledged
+      });
+      await onDeleted();
+    } catch (error) {
+      onMessage(error instanceof Error ? error.message : "Unable to delete site");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="mt-4 rounded-md border border-red-200 bg-red-50 p-4" aria-label={`Delete ${site.name}`}>
+      <div className="flex items-start gap-2">
+        <AlertTriangle size={18} className="mt-0.5 text-danger" aria-hidden="true" />
+        <div>
+          <h4 className="text-sm font-semibold text-danger">Permanent site deletion</h4>
+          <p className="mt-1 text-sm text-zinc-700">
+            Download an export first. Deletion removes this site, sensors, assets, observations, findings, reports, and schedules.
+          </p>
+        </div>
+      </div>
+      <div className="mt-4 grid gap-3 md:grid-cols-3">
+        <label className="text-sm font-medium text-ink">
+          Type {site.name}
+          <input
+            className="focus-ring mt-1 w-full rounded-md border border-red-200 bg-white px-3 py-2"
+            value={confirmation}
+            onChange={(event) => setConfirmation(event.target.value)}
+          />
+        </label>
+        <label className="text-sm font-medium text-ink">
+          Current password
+          <input
+            className="focus-ring mt-1 w-full rounded-md border border-red-200 bg-white px-3 py-2"
+            type="password"
+            autoComplete="current-password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+          />
+        </label>
+        <label className="text-sm font-medium text-ink">
+          MFA code, when enabled
+          <input
+            className="focus-ring mt-1 w-full rounded-md border border-red-200 bg-white px-3 py-2"
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            value={code}
+            onChange={(event) => setCode(event.target.value)}
+          />
+        </label>
+      </div>
+      <label className="mt-3 flex items-start gap-2 text-sm text-zinc-700">
+        <input
+          className="focus-ring mt-1"
+          type="checkbox"
+          checked={acknowledged}
+          onChange={(event) => setAcknowledged(event.target.checked)}
+        />
+        I understand this action is permanent and cannot be undone without a separate backup.
+      </label>
+      <div className="mt-4 flex flex-wrap justify-end gap-2">
+        <button className="ButtonSecondary" type="button" disabled={busy} onClick={onCancel}>Cancel</button>
+        <button className="ButtonDanger" type="button" disabled={busy || !ready} onClick={() => void remove()}>
+          <Trash2 size={16} aria-hidden="true" />
+          Delete site permanently
+        </button>
+      </div>
+    </section>
   );
 }
 

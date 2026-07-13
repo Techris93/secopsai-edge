@@ -32,3 +32,4 @@ htmlcov/
 agent/raw_scans/
 backups/
 secopsai-edge-support-*.txt
+hosted-health*.jsonl

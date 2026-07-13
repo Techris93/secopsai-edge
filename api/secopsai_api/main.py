@@ -42,6 +42,7 @@ from secopsai_api.models import (
     AuditLog,
     Base,
     BaselineRule,
+    DataLifecyclePolicy,
     Finding,
     FindingNote,
     IntegrationToken,
@@ -62,6 +63,7 @@ from secopsai_api.models import (
     utcnow,
 )
 from secopsai_api.notifications import attempt_delivery, notify_event, process_due_deliveries, test_notification
+from secopsai_api.data_lifecycle import delete_site_data, get_or_create_policy, run_retention
 from secopsai_api.mfa import (
     begin_mfa_setup,
     create_mfa_challenge,
@@ -72,6 +74,7 @@ from secopsai_api.mfa import (
     verify_mfa_code,
 )
 from secopsai_api.report_pdf import render_report_pdf
+from secopsai_api.site_export import build_site_export
 from secopsai_api.scheduling import compute_next_run_at, enqueue_due_schedules, normalize_frequency, pick_site_and_sensor
 from secopsai_api.schemas import (
     AssetDetailOut,
@@ -90,6 +93,9 @@ from secopsai_api.schemas import (
     FindingNoteCreateRequest,
     FindingNoteOut,
     FindingOut,
+    DataLifecyclePolicyOut,
+    DataLifecyclePolicyUpdateRequest,
+    DataLifecycleRunOut,
     HeartbeatIn,
     IntegrationTokenCreateRequest,
     IntegrationTokenCreateResponse,
@@ -128,6 +134,7 @@ from secopsai_api.schemas import (
     SensorEnrollmentCreateResponse,
     SensorEnrollmentOut,
     SiteCreateRequest,
+    SiteDeleteRequest,
     SiteOut,
     SiteUpdateRequest,
     AuthMeOut,
@@ -1897,6 +1904,148 @@ def update_site(
     db.commit()
     db.refresh(site)
     return site
+
+
+@app.get("/api/v1/sites/{site_id}/export")
+def export_site(
+    site_id: str,
+    auth_context: dict = Depends(require_operator),
+    db: Session = Depends(get_db),
+) -> JSONResponse:
+    organization_id = organization_id_from_context(auth_context)
+    site = get_site_or_404(db, site_id, organization_id)
+    bundle = build_site_export(db, site)
+    write_audit(
+        db,
+        "site.exported",
+        user_id=str(auth_context.get("uid")) if auth_context.get("uid") else None,
+        organization_id=organization_id,
+        resource_type="site",
+        resource_id=site.id,
+        details={"schema_version": bundle["schema_version"]},
+    )
+    db.commit()
+    filename = f"secopsai-edge-site-{site.id}.json"
+    return JSONResponse(
+        content=bundle,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@app.delete("/api/v1/sites/{site_id}")
+def delete_site(
+    site_id: str,
+    payload: SiteDeleteRequest,
+    auth_context: dict = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> dict[str, object]:
+    if auth_context.get("legacy") or auth_context.get("role") != "owner" or not auth_context.get("uid"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Owner user login required")
+    organization_id = organization_id_from_context(auth_context)
+    site = get_site_or_404(db, site_id, organization_id)
+    if not payload.acknowledge_permanent or payload.confirmation != site.name:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Confirm the exact site name and acknowledge permanent deletion",
+        )
+    user = db.scalar(select(User).where(User.id == str(auth_context["uid"])).with_for_update())
+    if user is None or not verify_password(payload.current_password, user.password_hash):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Current password is incorrect")
+    if user.mfa_enabled_at is not None:
+        if not payload.code or not verify_mfa_code(db, user, payload.code, settings):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid authentication code")
+    try:
+        deleted = delete_site_data(db, site)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    write_audit(
+        db,
+        "site.deleted",
+        user_id=user.id,
+        organization_id=organization_id,
+        resource_type="site",
+        resource_id=site_id,
+        details={"deleted": deleted},
+    )
+    db.commit()
+    return {"status": "deleted", "site_id": site_id, "deleted": deleted}
+
+
+@app.get("/api/v1/data-lifecycle", response_model=DataLifecyclePolicyOut)
+def get_data_lifecycle_policy(
+    auth_context: dict = Depends(require_operator),
+    db: Session = Depends(get_db),
+) -> DataLifecyclePolicy:
+    policy = get_or_create_policy(db, organization_id_from_context(auth_context))
+    db.commit()
+    db.refresh(policy)
+    return policy
+
+
+@app.patch("/api/v1/data-lifecycle", response_model=DataLifecyclePolicyOut)
+def update_data_lifecycle_policy(
+    payload: DataLifecyclePolicyUpdateRequest,
+    auth_context: dict = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> DataLifecyclePolicy:
+    organization_id = organization_id_from_context(auth_context)
+    policy = get_or_create_policy(db, organization_id)
+    for key, value in payload.model_dump().items():
+        setattr(policy, key, value)
+    policy.updated_at = utcnow()
+    write_audit(
+        db,
+        "data_lifecycle.policy_updated",
+        user_id=str(auth_context.get("uid")) if auth_context.get("uid") else None,
+        organization_id=organization_id,
+        resource_type="data_lifecycle_policy",
+        resource_id=organization_id,
+        details=payload.model_dump(),
+    )
+    db.commit()
+    db.refresh(policy)
+    return policy
+
+
+@app.post("/api/v1/data-lifecycle/run-due", response_model=DataLifecycleRunOut)
+def run_data_lifecycle(
+    auth_context: dict = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> dict[str, object]:
+    organization_id = None if auth_context.get("legacy") else organization_id_from_context(auth_context)
+    result = run_retention(db, organization_id=organization_id, force=False)
+    audit_organization_id = organization_id or organization_id_from_context(auth_context)
+    write_audit(
+        db,
+        "data_lifecycle.retention_run",
+        user_id=str(auth_context.get("uid")) if auth_context.get("uid") else None,
+        organization_id=audit_organization_id,
+        resource_type="data_lifecycle_policy",
+        resource_id=audit_organization_id,
+        details={"organizations": result["organizations"], "deleted": result["deleted"]},
+    )
+    db.commit()
+    return result
+
+
+@app.post("/api/v1/data-lifecycle/run-now", response_model=DataLifecycleRunOut)
+def run_data_lifecycle_now(
+    auth_context: dict = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> dict[str, object]:
+    organization_id = organization_id_from_context(auth_context)
+    result = run_retention(db, organization_id=organization_id, force=True)
+    write_audit(
+        db,
+        "data_lifecycle.retention_run",
+        user_id=str(auth_context.get("uid")) if auth_context.get("uid") else None,
+        organization_id=organization_id,
+        resource_type="data_lifecycle_policy",
+        resource_id=organization_id,
+        details={"organizations": result["organizations"], "deleted": result["deleted"], "forced": True},
+    )
+    db.commit()
+    return result
 
 
 @app.get("/api/v1/onboarding/status", response_model=OnboardingStatusOut)

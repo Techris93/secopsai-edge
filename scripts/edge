@@ -69,6 +69,7 @@ Usage:
   ./scripts/edge cloud enroll <token>  Use a one-time workspace enrollment token
   ./scripts/edge cloud drift-check     Check Render API, scheduler, and database drift/expiry
   ./scripts/edge cloud backup          Create and verify a hosted Render PostgreSQL backup
+  ./scripts/edge cloud uptime-check    Record API/readiness/dashboard health evidence
   ./scripts/edge test                  Run backend, frontend, build, and audit checks
   ./scripts/edge support-bundle [--cloud]
                                       Create a redacted diagnostics bundle for support
@@ -1661,6 +1662,12 @@ cloud() {
       ;;
     backup)
       "$ROOT_DIR/scripts/render-postgres-backup" "$@"
+      ;;
+    uptime-check)
+      python3 "$ROOT_DIR/scripts/hosted_health_check.py" \
+        --api-url "$(cloud_api_url)" \
+        --dashboard-url "${SECOPSAI_DASHBOARD_URL:-https://secopsai-edge.pages.dev}" \
+        "$@"
       ;;
     help|-h|--help)
       usage
