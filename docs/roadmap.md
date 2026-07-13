@@ -35,47 +35,46 @@ The controlled-pilot baseline includes:
 These are the remaining highest-priority gaps before inviting an external pilot
 without founder supervision:
 
-1. **Hosted Core ingestion and one operator truth.** Deploy a server-side Core
-   ingestion/helper service using the existing versioned bundle and scoped
-   credentials. The main SecOpsAI dashboard must show Edge assets/findings
-   without requiring a local Core repository.
-2. **Paid pilot infrastructure.** A matching-major hosted export and isolated
+1. **Paid pilot infrastructure.** A matching-major hosted export and isolated
    restore drill now protect the current demo data. Move Render API/PostgreSQL
    from free demo plans, enable managed backups or point-in-time recovery, and
    define an uptime target before accepting paid-pilot data.
-3. **Browser end-to-end coverage.** Desktop/mobile Chromium now protects login,
+2. **Browser end-to-end coverage.** Desktop/mobile Chromium now protects login,
    password recovery, scan queueing, finding triage, schedule creation, and
-   report generation against a disposable API contract. Onboarding enrollment,
-   PDF download, and automated accessibility checks remain.
-4. **Account recovery hardening.** Password-reset delivery is now durable,
-   non-enumerating, one-time, and operator-visible. Optional MFA, invite
-   acceptance, and recovery-code procedures remain.
-5. **Notification delivery operations.** Delivery attempts, retries, terminal
+   report generation against a disposable API contract. Invitation acceptance
+   and MFA login are also covered; onboarding enrollment, PDF download,
+   keyboard paths, and automated accessibility checks remain.
+3. **Account access activation.** Invitation acceptance, password recovery,
+   TOTP MFA, one-use recovery codes, and owner-assisted reset are implemented.
+   Configure an approved SMTP provider, enroll a second owner, and exercise the
+   full recovery path before inviting an external operator.
+4. **Notification delivery operations.** Delivery attempts, retries, terminal
    failure state, and operator-visible diagnostics are implemented for email,
-   Telegram, webhooks, and password-reset email.
+   Telegram, webhooks, invitation, and password-reset email. Exercise the
+   selected real provider and alert destinations.
+5. **Pilot support and data lifecycle.** Define retention/deletion controls,
+   uptime/support targets, escalation ownership, and a customer-facing pilot
+   exit/export procedure.
 
 ## Controlled Pilot Completion Sequence
 
-The checkpoint ledger is complete through `035`. The remaining controlled-pilot
+The checkpoint ledger is complete through `036`. The remaining controlled-pilot
 sequence is deliberately bounded and should be completed in this order:
 
-1. **Checkpoint 036 - Operator invitations and MFA.** One-time invitation
-   acceptance, disabled-login correctness, TOTP MFA, one-use recovery codes,
-   migration, browser workflows, release, and deployed verification.
-2. **Checkpoint 037 - Accessibility and browser completion.** Automated WCAG
+1. **Checkpoint 037 - Accessibility and browser completion.** Automated WCAG
    checks plus enrollment, PDF download, keyboard, responsive, empty, error,
    and degraded-state workflows against the production build.
-3. **Checkpoint 038 - Durable pilot infrastructure and recovery proof.** Paid
+2. **Checkpoint 038 - Durable pilot infrastructure and recovery proof.** Paid
    database/API decision, managed backups or equivalent, restore drill,
    retention/deletion controls, uptime target, and operator recovery exercise.
-4. **Checkpoint 039 - Research and wireless operational boundary.** First
+3. **Checkpoint 039 - Research and wireless operational boundary.** First
    narrowly scoped package-research workflow, reproducible evidence export,
    Linux/Raspberry Pi wireless validation, and explicit unsupported-platform
    messaging.
-5. **Checkpoint 040 - External pilot acceptance.** Fresh-machine installation,
+4. **Checkpoint 040 - External pilot acceptance.** Fresh-machine installation,
    seven-day soak, schedule/notification/offline-sensor exercises, support SLO,
    uninstall, and pilot exit checklist.
-6. **Checkpoint 041 - Controlled-pilot release closeout.** Exact-build deploy,
+5. **Checkpoint 041 - Controlled-pilot release closeout.** Exact-build deploy,
    release artifacts, public docs alignment, final security review, known-risk
    register, and a signed pilot go/no-go record.
 
