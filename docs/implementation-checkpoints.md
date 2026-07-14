@@ -2861,3 +2861,37 @@ Next checkpoint:
 
 - Publish the verified release, then collect the remaining external pilot
   evidence gates without treating this preflight as a substitute for them.
+
+## Checkpoint 054 - Hosted Operator Evidence
+
+Status: partial external evidence recorded; pilot acceptance remains pending
+
+Scope:
+
+- Use the released authenticated preflight against the live hosted API and
+  record which external acceptance gates are genuinely proven.
+- Distinguish a local DNS/network limitation from a failed Cloudflare Pages
+  deployment without weakening the acceptance standard.
+
+Evidence:
+
+- Render `/healthz` and `/readyz` returned HTTP `200` for `v0.3.8`; readiness
+  reported schema `0016_wifi_provenance`.
+- Authenticated identity, system status, onboarding, sites, sensors, schedules,
+  findings, and reports all returned HTTP `200` with valid JSON using the
+  environment-only pilot credential.
+- Public DNS-over-HTTPS returned records for the Pages hostname, but the local
+  resolver classified the dashboard check as `dns_resolution_failed` and direct
+  HTTPS requests were reset from this workstation. The dashboard gate therefore
+  remains unaccepted until an independent browser/network check succeeds.
+- Nmap and Python checks passed; worker, Wi-Fi, notification, soak, recovery,
+  backup, and hardware exercises were not performed by this non-destructive run.
+
+Authoritative record:
+
+- [pilot-evidence-2026-07-15.md](pilot-evidence-2026-07-15.md)
+
+Next checkpoint:
+
+- Run the remaining pilot acceptance matrix from an independent network and a
+  fresh sensor host, then record a signed go/no-go decision.
