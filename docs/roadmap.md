@@ -75,7 +75,7 @@ without founder supervision:
 
 ## Controlled Pilot Completion Sequence
 
-Implementation checkpoints are complete through `052`. The remaining work is
+Implementation checkpoints are complete through `054`. The remaining work is
 external operator acceptance, not untracked feature development:
 
 1. **Checkpoint 040 - External pilot acceptance.** Complete fresh-machine
@@ -114,6 +114,10 @@ external operator acceptance, not untracked feature development:
     can require an operator credential and verify authenticated identity,
     system status, onboarding, sites, sensors, schedules, findings, and reports
     without recording the token or response bodies.
+12. **Checkpoint 054 - Hosted operator evidence.** The live Render API and
+    authenticated operator surfaces were verified for `v0.3.8`; Cloudflare
+    Pages and the remaining fresh-host/soak/provider exercises remain explicitly
+    pending.
 
 Commercial SaaS/MSP, billing, broad fleet automation, appliance imaging, and
 multi-ecosystem research automation remain subsequent product horizons rather
