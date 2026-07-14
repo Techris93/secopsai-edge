@@ -27,6 +27,7 @@ class _BridgeHandler(BaseHTTPRequestHandler):
     ).encode()
     edge_authorization = ""
     core_authorization = ""
+    core_failures_remaining = 0
 
     def do_GET(self):
         if self.path != "/api/v1/core/export":
@@ -46,6 +47,10 @@ class _BridgeHandler(BaseHTTPRequestHandler):
         type(self).core_authorization = self.headers.get("Authorization", "")
         length = int(self.headers.get("Content-Length", "0"))
         assert self.rfile.read(length) == self.bundle
+        if type(self).core_failures_remaining:
+            type(self).core_failures_remaining -= 1
+            self.send_error(502)
+            return
         payload = json.dumps(
             {
                 "status": "imported",
@@ -255,6 +260,39 @@ def test_core_push_transfers_normalized_bundle_without_secret_arguments(tmp_path
     assert stat.S_IMODE(output.stat().st_mode) == 0o600
     assert _BridgeHandler.edge_authorization == "Bearer scoped-edge-export-secret"
     assert _BridgeHandler.core_authorization == "Bearer hosted-core-ingest-secret"
+
+
+def test_core_push_retries_transient_import_failure(tmp_path: Path) -> None:
+    output = tmp_path / "edge-bundle.json"
+    _BridgeHandler.core_failures_remaining = 1
+    with _Server() as edge_server, _Server() as core_server:
+        completed = subprocess.run(
+            [
+                str(EDGE),
+                "core",
+                "push",
+                "--cloud",
+                "--core-api-url",
+                core_server.url,
+                "--output",
+                str(output),
+            ],
+            cwd=ROOT,
+            env={
+                **os.environ,
+                "HOME": str(tmp_path),
+                "SECOPSAI_CLOUD_API_URL": edge_server.url,
+                "SECOPSAI_EDGE_CORE_TOKEN": "scoped-edge-export-secret",
+                "SECOPSAI_CORE_INGEST_TOKEN": "hosted-core-ingest-secret",
+            },
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+
+    assert completed.returncode == 0, completed.stderr
+    assert "Core import complete" in completed.stdout
+    assert _BridgeHandler.core_failures_remaining == 0
 
 
 def test_hosted_sync_service_stores_scoped_credentials_and_needs_no_core_checkout(
