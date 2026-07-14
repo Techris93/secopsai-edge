@@ -2950,3 +2950,40 @@ Next checkpoint:
 - Verify the canonical dashboard's live Core/Edge aggregation from an
   independent browser network, then complete the remaining fresh-host,
   provider, backup, and paid-pilot evidence gates.
+
+## Checkpoint 056 - Hosted Core Cold-Start Recovery
+
+Status: complete; external pilot acceptance remains pending
+
+Scope:
+
+- Make the real sensor-side hosted Core sync resilient to a Render cold start
+  or short-lived network interruption.
+
+Completed changes:
+
+- The supervised `core sync-service` runner retries Core import `500`, `502`,
+  `503`, and `504` responses plus transient URL/network failures up to three
+  times with bounded backoff.
+- Authentication failures, redirects, oversized responses, malformed JSON,
+  and validation errors still fail immediately and remain non-retryable.
+- The direct Core CLI client has the same bounded retry behavior for operators
+  using `secopsai edge sync --remote-only`.
+
+Validation:
+
+- Focused Core integration tests passed: `11` tests.
+- Sensor hosted sync-service tests passed: `7` tests, including a real local
+  HTTP bridge that returns `502` once and then confirms import.
+- Edge PR `#48` passed the full release verification and merged to `main` at
+  `4f52efc`.
+
+External boundary:
+
+- Retries improve recoverability but do not prove Render durability, a seven-
+  day soak, notification delivery, or customer-host installation.
+
+Next checkpoint:
+
+- Complete the independent dashboard availability check and the remaining
+  fresh-host, paid-infrastructure, provider, hardware, and recovery evidence.
