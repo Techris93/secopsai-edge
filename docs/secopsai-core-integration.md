@@ -34,6 +34,9 @@ unset SECOPSAI_EDGE_CORE_TOKEN SECOPSAI_CORE_INGEST_TOKEN
 The transfer rejects non-loopback plain HTTP, redirects, responses larger than
 the contract limit, and a Core response that does not confirm import. The
 saved bundle is owner-only and remains useful for audit/recovery.
+Transient Core `500`, `502`, `503`, `504`, and network failures are retried up
+to three times with bounded backoff; authentication, redirect, validation, and
+payload-limit failures are not retried.
 
 ## Automatic Sync
 
