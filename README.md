@@ -176,6 +176,15 @@ export SECOPSAI_CORE_INGEST_TOKEN="$(python3 -c 'import getpass; print(getpass.g
 unset SECOPSAI_EDGE_CORE_TOKEN SECOPSAI_CORE_INGEST_TOKEN
 ```
 
+The current pilot Core API is deployed at
+`https://secopsai-core-api.onrender.com`. Create the short-lived, scoped Edge
+export credential in the Edge Settings page and use the separate Core ingest
+credential from the Core deployment; never reuse the dashboard read token.
+The hosted transfer was verified against the current pilot workspace and
+accepts normalized graph/findings only. See
+[docs/secopsai-core-integration.md](docs/secopsai-core-integration.md) for the
+supervised five-minute sync service and recovery steps.
+
 The hosted dashboard can also queue remote scan jobs. Keep the worker running locally so queued jobs
 execute on your MacBook/Raspberry Pi, where the LAN is actually reachable. The dashboard shows
 sensor online/offline status from worker heartbeats and provides cancel/retry controls for remote jobs.
