@@ -10,6 +10,7 @@ import stat
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
@@ -18,6 +19,9 @@ from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 MAX_BUNDLE_BYTES = 10 * 1024 * 1024
 MAX_RESPONSE_BYTES = 1024 * 1024
+CORE_IMPORT_ATTEMPTS = 3
+CORE_RETRYABLE_STATUS_CODES = {500, 502, 503, 504}
+CORE_RETRY_BACKOFF_SECONDS = 0.5
 
 
 class NoRedirectHandler(HTTPRedirectHandler):
@@ -67,6 +71,7 @@ def bounded_request(
     label: str,
     body: bytes | None = None,
     max_bytes: int,
+    retry_attempts: int = 1,
 ) -> bytes:
     headers = {
         "Accept": "application/json",
@@ -75,20 +80,29 @@ def bounded_request(
     }
     if body is not None:
         headers["Content-Type"] = "application/json"
-    request = Request(url, data=body, headers=headers, method=method)
-    try:
-        with build_opener(NoRedirectHandler()).open(request, timeout=30) as response:
-            content_length = response.headers.get("Content-Length")
-            if content_length and int(content_length) > max_bytes:
-                raise RuntimeError(f"{label} response exceeds the {max_bytes}-byte limit")
-            payload = response.read(max_bytes + 1)
-    except HTTPError as exc:
-        raise RuntimeError(f"{label} returned HTTP {exc.code}") from exc
-    except URLError as exc:
-        raise RuntimeError(f"{label} request failed: {exc.reason}") from exc
-    if len(payload) > max_bytes:
-        raise RuntimeError(f"{label} response exceeds the {max_bytes}-byte limit")
-    return payload
+    attempts = max(1, retry_attempts)
+    for attempt in range(attempts):
+        request = Request(url, data=body, headers=headers, method=method)
+        try:
+            with build_opener(NoRedirectHandler()).open(request, timeout=30) as response:
+                content_length = response.headers.get("Content-Length")
+                if content_length and int(content_length) > max_bytes:
+                    raise RuntimeError(f"{label} response exceeds the {max_bytes}-byte limit")
+                payload = response.read(max_bytes + 1)
+        except HTTPError as exc:
+            if exc.code in CORE_RETRYABLE_STATUS_CODES and attempt < attempts - 1:
+                time.sleep(CORE_RETRY_BACKOFF_SECONDS * (attempt + 1))
+                continue
+            raise RuntimeError(f"{label} returned HTTP {exc.code}") from exc
+        except URLError as exc:
+            if attempt < attempts - 1:
+                time.sleep(CORE_RETRY_BACKOFF_SECONDS * (attempt + 1))
+                continue
+            raise RuntimeError(f"{label} request failed: {exc.reason}") from exc
+        if len(payload) > max_bytes:
+            raise RuntimeError(f"{label} response exceeds the {max_bytes}-byte limit")
+        return payload
+    raise RuntimeError(f"{label} request failed after {attempts} attempts")
 
 
 def push_to_hosted_core(config: dict[str, object], credentials: dict[str, object]) -> int:
@@ -148,6 +162,7 @@ def push_to_hosted_core(config: dict[str, object], credentials: dict[str, object
         label="Core import",
         body=bundle_bytes,
         max_bytes=MAX_RESPONSE_BYTES,
+        retry_attempts=CORE_IMPORT_ATTEMPTS,
     )
     try:
         response = json.loads(response_bytes)
