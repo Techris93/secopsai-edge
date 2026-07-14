@@ -2895,3 +2895,58 @@ Next checkpoint:
 
 - Run the remaining pilot acceptance matrix from an independent network and a
   fresh sensor host, then record a signed go/no-go decision.
+
+## Checkpoint 055 - Hosted Core API Activation
+
+Status: implementation and hosted integration proof complete; external pilot
+acceptance remains pending
+
+Scope:
+
+- Activate the hosted Core API as the normalized Edge destination.
+- Verify the Edge export, Core ingest boundary, and operator workspace end to
+  end without retaining raw scanner telemetry in Core.
+
+Completed changes:
+
+- Merged Core hosted sync support to Core `main` through PR `#44` at merge
+  commit `bf1e4f8`.
+- The hosted Core service is live at
+  `https://secopsai-core-api.onrender.com` on a protected Render Starter
+  instance with a persistent SQLite disk.
+- Created a temporary seven-day `core:export` credential for validation only,
+  pushed the current normalized Edge bundle, and revoked the temporary
+  credential after verification.
+- Hosted Core accepted the bundle with contract
+  `secopsai.edge.bundle.v1`: `11` graph nodes, `17` graph edges, and `10`
+  findings.
+- The authenticated hosted Core workspace now reports `4` assets, `10`
+  findings, `1` site, and `1` sensor. The response contained no raw or packet
+  telemetry keys.
+- The first request returned a transient `502` while the Render service was
+  warming; the immediate retry succeeded. Treat the hosted preflight as a
+  required retryable operation and investigate any repeated failures through
+  Render logs before using the service for customer data.
+
+Validation:
+
+- Core PR `#44` passed Cloudflare Pages, security, SAST, dependency, license,
+  and Python 3.10/3.11 checks before merge.
+- Core full suite passed: `251` tests, `13` warnings, and `4` subtests.
+- Hosted `/healthz`, `/readyz`, authenticated `/api/v1/workspace`, and the
+  normalized Edge ingest endpoint returned valid responses.
+- Temporary validation credentials were removed; production credentials must
+  be created and stored by the operator through the documented Settings/Render
+  workflow.
+
+External boundary:
+
+- This proves the current hosted Edge-to-Core transfer path, not a seven-day
+  customer soak, paid Render durability/PITR drill, notification delivery,
+  second-owner recovery, or independent dashboard browser availability.
+
+Next checkpoint:
+
+- Verify the canonical dashboard's live Core/Edge aggregation from an
+  independent browser network, then complete the remaining fresh-host,
+  provider, backup, and paid-pilot evidence gates.

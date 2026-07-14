@@ -29,6 +29,9 @@ The controlled-pilot baseline includes:
   private release archives, Render API/PostgreSQL, Cloudflare dashboard,
   Render configuration drift checks, and matching-major hosted backups.
 - Versioned Edge-to-Core graph/finding export and automated local Core sync.
+- Hosted Core API deployment and normalized Edge bundle ingestion are verified
+  at `https://secopsai-core-api.onrender.com`; the hosted operator workspace
+  is populated without raw scanner telemetry. See checkpoint `055`.
 - Unified Core console visibility for Edge sync freshness, including current,
   stale, and never-synced states.
 - OpenClaw read-only Edge operator checks for local worker status and safe
@@ -118,6 +121,11 @@ external operator acceptance, not untracked feature development:
     authenticated operator surfaces were verified for `v0.3.8`; Cloudflare
     Pages and the remaining fresh-host/soak/provider exercises remain explicitly
     pending.
+13. **Checkpoint 055 - Hosted Core API activation.** Core PR `#44` is merged,
+    the hosted Core service accepts the versioned Edge bundle, and the
+    authenticated workspace exposes normalized assets/findings. Independent
+    dashboard aggregation and the remaining external pilot evidence gates are
+    still pending.
 
 Commercial SaaS/MSP, billing, broad fleet automation, appliance imaging, and
 multi-ecosystem research automation remain subsequent product horizons rather
