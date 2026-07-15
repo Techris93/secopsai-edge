@@ -91,7 +91,7 @@ without founder supervision:
 
 ## Controlled Pilot Completion Sequence
 
-Implementation checkpoints are complete through `078`. The remaining work is
+Implementation checkpoints are complete through `079`. The remaining work is
 external operator acceptance, not untracked feature development. The older
 numbered entries below are historical milestones; the active acceptance gate
 is now the target-host lifecycle and pilot go/no-go exercise:
@@ -227,6 +227,13 @@ is now the target-host lifecycle and pilot go/no-go exercise:
 32. **Checkpoint 078 - hosted paid-plan visibility.** Render drift checks now
     warn for both free Edge API and free PostgreSQL resources, so a zero-drift
     deployment cannot be mistaken for paid-pilot durability.
+33. **Checkpoint 079 - research detection-rule artifacts.** Core Research Cases
+    now store and structurally validate YARA, Sigma, and Semgrep rules, include
+    them in deterministic exports, and block publication when an attached rule
+    fails validation. The canonical dashboard now shows rule type, validation,
+    provenance, purpose, preview, and retraction state. Core PR `#47` and
+    dashboard PR `#13` are merged; the external pilot infrastructure gates are
+    unchanged.
 
 Commercial SaaS/MSP, billing, broad fleet automation, appliance imaging, and
 multi-ecosystem research automation remain subsequent product horizons rather

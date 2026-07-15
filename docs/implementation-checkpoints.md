@@ -3828,3 +3828,54 @@ Next checkpoint:
 
 - Re-run the drift check after paid-plan activation and record a clean
   customer-data readiness result.
+
+## Checkpoint 079 - Research Detection-Rule Artifacts
+
+Status: implementation complete; hosted pilot acceptance remains external
+
+Scope:
+
+- Make independent research output operationally useful by preserving the
+  defensive detections produced during a case investigation.
+- Keep rule handling bounded and non-executing: the operator may record YARA,
+  Sigma, and Semgrep content, but SecOpsAI must never run submitted rules.
+
+Completed changes:
+
+- Core now stores `research_rules` with stable IDs, rule type, name, purpose,
+  content, source evidence, validation result, status, and timestamps.
+- `secopsai research case add-rule` supports inline content or a bounded local
+  UTF-8 file. `research case retract --item-type rule` preserves history.
+- Sigma and Semgrep receive safe YAML structural validation. YARA receives a
+  bounded declaration/braces/condition preflight; this is explicitly not a
+  compiler claim.
+- Publication readiness blocks an active rule that has not passed validation.
+- JSON and Markdown case exports include active rule content and validation
+  status, making published detections reproducible with the case evidence.
+- The canonical dashboard Research Case detail now displays rule type,
+  validation, provenance, purpose, preview, and retraction state, with a
+  dedicated detection-rule metric.
+
+Validation:
+
+- Core focused research/agent tests passed: 17 tests.
+- Core full suite passed: 256 tests, 13 warnings, 4 subtests.
+- Core hosted PR checks passed on Python 3.10/3.11, security, SAST, Trivy,
+  dependency, license, secrets, and Cloudflare Pages checks.
+- Dashboard `npm test`, syntax checks, and Python tests passed: 42 tests and
+  13 subtests.
+- Core PR `#47` merged at `a320d01`; dashboard PR `#13` merged at `aa22ce6`.
+
+Remaining boundary:
+
+- Add a dashboard write form and helper endpoint for attaching rules in a
+  future research-operations checkpoint; current dashboard review is
+  read-only and the CLI is the authoritative write path.
+- Expand compiler-backed validation only where a trusted local validator is
+  deliberately installed; never execute untrusted rules or packages on the
+  operator workstation.
+
+Next checkpoint:
+
+- Reconcile the dashboard helper write contract, then add the first narrow
+  package watchlist-to-research-case workflow for one ecosystem.
