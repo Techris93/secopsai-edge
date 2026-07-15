@@ -261,6 +261,16 @@ require_nmap() {
   fi
 }
 
+require_macos_service_root() {
+  [ "$(uname -s)" = "Darwin" ] || return 0
+  [ "${SECOPSAI_EDGE_ALLOW_PROTECTED_SERVICE_ROOT:-no}" = "yes" ] && return 0
+  case "$ROOT_DIR/" in
+    "$HOME/Documents/"*|"$HOME/Desktop/"*|"$HOME/Downloads/"*|"$HOME/Library/Mobile Documents/"*)
+      fail "macOS launchd cannot reliably run a worker from a privacy-protected folder: $ROOT_DIR. Install the released sensor with the dashboard's one-time command (it uses $HOME/.local/share/secopsai-edge), or move this checkout outside Documents/Desktop/Downloads. To override after granting the required macOS access, set SECOPSAI_EDGE_ALLOW_PROTECTED_SERVICE_ROOT=yes."
+      ;;
+  esac
+}
+
 prompt_default() {
   label="$1"
   default="$2"
@@ -777,6 +787,7 @@ install_worker_service() {
     fi
   done
 
+  require_macos_service_root
   ensure_python_tools
   require_nmap
   if [ "$profile" = "cloud" ]; then
