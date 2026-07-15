@@ -200,8 +200,11 @@ reboot/soak, or hardware acceptance rows below.
 - Cloudflare Pages dashboard acceptance is not closed from this workstation.
   The dashboard Pages project is `secopsai-dashboard.pages.dev`; the intended
   custom domain `dashboard.secopsai.dev` is attached to that project but is
-  still pending because its CNAME record has not been created. An independent
-  browser/network check is still required after DNS activation.
+  still pending because its CNAME record has not been created. Cloudflare's
+  Pages API reports domain status `pending`; independent DNS-over-HTTPS lookup
+  returns the Pages project records but returns NXDOMAIN for
+  `dashboard.secopsai.dev`. Add the CNAME record, then rerun the independent
+  browser/network check.
 - Reboot survival and the seven-day sensor soak, scheduled scan, notification delivery, offline
   sensor alert, paid Render/PITR drill, second-owner MFA recovery, and
   TL-WN722N Linux/Raspberry Pi validation remain unperformed.
