@@ -10,7 +10,12 @@ ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "scripts" / "render_drift_check.py"
 
 
-def inventory(*, plan: str = "basic_256mb", expires_at: str | None = None) -> list[dict[str, object]]:
+def inventory(
+    *,
+    plan: str = "basic_256mb",
+    expires_at: str | None = None,
+    api_plan: str | None = None,
+) -> list[dict[str, object]]:
     return [
         {
             "service": {
@@ -21,6 +26,7 @@ def inventory(*, plan: str = "basic_256mb", expires_at: str | None = None) -> li
                 "autoDeploy": "yes",
                 "serviceDetails": {
                     "healthCheckPath": "/readyz",
+                    **({"plan": api_plan} if api_plan else {}),
                     "envSpecificDetails": {
                         "buildCommand": "pip install -r requirements.lock",
                         "startCommand": "./scripts/render-start-api",
@@ -104,6 +110,16 @@ def test_free_database_expiry_is_reported_without_failing_by_default(tmp_path: P
     assert output["status"] == "warning"
     assert output["warning_count"] == 1
     assert output["results"][-1]["code"] == "database.expires_soon"
+
+
+def test_free_api_plan_is_reported_as_a_pilot_warning(tmp_path: Path) -> None:
+    result = run_check(tmp_path, inventory(api_plan="free"), "--json")
+
+    assert result.returncode == 0
+    output = json.loads(result.stdout)
+    assert output["status"] == "warning"
+    warning = next(item for item in output["results"] if item["code"] == "api.free_plan")
+    assert "paid pilot infrastructure" in warning["message"]
 
 
 def test_fail_on_warning_supports_automated_risk_gates(tmp_path: Path) -> None:

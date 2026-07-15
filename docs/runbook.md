@@ -140,9 +140,10 @@ For the hosted Render database, use the authenticated one-command workflow:
 
 The drift check validates `render.yaml`, the live API build/start/health
 contract, scheduler branch/commands/five-minute schedule, PostgreSQL status and
-major version, and free-database expiry. It reads no environment variables or
-secrets. Add `--json` for monitoring or `--fail-on-warning` when an expiring
-free database should fail an automation gate.
+major version, and free-plan warnings for both the API and database. It reads
+no environment variables or secrets. Add `--json` for monitoring or
+`--fail-on-warning` when demo-only infrastructure should fail an automation
+gate.
 
 The hosted backup command reads the database major from Render, pulls the
 matching official PostgreSQL client image, temporarily adds only the current

@@ -3788,3 +3788,43 @@ Next checkpoint:
 
 - Merge the change, run the full cross-repo gate, and use the human-readable
   acceptance output during the operator-controlled pilot exercise.
+
+## Checkpoint 078 - Hosted Paid-Plan Visibility
+
+Status: implementation complete; plan activation remains operator-controlled
+
+Scope:
+
+- Ensure hosted operations checks identify all demo-tier Render resources that
+  are unsuitable for customer data.
+- Keep billing and infrastructure mutations outside the repository change.
+
+Completed changes:
+
+- `scripts/render_drift_check.py` now warns when the live Edge API service uses
+  Render's free plan, in addition to the existing free PostgreSQL expiry
+  warning.
+- Added regression coverage for the API free-plan warning and preserved the
+  existing zero-drift/paid-inventory behavior.
+- Updated the Render deployment guide and operator runbook to require paid API
+  and database plans plus a recovery-point drill before customer data is
+  accepted.
+
+Validation:
+
+- Render drift test suite passed: 5 tests.
+- Live `./scripts/edge cloud drift-check --json` reported zero drift issues and
+  two warnings: `api.free_plan` and `database.expires_soon`.
+- No Render plan, billing, database, or service configuration was changed.
+
+Remaining external boundary:
+
+- Move the Edge API and PostgreSQL resources to approved paid pilot plans,
+  then perform the isolated restore/PITR drill.
+- Complete dashboard DNS/authentication, notification, reboot/soak,
+  second-owner recovery, and Raspberry Pi/Wi-Fi acceptance.
+
+Next checkpoint:
+
+- Re-run the drift check after paid-plan activation and record a clean
+  customer-data readiness result.
