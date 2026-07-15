@@ -3511,3 +3511,48 @@ Next checkpoint:
 
 - Complete reboot/soak and notification acceptance, then close the remaining
   hosted pilot go/no-go gates.
+
+## Checkpoint 072 - Deployed Dashboard Health Endpoint Correction
+
+Status: merged; dashboard DNS acceptance remains external
+
+Scope:
+
+- Align all hosted health and pilot acceptance checks with the actual
+  Cloudflare Pages project.
+- Preserve evidence that distinguishes a correct endpoint from a local DNS
+  failure.
+
+Completed changes:
+
+- PR `#71` changed the hosted health workflow, `./scripts/edge cloud
+  uptime-check`, and `./scripts/edge pilot check --cloud` defaults from the
+  retired `secopsai-edge.pages.dev` hostname to the documented
+  `secopsai-dashboard.pages.dev` project.
+- Centralized the default dashboard URL in
+  `scripts/hosted_health_check.py` and added a regression test to prevent the
+  old hostname from returning.
+- The corrected hosted acceptance run confirmed Edge API liveness and
+  readiness at v0.3.14 with schema `0017_sensor_offline_alert`.
+- The dashboard probe failed only because this workstation could not resolve
+  the Pages hostname. No response bodies, tokens, scans, or telemetry were
+  collected.
+
+Validation:
+
+- Focused hosted-health and pilot-acceptance tests passed: 10 tests.
+- Shell syntax and Python compilation checks passed.
+- PR `#71` full GitHub verification passed in `3m35s` and was merged.
+
+Remaining external boundary:
+
+- Re-run the dashboard probe from a network with working Pages DNS after the
+  project hostname and `dashboard.secopsai.dev` CNAME are active.
+- Reboot survival, seven-day soak, scheduled scan, real notification delivery
+  and offline/recovery alert, paid Render/PITR, second-owner MFA recovery,
+  and TL-WN722N Linux/Raspberry Pi validation remain pending.
+
+Next checkpoint:
+
+- Close the dashboard DNS/account/notification gates where operator access is
+  available, then record the final pilot go/no-go decision.
