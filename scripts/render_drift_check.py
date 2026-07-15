@@ -150,6 +150,12 @@ def inspect_inventory(
                 )
         if not auto_deploy_enabled(api.get("autoDeploy")):
             add("drift", "api.auto_deploy", "API automatic deploys are disabled.")
+        if details.get("plan") == "free":
+            add(
+                "warning",
+                "api.free_plan",
+                "API uses the free plan; paid pilot infrastructure is required for reliable availability.",
+            )
         if not any(item["code"].startswith("api.") for item in results):
             add("ok", "api.contract", "API service matches the repository deployment contract.")
 

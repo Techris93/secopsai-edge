@@ -91,7 +91,7 @@ without founder supervision:
 
 ## Controlled Pilot Completion Sequence
 
-Implementation checkpoints are complete through `077`. The remaining work is
+Implementation checkpoints are complete through `078`. The remaining work is
 external operator acceptance, not untracked feature development. The older
 numbered entries below are historical milestones; the active acceptance gate
 is now the target-host lifecycle and pilot go/no-go exercise:
@@ -224,6 +224,9 @@ is now the target-host lifecycle and pilot go/no-go exercise:
 31. **Checkpoint 077 - human-readable pilot acceptance.** The non-destructive
     pilot check can now render safe operator guidance while continuing to write
     machine-readable JSON evidence for automation and audit records.
+32. **Checkpoint 078 - hosted paid-plan visibility.** Render drift checks now
+    warn for both free Edge API and free PostgreSQL resources, so a zero-drift
+    deployment cannot be mistaken for paid-pilot durability.
 
 Commercial SaaS/MSP, billing, broad fleet automation, appliance imaging, and
 multi-ecosystem research automation remain subsequent product horizons rather

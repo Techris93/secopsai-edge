@@ -114,10 +114,10 @@ reboot/soak, or hardware acceptance rows below.
   `/readyz` as healthy on v0.3.14 with schema `0017_sensor_offline_alert`.
 - The same health check returned the documented non-secret
   `dns_resolution_failed` result for `secopsai-dashboard.pages.dev`.
-- `./scripts/edge cloud drift-check` reported zero drift issues. It warned
-  that the current free Render database expires on 2026-07-20; paid
-  infrastructure activation and a PITR drill remain mandatory before a real
-  external pilot.
+- `./scripts/edge cloud drift-check --json` reported zero drift issues and two
+  warnings: the Edge API is on Render's free plan and the free database expires
+  on 2026-07-20. Paid API/database activation and a PITR drill remain
+  mandatory before a real external pilot.
 
 ## v0.3.14 release-check repair and package evidence
 

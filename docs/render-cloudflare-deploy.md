@@ -95,8 +95,11 @@ infrastructure or dashboard change:
 ```
 
 The command fails on live build/start/health/branch/schedule/database-version
-drift and warns about a free database nearing expiry. A warning does not fail
-an interactive check unless `--fail-on-warning` is supplied.
+drift and warns when the Edge API or database is on a free plan. A warning does
+not fail an interactive check unless `--fail-on-warning` is supplied. Treat
+free-plan warnings as a demo-only boundary; move both the API and database to
+paid pilot plans and complete a recovery-point drill before accepting customer
+data.
 
 Create a verified pre-deploy export while the database is still on a free plan:
 
