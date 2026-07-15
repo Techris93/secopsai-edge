@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import socket
 import time
 import urllib.error
@@ -49,6 +50,7 @@ def check(
     *,
     expect_json_status: str | None = None,
     expect_text: str | None = None,
+    expect_pattern: tuple[str, ...] = (),
     expect_json: bool = False,
     headers: Mapping[str, str] | None = None,
 ) -> dict[str, object]:
@@ -80,6 +82,10 @@ def check(
         if expect_text:
             result["expected_content"] = expect_text
             result["ok"] = bool(result["ok"] and expect_text in body)
+        if expect_pattern:
+            missing = [pattern for pattern in expect_pattern if re.search(pattern, body) is None]
+            result["missing_content"] = missing
+            result["ok"] = bool(result["ok"] and not missing)
         return result
     except urllib.error.HTTPError as exc:
         return {
@@ -115,7 +121,7 @@ def main() -> int:
         "checks": [
             check(f"{api_url}/healthz", expect_json_status="ok"),
             check(f"{api_url}/readyz", expect_json_status="ready"),
-            check(dashboard_url, expect_text="SecOpsAI Edge"),
+            check_dashboard(dashboard_url),
         ],
     }
     evidence["ok"] = all(item["ok"] for item in evidence["checks"])
@@ -126,6 +132,34 @@ def main() -> int:
         with args.output.open("a", encoding="utf-8") as handle:
             handle.write(f"{line}\n")
     return 0 if evidence["ok"] else 1
+
+
+def check_dashboard(url: str) -> dict[str, object]:
+    """Check the public page and the runtime config without recording its body."""
+    page = check(url, expect_text="SecOpsAI")
+    if not page["ok"]:
+        return page
+
+    config_url = f"{url.rstrip('/')}/config.js"
+    config = check(
+        config_url,
+        expect_text="window.SECOPSAI_CONFIG",
+        expect_pattern=(
+            r'["\']?supabaseUrl["\']?\s*:\s*["\']https://[^"\'\\]+["\']',
+            r'["\']?supabaseAnonKey["\']?\s*:\s*["\'][^"\'\\]{20,}["\']',
+        ),
+    )
+    result: dict[str, object] = {
+        **page,
+        "config_url": _safe_url(config_url),
+        "config_ok": config["ok"],
+        "config_status_code": config.get("status_code"),
+        "config_error_code": config.get("error_code"),
+        "config_missing": config.get("missing_content", []),
+    }
+    result["ok"] = bool(page["ok"] and config["ok"])
+    result["latency_ms"] = int(page.get("latency_ms", 0)) + int(config.get("latency_ms", 0))
+    return result
 
 
 if __name__ == "__main__":

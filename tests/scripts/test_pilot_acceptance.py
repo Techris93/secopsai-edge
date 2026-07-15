@@ -42,6 +42,16 @@ class Handler(BaseHTTPRequestHandler):
                 self._write_json({"status": "ready"})
             else:
                 self._write_json([])
+        elif self.path.startswith("/config.js"):
+            body = (
+                b'window.SECOPSAI_CONFIG = {"supabaseUrl":"https://supabase.example",'
+                b'"supabaseAnonKey":"abcdefghijklmnopqrstuvwxyz123456"};'
+            )
+            self.send_response(200)
+            self.send_header("Content-Type", "application/javascript")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
         else:
             body = b"<html><title>SecOpsAI Edge</title></html>"
             self.send_response(200)

@@ -19,6 +19,7 @@ SCRIPT = ROOT / "scripts" / "hosted_health_check.py"
 
 class Handler(BaseHTTPRequestHandler):
     ready = True
+    config_ready = True
 
     def do_GET(self) -> None:
         if self.path == "/healthz":
@@ -31,6 +32,18 @@ class Handler(BaseHTTPRequestHandler):
                 },
                 200 if self.ready else 503,
             )
+        elif self.path.startswith("/config.js"):
+            body = (
+                b'window.SECOPSAI_CONFIG = {"supabaseUrl":"https://supabase.example",'
+                b'"supabaseAnonKey":"abcdefghijklmnopqrstuvwxyz123456"};'
+                if self.config_ready
+                else b"window.SECOPSAI_CONFIG = {\"supabaseUrl\":\"\",\"supabaseAnonKey\":\"\"};"
+            )
+            self.send_response(200)
+            self.send_header("Content-Type", "application/javascript")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
         else:
             body = b"<html><title>SecOpsAI Edge</title></html>"
             self.send_response(200)
@@ -51,8 +64,9 @@ class Handler(BaseHTTPRequestHandler):
         return
 
 
-def run_check(tmp_path: Path, *, ready: bool) -> subprocess.CompletedProcess[str]:
+def run_check(tmp_path: Path, *, ready: bool, config_ready: bool = True) -> subprocess.CompletedProcess[str]:
     Handler.ready = ready
+    Handler.config_ready = config_ready
     server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
@@ -96,6 +110,19 @@ def test_hosted_health_check_fails_when_readiness_is_degraded(tmp_path: Path) ->
     result = run_check(tmp_path, ready=False)
     assert result.returncode == 1
     assert json.loads(result.stdout)["ok"] is False
+
+
+def test_hosted_health_check_reports_reachable_but_unconfigured_dashboard(tmp_path: Path) -> None:
+    result = run_check(tmp_path, ready=True, config_ready=False)
+
+    assert result.returncode == 1
+    payload = json.loads(result.stdout)
+    dashboard = payload["checks"][2]
+    assert dashboard["status_code"] == 200
+    assert dashboard["config_ok"] is False
+    assert dashboard["config_status_code"] == 200
+    assert "supabaseAnonKey" in dashboard["config_missing"][1]
+    assert "window.SECOPSAI_CONFIG" not in dashboard.get("body", "")
 
 
 def test_hosted_health_check_classifies_dns_failures_without_exposing_reason(monkeypatch) -> None:

@@ -21,7 +21,11 @@ worker service. Wi-Fi capability is recorded as an advisory unless
 error types, never response bodies, tokens, or notification payloads. Hosted
 failures include a non-secret `error_code` such as `dns_resolution_failed`,
 `network_timeout`, `http_error`, or `invalid_json` so an operator can choose
-the right recovery path.
+the right recovery path. The dashboard check also probes its runtime
+`/config.js` and verifies non-empty hosted authentication configuration without
+recording the configuration body. A reachable page with missing or invalid
+runtime configuration therefore fails with an explicit `config_missing` list
+instead of looking like a healthy operator console.
 
 For a real operator acceptance run, also verify the authenticated product
 surface. Keep the access token in the process environment rather than in the
