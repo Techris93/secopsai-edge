@@ -56,6 +56,24 @@ bodies, scan output, or customer telemetry.
   OpenClaw agent has no usable provider authentication and its selected model
   entry lacks a matching provider declaration.
 
+## Cross-repository verification after checkpoint 073
+
+The following suites were rerun from the clean repositories after the
+OpenClaw runtime and roadmap corrections:
+
+- Edge: `144` backend/agent tests, `34` frontend tests, `28` desktop/mobile
+  browser workflows, production Next.js build, and `npm audit` with zero
+  vulnerabilities.
+- Core: `253` tests, `13` warnings, and `4` subtests passed.
+- Canonical dashboard: `42` Python tests and `13` subtests passed; JavaScript
+  tests and syntax checks passed.
+- OpenClaw SecOpsAI plugin: `4` tests passed, including compatibility and
+  manifest tool-contract checks.
+
+These are local repository verification results. They do not replace the
+external notification, DNS, paid-infrastructure, account-recovery,
+reboot/soak, or hardware acceptance rows below.
+
 ## v0.3.14 release-check repair and package evidence
 
 - Edge PR `#67` fixed the hosted worker release-check formatter. The previous
