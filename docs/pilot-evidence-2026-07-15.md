@@ -1,14 +1,14 @@
 # Pilot Evidence - 2026-07-15
 
 This record captures the non-destructive hosted checks performed after the
-`v0.3.8` release. It contains no bearer tokens, response bodies, scan output,
+`v0.3.9` release. It contains no bearer tokens, response bodies, scan output,
 or customer telemetry.
 
 ## Passed
 
-- Edge release `v0.3.8` is published from the verified GitHub workflow.
-- Render API `/healthz` returned HTTP `200`, status `ok`, version `0.3.8`.
-- Render API `/readyz` returned HTTP `200`, status `ready`, version `0.3.8`,
+- Edge release `v0.3.9` is published from the verified GitHub workflow.
+- Render API `/healthz` returned HTTP `200`, status `ok`, version `0.3.9`.
+- Render API `/readyz` returned HTTP `200`, status `ready`, version `0.3.9`,
   schema `0016_wifi_provenance`.
 - Authenticated operator preflight returned HTTP `200` and valid JSON for:
   identity, system status, onboarding, sites, sensors, schedules, findings,
@@ -18,15 +18,28 @@ or customer telemetry.
 ## Still Pending
 
 - Cloudflare Pages dashboard acceptance is not closed from this workstation.
-  The normal resolver classified `https://secopsai-edge.pages.dev` as
-  `dns_resolution_failed`. Cloudflare DNS-over-HTTPS returned public A records,
-  but direct HTTPS requests from this environment were reset, so an independent
-  browser/network check is still required.
+  The dashboard Pages project is `secopsai-dashboard.pages.dev`; the intended
+  custom domain `dashboard.secopsai.dev` is attached to that project but is
+  still pending because its CNAME record has not been created. An independent
+  browser/network check is still required after DNS activation.
 - The seven-day sensor soak, scheduled scan, notification delivery, offline
   sensor alert, paid Render/PITR drill, second-owner MFA recovery, and
   TL-WN722N Linux/Raspberry Pi validation remain unperformed.
 - Wi-Fi was not treated as a required check and no supported adapter capability
   was available on this MacBook run.
+
+## Clean-host bootstrap evidence
+
+- The public `v0.3.9` bootstrap installer was downloaded from the verified
+  GitHub release into an isolated temporary directory.
+- Installation completed successfully with a short-lived one-time enrollment
+  token and created owner-only sensor credentials.
+- The sensor registered successfully, was disabled after validation, and the
+  temporary installation directory was removed.
+- No service was started, no network scan was run, no raw telemetry was
+  collected, and no credential appeared in captured output.
+- Launchd/systemd startup, reboot survival, upgrade rollback, and long-running
+  soak remain separate operator acceptance steps.
 
 ## Reproduction
 
