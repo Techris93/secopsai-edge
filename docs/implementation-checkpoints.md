@@ -3728,6 +3728,11 @@ Validation:
 
 - `bash -n scripts/release-publish scripts/release-gate` passed.
 - `pytest tests/scripts/test_release_publisher.py -q` passed: 4 tests.
+- PR `#86` was merged to `main` at `fa6f798b5e95` after required verification
+  run `29396827760` passed in `3m47s`.
+- Post-merge `main` CI run `29397047473` passed in `3m44s`, including the
+  release archive inspection, migration/backup drills, dashboard build, 28
+  browser tests, and generated-state verification.
 - The existing v0.3.14 workflow remains the authoritative successful package
   publication evidence; no release tag was created by this checkpoint.
 
