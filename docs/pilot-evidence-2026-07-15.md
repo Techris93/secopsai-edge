@@ -204,7 +204,9 @@ reboot/soak, or hardware acceptance rows below.
   Pages API reports domain status `pending`; independent DNS-over-HTTPS lookup
   returns the Pages project records but returns NXDOMAIN for
   `dashboard.secopsai.dev`. Add the CNAME record, then rerun the independent
-  browser/network check.
+  browser/network check. An authenticated attempt to create the record
+  through the current Wrangler OAuth token was rejected with Cloudflare API
+  error `10000` (DNS-write permission is not present); no DNS state changed.
 - Reboot survival and the seven-day sensor soak, scheduled scan, notification delivery, offline
   sensor alert, paid Render/PITR drill, second-owner MFA recovery, and
   TL-WN722N Linux/Raspberry Pi validation remain unperformed.
