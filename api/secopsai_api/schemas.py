@@ -647,6 +647,15 @@ class SensorOut(BaseModel):
     current_job: ScanJobOut | None = None
 
 
+class SensorReleaseStatusOut(BaseModel):
+    id: str
+    name: str
+    version: str | None = None
+    recommended_version: str | None = None
+    release_status: str
+    upgrade_available: bool | None = None
+
+
 class NotificationEndpointCreateRequest(BaseModel):
     name: str = Field(min_length=1, max_length=160)
     type: str = Field(pattern="^(webhook|email|telegram)$")

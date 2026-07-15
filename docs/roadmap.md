@@ -4,7 +4,7 @@ This roadmap records product gaps, not historical aspirations. A capability is
 listed as complete only when it has implementation and test evidence in
 `docs/implementation-checkpoints.md`.
 
-## Current Product Baseline - v0.3.12
+## Current Product Baseline - v0.3.13
 
 The controlled-pilot baseline includes:
 
@@ -31,6 +31,8 @@ The controlled-pilot baseline includes:
   the operator can copy a verified, explicit upgrade command. The read-only
   `./scripts/edge worker release-check --cloud` command provides the same
   check without downloading or changing the sensor.
+- The cloud release check uses a sensor-scoped read-only endpoint and does not
+  require an administrator token on the sensor host.
 - Redacted support bundles, backup/restore tooling, release gates, verified
   private release archives, Render API/PostgreSQL, Cloudflare dashboard,
   Render configuration drift checks, and matching-major hosted backups.
@@ -86,7 +88,7 @@ without founder supervision:
 
 ## Controlled Pilot Completion Sequence
 
-Implementation checkpoints are complete through `066`. The remaining work is
+Implementation checkpoints are complete through `068`. The remaining work is
 external operator acceptance, not untracked feature development. The older
 numbered entries below are historical milestones; the active acceptance gate
 is now the target-host lifecycle and pilot go/no-go exercise:
@@ -173,6 +175,13 @@ is now the target-host lifecycle and pilot go/no-go exercise:
     dashboard expose an operator-reviewed upgrade path. Unattended fleet
     rollout, staged rings, and signed remote upgrades remain later SaaS
     milestones.
+23. **Checkpoint 067 - v0.3.12 hosted release evidence.** The fresh package
+    passed the corrected release-publication workflow, archive verification,
+    and Render deployment identity checks.
+24. **Checkpoint 068 - sensor-scoped release status.** The cloud worker check
+    now authenticates with the sensor's scoped token against a read-only
+    endpoint; administrator credentials are not required for sensor lifecycle
+    verification.
 
 Commercial SaaS/MSP, billing, broad fleet automation, appliance imaging, and
 multi-ecosystem research automation remain subsequent product horizons rather
@@ -180,8 +189,9 @@ than hidden requirements of the controlled-pilot release.
 
 ## Paid Pilot Readiness
 
-- Fleet release visibility and a signed, staged sensor upgrade workflow with
-  rollback.
+- Signed, staged sensor upgrade workflow with rollback. Release visibility and
+  explicit operator-controlled upgrades are implemented; unattended fleet
+  rollout remains a later SaaS milestone.
 - Per-customer report branding, report retention policy, and export audit
   evidence.
 - Support SLOs, escalation runbook, safe remote diagnostics, and pilot exit

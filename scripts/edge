@@ -931,21 +931,15 @@ worker_release_check() {
   ensure_python_tools
   local_version="$(PYTHONPATH="$ROOT_DIR/agent" "$PYTHON_BIN" -c 'from secopsai_agent import __version__; print(__version__)')"
   if [ "$profile" = "cloud" ]; then
-    load_cloud_env
+    require_cloud_sensor_env
     target_api_url="$(cloud_api_url)"
-    sensor_id="${SECOPSAI_CLOUD_SENSOR_ID:-}"
-    [ -n "$sensor_id" ] || fail "No hosted sensor ID. Run ./scripts/edge cloud register first."
-    target_admin_token="$(cloud_admin_token)"
-    response="$(curl -fsS "$target_api_url/api/v1/sensors" -H "Authorization: Bearer $target_admin_token")" \
-      || fail "Unable to read hosted sensor release status. Check the API URL and admin access."
-    printf '%s' "$response" | SENSOR_ID="$sensor_id" LOCAL_VERSION="$local_version" "$PYTHON_BIN" -c '
+    sensor_id="$SECOPSAI_CLOUD_SENSOR_ID"
+    response="$(curl -fsS "$target_api_url/api/v1/sensors/$sensor_id/release-status" -H "X-Sensor-Token: $SECOPSAI_CLOUD_SENSOR_TOKEN")" \
+      || fail "Unable to read hosted sensor release status. Check the API URL and saved sensor credentials."
+    printf '%s' "$response" | LOCAL_VERSION="$local_version" "$PYTHON_BIN" -c '
 import json, os, sys
-items = json.load(sys.stdin)
-sensor_id = os.environ["SENSOR_ID"]
-sensor = next((item for item in items if item.get("id") == sensor_id), None)
-if sensor is None:
-    raise SystemExit("Hosted sensor was not found for the saved sensor ID.")
-print(f"Sensor:              {sensor.get(\"name\", sensor_id)}")
+sensor = json.load(sys.stdin)
+print(f"Sensor:              {sensor.get(\"name\", sensor.get(\"id\", \"unknown\"))}")
 print(f"Installed worker:    v{os.environ[\"LOCAL_VERSION\"]}")
 print(f"Reported worker:     v{sensor.get(\"version\") or \"unknown\"}")
 print(f"Recommended release: v{sensor.get(\"recommended_version\") or \"unknown\"}")

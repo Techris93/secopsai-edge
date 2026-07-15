@@ -356,7 +356,8 @@ read-only terminal check:
 ./scripts/edge worker release-check --cloud
 ```
 
-When an upgrade is available, use `Copy upgrade` in Sites. Review the command
+The cloud check uses the sensor's scoped credential from `.cloud-sensor.env`,
+not the workspace administrator token. When an upgrade is available, use `Copy upgrade` in Sites. Review the command
 before running it on the sensor host. It downloads the exact versioned
 bootstrap from the GitHub release, preserves the owner-only credential files,
 and uses the installer's rollback path if the new package cannot start. This
