@@ -3203,8 +3203,8 @@ Next checkpoint:
 
 ## Checkpoint 062 - Sensor-Offline Notification Evaluation
 
-Status: implementation complete; hosted migration and external pilot exercise
-remain pending
+Status: implementation complete; hosted migration verified; external pilot
+exercise remains pending
 
 Scope:
 
@@ -3242,12 +3242,10 @@ Validation:
 
 Remaining external boundary:
 
-- Render must deploy `v0.3.11` and report schema `0017_sensor_offline_alert`
-  before the hosted migration is considered verified.
 - A real notification destination, target-host worker outage/recovery, and
   seven-day scheduler/soak exercise still require operator evidence.
 
 Next checkpoint:
 
-- Run the clean release gate, publish `v0.3.11`, verify Render readiness, and
-  record a non-secret hosted migration and notification-scheduler result.
+- Exercise a real notification destination and target-host worker outage/recovery,
+  then record the final controlled-pilot acceptance evidence.
