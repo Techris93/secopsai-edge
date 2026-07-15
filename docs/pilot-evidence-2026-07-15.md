@@ -50,6 +50,10 @@ bodies, scan output, or customer telemetry.
 - Local installation and gateway restart succeeded. Runtime inspection
   reported plugin version `1.0.2` as loaded and activated with 27 tools and
   zero diagnostics.
+- The merged plugin was also exercised directly with the real Core and Edge
+  paths. It registered all 27 tools and the read-only
+  `secopsai_edge_worker_status` action returned the expected no-service state
+  without an error, scan, or mutation.
 - No scan, queued job, report, worker mutation, or raw telemetry operation was
   invoked during this check.
 - A model-driven read-only tool call remains pending because the local
