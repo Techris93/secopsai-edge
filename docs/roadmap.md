@@ -91,7 +91,7 @@ without founder supervision:
 
 ## Controlled Pilot Completion Sequence
 
-Implementation checkpoints are complete through `073`. The remaining work is
+Implementation checkpoints are complete through `075`. The remaining work is
 external operator acceptance, not untracked feature development. The older
 numbered entries below are historical milestones; the active acceptance gate
 is now the target-host lifecycle and pilot go/no-go exercise:
@@ -110,7 +110,14 @@ is now the target-host lifecycle and pilot go/no-go exercise:
    zero diagnostics, and now passes a live model-driven read-only worker-status
    turn using explicit embedded-agent path fallbacks. Only the unrelated Brave
    plugin metadata warning remains outside this product.
-4. **Historical release closeout.** The exact verified `v0.3.4` build
+4. **Checkpoint 074 - Hosted dashboard configuration acceptance.** Health and
+   pilot checks now validate the public dashboard runtime configuration without
+   recording Supabase credentials or response bodies.
+5. **Checkpoint 075 - Hosted dashboard deployment evidence.** Cloudflare Pages
+   production configuration entries were confirmed read-only; the browser-side
+   `/config.js` block and workstation DNS limitation were recorded without
+   misclassifying them as a deployment failure.
+6. **Historical release closeout.** The exact verified `v0.3.4` build
    closeout was superseded by the verified `v0.3.5` release in checkpoint 042.
 5. **Checkpoint 042 - AI report cost guardrail and release evidence.** The
    report cooldown, operator visibility, release archive, Render identity, and
