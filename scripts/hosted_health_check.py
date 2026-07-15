@@ -12,6 +12,8 @@ from pathlib import Path
 from typing import Mapping
 from urllib.parse import urlsplit, urlunsplit
 
+DEFAULT_DASHBOARD_URL = "https://secopsai-dashboard.pages.dev"
+
 
 def _safe_url(url: str) -> str:
     """Remove credentials and query material before writing an evidence record."""
@@ -101,7 +103,7 @@ def check(
 def main() -> int:
     parser = argparse.ArgumentParser(description="Record non-secret SecOpsAI Edge hosted health evidence")
     parser.add_argument("--api-url", default="https://secopsai-edge-api.onrender.com")
-    parser.add_argument("--dashboard-url", default="https://secopsai-edge.pages.dev")
+    parser.add_argument("--dashboard-url", default=DEFAULT_DASHBOARD_URL)
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
 

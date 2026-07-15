@@ -88,6 +88,10 @@ def test_hosted_health_check_records_success_without_response_bodies(tmp_path: P
     assert (tmp_path / "health.jsonl").read_text(encoding="utf-8").count("\n") == 1
 
 
+def test_default_dashboard_url_matches_the_deployed_pages_project() -> None:
+    assert hosted_health_check.DEFAULT_DASHBOARD_URL == "https://secopsai-dashboard.pages.dev"
+
+
 def test_hosted_health_check_fails_when_readiness_is_degraded(tmp_path: Path) -> None:
     result = run_check(tmp_path, ready=False)
     assert result.returncode == 1

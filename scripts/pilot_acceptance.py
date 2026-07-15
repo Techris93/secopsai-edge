@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from hosted_health_check import check as check_endpoint
+from hosted_health_check import DEFAULT_DASHBOARD_URL, check as check_endpoint
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -178,7 +178,7 @@ def run_acceptance(args: argparse.Namespace) -> dict[str, Any]:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run non-destructive SecOpsAI Edge pilot acceptance checks")
     parser.add_argument("--api-url", default="https://secopsai-edge-api.onrender.com")
-    parser.add_argument("--dashboard-url", default="https://secopsai-edge.pages.dev")
+    parser.add_argument("--dashboard-url", default=DEFAULT_DASHBOARD_URL)
     parser.add_argument("--output", type=Path)
     parser.add_argument("--skip-cloud", action="store_true", help="Skip hosted API and dashboard checks")
     parser.add_argument("--skip-worker", action="store_true", help="Skip local worker-service check")
