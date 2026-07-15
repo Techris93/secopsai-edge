@@ -91,7 +91,7 @@ without founder supervision:
 
 ## Controlled Pilot Completion Sequence
 
-Implementation checkpoints are complete through `080`. The remaining work is
+Implementation checkpoints are complete through `081`. The remaining work is
 external operator acceptance, not untracked feature development. The older
 numbered entries below are historical milestones; the active acceptance gate
 is now the target-host lifecycle and pilot go/no-go exercise:
@@ -240,6 +240,12 @@ is now the target-host lifecycle and pilot go/no-go exercise:
    is preserved and bounded, no shell is involved, Core remains authoritative
    for validation/publication gates, and dashboard PR `#14` is merged at
    `aca1382`.
+35. **Checkpoint 081 - npm watchlist-to-case workflow.** Core now supports a
+   preview-first, `--create`-gated workflow that promotes explicitly selected
+   npm campaign-watchlist leads into idempotent draft Research Cases with local
+   provenance. Non-npm prefixes are rejected, package code is never fetched or
+   executed, Core PR `#48` is merged at `f941fea`, and the broader ecosystem
+   adapters plus external pilot gates remain explicit.
 
 Commercial SaaS/MSP, billing, broad fleet automation, appliance imaging, and
 multi-ecosystem research automation remain subsequent product horizons rather
