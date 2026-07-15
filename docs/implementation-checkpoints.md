@@ -3049,7 +3049,7 @@ Evidence:
 - No service was started, no network scan was run, no raw telemetry was
   collected, and no credential appeared in captured output.
 
-Remaining external boundary:
+Known runtime note:
 
 - This does not prove launchd/systemd startup, reboot survival, upgrade
   rollback, uninstall, or a seven-day worker soak.
@@ -3583,7 +3583,8 @@ Completed changes and evidence:
 
 Validation:
 
-- Plugin test suite passed: 4 tests.
+- Plugin test suite passed: 5 tests, including the embedded-agent path
+  fallback regression.
 - Runtime plugin inspection passed with 27 tool names and no diagnostics.
 - No network scan, scan queue, report generation, worker start/stop, or raw
   telemetry operation was invoked.
@@ -3592,9 +3593,9 @@ Remaining external boundary:
 
 - The embedded/local agent path does not pass the configured plugin object to
   `api.config`; plugin PR `#10` added explicit `SECOPSAI_CORE_PATH` and
-  `SECOPSAI_EDGE_PATH` fallbacks for that runtime boundary. A fresh live model
-  turn then invoked `secopsai_edge_worker_status` against the real Edge path
-  and returned the expected stopped-worker state.
+  `SECOPSAI_EDGE_PATH` fallbacks, and a fresh live model turn invoked
+  `secopsai_edge_worker_status` against the real Edge path with the expected
+  stopped-worker result.
 - The unrelated OpenClaw warning about conflicting Brave plugin install
   metadata remains outside the SecOpsAI plugin.
 
