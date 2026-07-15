@@ -376,6 +376,28 @@ configured hostname, `network_timeout` to check connectivity/provider health,
 `invalid_json` to verify that the configured URL is the intended SecOpsAI API
 or dashboard. These diagnostics never store response bodies.
 
+## Release Publication Recovery
+
+The tag workflow verifies the exact `main` ancestry, builds the package, and
+publishes the assets through `scripts/release-publish`. Publication is
+idempotent: an existing release is refreshed with `--clobber`, and a create
+failure is retried as an existing-release upload so a concurrent tag run does
+not leave a false failed release. The helper never creates a release unless
+all requested asset files exist.
+
+To inspect a release run without rebuilding or changing the repository:
+
+```bash
+gh run list --workflow 'Release Sensor Package' --limit 10
+gh run view <run-id> --log-failed
+gh release view <tag>
+```
+
+Historical v0.3.6 and v0.3.7 failures stopped only at release publication
+because the release tag already existed. The current workflow records that
+case as a verified asset refresh; a failed package build or release gate must
+still be investigated as a real failure.
+
 ## Automatic Core Sync
 
 Keep Core assets/findings current without manually exporting bundles:
