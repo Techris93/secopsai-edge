@@ -25,6 +25,16 @@ def _fake_curl(bin_dir: Path, args_file: Path) -> None:
     curl.chmod(0o700)
 
 
+def _fake_release_curl(bin_dir: Path) -> None:
+    curl = bin_dir / "curl"
+    curl.write_text(
+        "#!/bin/sh\n"
+        "printf '%s' '{\"id\":\"sensor-release\",\"name\":\"MacBook Sensor\",\"version\":\"0.3.13\",\"recommended_version\":\"0.3.13\",\"release_status\":\"current\",\"upgrade_available\":false}'\n",
+        encoding="utf-8",
+    )
+    curl.chmod(0o700)
+
+
 def test_cloud_sensor_rotation_replaces_credentials_atomically(tmp_path: Path) -> None:
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
@@ -103,3 +113,36 @@ def test_cloud_reauth_alias_accepts_explicit_sensor_id(tmp_path: Path) -> None:
     assert "SECOPSAI_CLOUD_SENSOR_ID=sensor-explicit" in sensor_file.read_text(encoding="utf-8")
     args = (tmp_path / "curl-args.txt").read_text(encoding="utf-8").splitlines()
     assert "https://edge.example.test/api/v1/sensors/sensor-explicit/rotate-token" in args
+
+
+def test_cloud_worker_release_check_formats_hosted_response(tmp_path: Path) -> None:
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    _fake_release_curl(bin_dir)
+
+    env = os.environ.copy()
+    env.update(
+        {
+            "PATH": f"{bin_dir}:{env['PATH']}",
+            "SECOPSAI_EDGE_CLOUD_ENV_FILE": str(tmp_path / "cloud.env"),
+            "SECOPSAI_EDGE_CLOUD_SENSOR_ENV_FILE": str(tmp_path / "cloud-sensor.env"),
+            "SECOPSAI_CLOUD_API_URL": "https://edge.example.test",
+            "SECOPSAI_CLOUD_SENSOR_ID": "sensor-release",
+            "SECOPSAI_CLOUD_SENSOR_TOKEN": "sensor-token",
+        }
+    )
+
+    result = subprocess.run(
+        [str(EDGE), "worker", "release-check", "--cloud"],
+        cwd=ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "MacBook Sensor" in result.stdout
+    assert "Installed worker:    v0.3.13" in result.stdout
+    assert "Release status:      current" in result.stdout
+    assert "invalid sensor release response" not in result.stderr

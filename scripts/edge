@@ -939,11 +939,11 @@ worker_release_check() {
     printf '%s' "$response" | LOCAL_VERSION="$local_version" "$PYTHON_BIN" -c '
 import json, os, sys
 sensor = json.load(sys.stdin)
-print(f"Sensor:              {sensor.get(\"name\", sensor.get(\"id\", \"unknown\"))}")
-print(f"Installed worker:    v{os.environ[\"LOCAL_VERSION\"]}")
-print(f"Reported worker:     v{sensor.get(\"version\") or \"unknown\"}")
-print(f"Recommended release: v{sensor.get(\"recommended_version\") or \"unknown\"}")
-print(f"Release status:      {sensor.get(\"release_status\", \"unknown\")}")
+print("Sensor:              {}".format(sensor.get("name", sensor.get("id", "unknown"))))
+print("Installed worker:    v{}".format(os.environ["LOCAL_VERSION"]))
+print("Reported worker:     v{}".format(sensor.get("version") or "unknown"))
+print("Recommended release: v{}".format(sensor.get("recommended_version") or "unknown"))
+print("Release status:      {}".format(sensor.get("release_status", "unknown")))
 if sensor.get("upgrade_available"):
     print("Action:              copy the verified upgrade command from Sites, review it, then run it with --upgrade")
 else:
