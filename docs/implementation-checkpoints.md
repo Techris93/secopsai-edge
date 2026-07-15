@@ -3158,3 +3158,45 @@ Next checkpoint:
 - Complete the target-host lifecycle exercise and record the final controlled
   pilot go/no-go evidence, then move to paid-pilot hardening only for gaps
   revealed by that exercise.
+
+## Checkpoint 061 - v0.3.10 Sensor Package Release
+
+Status: released; external pilot acceptance remains pending
+
+Scope:
+
+- Ship the checkpoint 060 worker lifecycle cleanup in the public sensor
+  package rather than leaving it only in the source checkout.
+- Verify the release was built from `main`, passed the release gate, and
+  contains the new lifecycle command.
+
+Release evidence:
+
+- API, agent, and web package versions were aligned at `0.3.10` in the
+  release-preparation commit `855072a`.
+- Local `./scripts/release-gate` passed at `855072a`, including `135`
+  backend/agent tests, `33` frontend tests, the production build, `28`
+  desktop/mobile browser workflows, audit checks, and archive verification.
+- PR `#56` passed hosted verification and was merged into `main`.
+- Tag `v0.3.10` was created from the verified main ancestry.
+- GitHub release workflow `29381687693` passed in `3m15s`. It verified the
+  release commit, package archive, SHA-256 manifest, and publication steps.
+- Published archive inspection passed: the package checksum was valid, the
+  archive contains `worker uninstall`, and the agent reports version
+  `0.3.10`.
+- Release [`v0.3.10`](https://github.com/Techris93/secopsai-edge/releases/tag/v0.3.10)
+  contains the versioned archive, versioned checksum, latest archive, latest
+  checksum, and bootstrap installer.
+
+External boundary:
+
+- GitHub artifact provenance attestation remains unavailable for this private
+  repository; the release workflow records that limitation and publishes
+  SHA-256 manifests from the verified tag.
+- A target-host reboot, upgrade rollback, uninstall, Linux/systemd exercise,
+  and seven-day worker soak are still required before external pilot go/no-go.
+
+Next checkpoint:
+
+- Run the v0.3.10 installer on the target MacBook or Linux sensor host through
+  the lifecycle exercise and record the final acceptance evidence.
