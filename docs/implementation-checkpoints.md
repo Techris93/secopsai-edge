@@ -3917,3 +3917,53 @@ Next checkpoint:
 
 - Build the first package watchlist workflow with explicit provenance and safe
   artifact handling.
+
+## Checkpoint 081 - npm Watchlist To Research Case
+
+Status: implementation complete; broader ecosystem promotion and hosted pilot
+acceptance remain external/product-expansion work
+
+Scope:
+
+- Prove the first safe path from an existing package campaign watchlist into a
+  durable Core Research Case without treating a watchlist hit as proof of
+  maliciousness.
+
+Completed changes:
+
+- Core now supports `research case from-watchlist --ecosystem npm` with explicit
+  package selection or a reviewed `--all` preview.
+- Promotion is preview-first and requires `--create` for writes. It accepts
+  only normalized npm package names, excludes other ecosystem prefixes, and
+  does not fetch registry metadata, download artifacts, unpack packages, or
+  execute package code.
+- Promotion is idempotent for an active npm package subject and records local
+  watchlist provenance as structured case evidence. Cases remain in `draft`
+  with confidence and validation open.
+- Added CLI and research documentation plus tests for ecosystem filtering,
+  preview behavior, provenance, idempotence, and the write gate.
+
+Validation:
+
+- Core full suite passed: 259 tests, 13 warnings, 4 subtests.
+- Core PR `#48` merged to main at `f941fea`.
+- Edge full verification passed: 151 backend/agent tests, 34 frontend tests,
+  28 browser tests, production build, and dependency audit.
+- Canonical dashboard tests and checks passed; OpenClaw plugin build and 5
+  tests passed.
+
+Remaining boundary:
+
+- Add registry-specific watchlist adapters for PyPI, NuGet, Packagist, and the
+  other supported ecosystems after the npm contract is exercised with real
+  public research data. Do not generalize registry behavior by string prefix
+  alone.
+- Complete the external pilot gates: paid Render plans and restore drill,
+  dashboard DNS/operator authentication, real notification delivery, target
+  host reboot/soak, second-owner MFA recovery, and Raspberry Pi/TL-WN722N
+  validation.
+
+Next checkpoint:
+
+- Run the controlled pilot acceptance exercise and record pass/fail evidence
+  for each external gate.
