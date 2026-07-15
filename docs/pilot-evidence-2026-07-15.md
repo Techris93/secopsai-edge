@@ -65,6 +65,11 @@ bodies, scan output, or customer telemetry.
   direct runtime exercise above remains the strongest local proof, and no
   scan, queued job, report, worker mutation, or raw telemetry operation was
   invoked.
+- Plugin PR `#10` added `SECOPSAI_CORE_PATH` and `SECOPSAI_EDGE_PATH` fallback
+  configuration for embedded/local agent runs while preserving explicit
+  plugin configuration precedence. After the fix, a fresh live Google model
+  turn invoked `secopsai_edge_worker_status` against the real Edge checkout
+  and returned the expected stopped-worker state. No scan or mutation ran.
 
 ## Cross-repository verification after checkpoint 073
 
