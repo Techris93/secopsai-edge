@@ -63,6 +63,15 @@ or customer telemetry.
 - The lifecycle helper and dashboard command-card tests passed as part of the
   full Edge gate.
 
+## v0.3.10 package closeout
+
+- The v0.3.10 release workflow `29381687693` passed after verifying the tag's
+  main ancestry, release gate, archive, checksums, and publication.
+- The downloaded v0.3.10 archive checksum passed and archive inspection found
+  the worker uninstall command and agent version `0.3.10`.
+- The release is available at
+  https://github.com/Techris93/secopsai-edge/releases/tag/v0.3.10.
+
 ## Reproduction
 
 Run the hosted checks from a network with working DNS and an approved operator

@@ -148,6 +148,14 @@ is now the target-host lifecycle and pilot go/no-go exercise:
     source checkout now rejects the macOS privacy-protected service path with
     an actionable recovery message. Reboot, upgrade rollback, uninstall, and
     soak evidence remain pending.
+18. **Checkpoint 060 - Worker lifecycle cleanup and cross-repo gate.** The
+    supported worker uninstall command, onboarding command card, and release
+    path documentation passed the complete Edge, Core, dashboard, and plugin
+    verification gates.
+19. **Checkpoint 061 - v0.3.10 sensor package release.** The lifecycle cleanup
+    was published in the verified v0.3.10 archive and checked after download.
+    Target-host reboot, upgrade rollback, uninstall, and soak evidence remain
+    the active acceptance gate.
 
 Commercial SaaS/MSP, billing, broad fleet automation, appliance imaging, and
 multi-ecosystem research automation remain subsequent product horizons rather
