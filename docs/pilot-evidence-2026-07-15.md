@@ -50,6 +50,25 @@ bodies, scan output, or customer telemetry.
 - This does not perform an upgrade. The target-host upgrade, rollback, reboot,
   and soak exercise remain operator acceptance tasks.
 
+## v0.3.14 clean-host lifecycle evidence
+
+- A temporary 30-minute site-scoped enrollment created through the hosted API
+  enrolled `v0.3.14` without exposing the administrator token to the installer.
+- The released bootstrap downloaded and checksum-verified the private package,
+  installed it under an isolated path outside protected folders, installed the
+  macOS launchd service, and started it without running a scan.
+- After the first heartbeat, the validation sensor reported worker `v0.3.14`,
+  recommended release `v0.3.14`, and release status `current`. Worker logs
+  reported the expected waiting state with no error output.
+- `worker stop` and `worker start` both completed successfully. A deliberately
+  invalid upgrade enrollment failed with exit code `56`; the bootstrap restored
+  the previous installation and preserved version `0.3.14`. After restart, the
+  worker again heartbeated as `current`.
+- `worker uninstall` removed the launchd definition. The temporary sensor was
+  disabled and the isolated runtime and logs were removed.
+- No network scan, packet capture, raw telemetry collection, or customer data
+  change was performed during this lifecycle exercise.
+
 ## v0.3.13 package and scoped release-status evidence
 
 - The v0.3.13 release workflow `29386712345` passed in `3m16s` after
@@ -113,7 +132,7 @@ bodies, scan output, or customer telemetry.
   custom domain `dashboard.secopsai.dev` is attached to that project but is
   still pending because its CNAME record has not been created. An independent
   browser/network check is still required after DNS activation.
-- The seven-day sensor soak, scheduled scan, notification delivery, offline
+- Reboot survival and the seven-day sensor soak, scheduled scan, notification delivery, offline
   sensor alert, paid Render/PITR drill, second-owner MFA recovery, and
   TL-WN722N Linux/Raspberry Pi validation remain unperformed.
 - Wi-Fi was not treated as a required check and no supported adapter capability
