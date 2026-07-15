@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from hosted_health_check import DEFAULT_DASHBOARD_URL, check as check_endpoint
+from hosted_health_check import DEFAULT_DASHBOARD_URL, check as check_endpoint, check_dashboard
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -106,7 +106,7 @@ def run_acceptance(args: argparse.Namespace) -> dict[str, Any]:
             [
                 hosted("api_liveness", f"{api_url}/healthz", expect_json_status="ok"),
                 hosted("api_readiness", f"{api_url}/readyz", expect_json_status="ready"),
-                hosted("dashboard", dashboard_url, expect_text="SecOpsAI Edge"),
+                {"name": "dashboard", "required": True, **check_dashboard(dashboard_url)},
             ]
         )
 

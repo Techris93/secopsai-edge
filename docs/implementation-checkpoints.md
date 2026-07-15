@@ -3603,3 +3603,51 @@ Next checkpoint:
 
 - Close the remaining notification, account, DNS, paid-infrastructure,
   reboot/soak, and hardware acceptance gates.
+
+## Checkpoint 074 - Hosted Dashboard Configuration Acceptance
+
+Status: implementation complete; hosted operator configuration remains
+external
+
+Scope:
+
+- Make hosted dashboard acceptance distinguish a reachable web page from a
+  configured operator console.
+- Keep dashboard configuration and authentication material out of evidence
+  records.
+
+Completed changes:
+
+- `scripts/hosted_health_check.py` now checks the public dashboard page and its
+  runtime `/config.js` endpoint.
+- The check validates the runtime configuration contains a hosted HTTPS
+  Supabase URL and a non-empty anonymous key by pattern only; it never stores
+  the response body or key.
+- `scripts/pilot_acceptance.py` uses the same dashboard check, so the pilot
+  command reports configuration failures instead of treating a `200` page as
+  sufficient.
+- Added regression coverage for reachable-but-unconfigured dashboards and
+  preserved URL/body/secret redaction tests.
+
+Validation:
+
+- Focused hosted-health and pilot-acceptance tests passed: 11 tests.
+- The public `secopsai-dashboard.pages.dev` hostname was reachable in a
+  browser and rendered its intentional locked operator state. The available
+  browser session had no Cloudflare account session, so no DNS or Pages
+  settings were changed.
+- No response body, dashboard credential, scan, packet capture, or raw
+  telemetry was written to the acceptance evidence.
+
+Remaining external boundary:
+
+- Configure Supabase/Auth values and invite the first operator in the
+  Cloudflare Pages project before treating the dashboard as pilot-ready.
+- Add the `dashboard.secopsai.dev` DNS record with a Cloudflare credential
+  that has DNS-write permission, then rerun the public dashboard check from an
+  independent network.
+
+Next checkpoint:
+
+- Activate the hosted operator account and complete the notification,
+  paid-infrastructure, reboot/soak, recovery, and hardware acceptance gates.

@@ -72,7 +72,10 @@ without founder supervision:
    protects login, password recovery, invitation acceptance, MFA, scan queueing,
    finding triage, schedule creation, report generation, sensor enrollment, PDF
    download, keyboard paths, responsive layouts, and automated WCAG checks.
-   Complete a manual VoiceOver/NVDA review before broad commercial use.
+   Complete a manual VoiceOver/NVDA review before broad commercial use. Hosted
+   health checks now validate the dashboard runtime configuration as well as
+   the page response, so an unconfigured Pages deployment cannot be mistaken
+   for a usable operator console.
 3. **Account access activation.** Invitation acceptance, password recovery,
    TOTP MFA, one-use recovery codes, and owner-assisted reset are implemented.
    Configure an approved SMTP provider, enroll a second owner, and exercise the
