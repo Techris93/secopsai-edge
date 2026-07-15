@@ -20,13 +20,16 @@ bodies, scan output, or customer telemetry.
 ## Latest hosted deployment
 
 - Render Edge `/healthz` returned HTTP `200`, status `ok`, version `0.3.14`,
-  commit `68f58d7dcbb1`.
+  current deployed commit `6d9db82506c3`.
 - Render Edge `/readyz` returned HTTP `200`, status `ready`, version `0.3.14`,
   schema `0017_sensor_offline_alert`.
 - Render Core `/readyz` returned HTTP `200`, status `ready`, using its hosted
   SQLite data store.
 - The v0.3.14 deployment is the current hosted release; the earlier v0.3.9
   through v0.3.12 bullets above remain historical evidence.
+- The health/readiness recheck was performed after the documentation-only
+  merges and confirms the hosted service is still on the v0.3.14 application
+  version while Render reports the latest deployed main descendant commit.
 
 ## v0.3.14 hosted acceptance probe correction
 
