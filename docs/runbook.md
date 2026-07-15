@@ -364,6 +364,10 @@ and uses the installer's rollback path if the new package cannot start. This
 is an operator-controlled upgrade channel; unattended fleet rollout and
 remote self-upgrade are not enabled in the pilot baseline.
 
+OpenClaw operators can run the same read-only check with
+`secopsai_edge_release_check`. The plugin invokes the local Edge helper and
+does not receive, print, or request the sensor credential itself.
+
 When `./scripts/edge pilot check --cloud` or `./scripts/edge cloud uptime-check`
 fails, inspect the non-secret `error_code` in the JSON evidence. Use
 `dns_resolution_failed` to check the monitoring network's resolver or the

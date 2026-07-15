@@ -1,8 +1,8 @@
 # Pilot Evidence - 2026-07-15
 
 This record captures the non-destructive hosted checks performed through the
-`v0.3.12` release. Earlier sections retain the historical v0.3.9, v0.3.10,
-and v0.3.11 validation
+`v0.3.13` release. Earlier sections retain the historical v0.3.9 through
+v0.3.12 validation
 where that package was exercised. It contains no bearer tokens, response
 bodies, scan output, or customer telemetry.
 
@@ -19,14 +19,32 @@ bodies, scan output, or customer telemetry.
 
 ## Latest hosted deployment
 
-- Render Edge `/healthz` returned HTTP `200`, status `ok`, version `0.3.12`,
-  commit `91db49c7b9dd`.
-- Render Edge `/readyz` returned HTTP `200`, status `ready`, version `0.3.12`,
+- Render Edge `/healthz` returned HTTP `200`, status `ok`, version `0.3.13`,
+  commit `581653754988`.
+- Render Edge `/readyz` returned HTTP `200`, status `ready`, version `0.3.13`,
   schema `0017_sensor_offline_alert`.
 - Render Core `/readyz` returned HTTP `200`, status `ready`, using its hosted
   SQLite data store.
-- The v0.3.12 deployment is the current hosted release; the earlier v0.3.9,
-  v0.3.10, and v0.3.11 bullets above remain historical evidence.
+- The v0.3.13 deployment is the current hosted release; the earlier v0.3.9
+  through v0.3.12 bullets above remain historical evidence.
+
+## v0.3.13 package and scoped release-status evidence
+
+- The v0.3.13 release workflow `29386712345` passed in `3m16s` after
+  verifying main ancestry, the full release gate, archive, checksums, and
+  publication.
+- The downloaded `secopsai-edge-0.3.13.tar.gz` checksum passed and archive
+  inspection found `scripts/edge` while excluding credential and build paths.
+- The release is available at
+  https://github.com/Techris93/secopsai-edge/releases/tag/v0.3.13.
+- Render deployed the same main commit and reports matching version `0.3.13`
+  with schema `0017_sensor_offline_alert`.
+- `GET /api/v1/sensors/{sensor_id}/release-status` is sensor-token scoped and
+  returns only that sensor's release state. The released worker check no longer
+  requires a workspace administrator token.
+- OpenClaw plugin PR `#7` merged the read-only `secopsai_edge_release_check`
+  action, which invokes the same scoped worker command and never upgrades or
+  mutates the sensor.
 
 ## v0.3.12 package and release evidence
 

@@ -3342,8 +3342,7 @@ Next checkpoint:
 
 ## Checkpoint 068 - Sensor-Scoped Release Status
 
-Status: implementation complete; release and hosted deployment verification
-remain pending
+Status: released; hosted evidence closed; target-host exercise remains pending
 
 Scope:
 
@@ -3372,12 +3371,42 @@ Validation:
 
 Remaining external boundary:
 
-- v0.3.13 must pass the hosted release workflow and deploy before the endpoint
-  is available to the released worker.
-- OpenClaw still needs a small read-only release-status action after the Edge
-  release is hosted.
+- An operator must still perform an upgrade/rollback exercise on the target
+  sensor host and retain evidence before calling the lifecycle path
+  pilot-ready.
 
 Next checkpoint:
 
-- Release v0.3.13, verify the scoped endpoint on Render, then add and release
-  the OpenClaw `secopsai_edge_release_check` tool.
+- Complete the target-host lifecycle and controlled-pilot acceptance gates.
+
+## Checkpoint 069 - OpenClaw Release Check Integration
+
+Status: released; local plugin verification passed
+
+Scope:
+
+- Expose the sensor-scoped release check through the OpenClaw automation
+  bridge without adding an unapproved upgrade action.
+
+Completed changes:
+
+- OpenClaw plugin PR `#7` added the read-only
+  `secopsai_edge_release_check` tool. It invokes
+  `worker release-check --cloud` through the canonical Edge helper.
+- Plugin documentation and its allow-list example now include the tool.
+- Plugin tests verify the structured argument list and safe output path.
+
+Validation:
+
+- OpenClaw `npm test` passed: TypeScript build and 2 tests.
+- Edge v0.3.13 release workflow and Render health/readiness evidence passed.
+
+Remaining external boundary:
+
+- Install/reload the released plugin in the operator's OpenClaw runtime and
+  exercise the tool with a real sensor credential environment.
+
+Next checkpoint:
+
+- Complete the target-host lifecycle, OpenClaw runtime exercise, and remaining
+  controlled-pilot acceptance gates.

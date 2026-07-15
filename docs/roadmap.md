@@ -88,7 +88,7 @@ without founder supervision:
 
 ## Controlled Pilot Completion Sequence
 
-Implementation checkpoints are complete through `068`. The remaining work is
+Implementation checkpoints are complete through `069`. The remaining work is
 external operator acceptance, not untracked feature development. The older
 numbered entries below are historical milestones; the active acceptance gate
 is now the target-host lifecycle and pilot go/no-go exercise:
@@ -182,6 +182,9 @@ is now the target-host lifecycle and pilot go/no-go exercise:
     now authenticates with the sensor's scoped token against a read-only
     endpoint; administrator credentials are not required for sensor lifecycle
     verification.
+25. **Checkpoint 069 - OpenClaw release check integration.** OpenClaw now has a
+    read-only `secopsai_edge_release_check` action that invokes the scoped Edge
+    lifecycle check without requesting upgrade or service mutation approval.
 
 Commercial SaaS/MSP, billing, broad fleet automation, appliance imaging, and
 multi-ecosystem research automation remain subsequent product horizons rather
