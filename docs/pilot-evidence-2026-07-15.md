@@ -56,9 +56,15 @@ bodies, scan output, or customer telemetry.
   without an error, scan, or mutation.
 - No scan, queued job, report, worker mutation, or raw telemetry operation was
   invoked during this check.
-- A model-driven read-only tool call remains pending because the local
-  OpenClaw agent has no usable provider authentication and its selected model
-  entry lacks a matching provider declaration.
+- A live model-driven read-only turn was exercised with the approved Google
+  provider after the gateway was restarted. The model ran successfully but
+  reported `secopsai_edge_worker_status` as unavailable because the agent's
+  `coding` tool profile removed the plugin tool surface before dispatch. This
+  is an OpenClaw agent-policy boundary, not a plugin load failure.
+- The exact plugin tool was therefore not invoked through the model turn. The
+  direct runtime exercise above remains the strongest local proof, and no
+  scan, queued job, report, worker mutation, or raw telemetry operation was
+  invoked.
 
 ## Cross-repository verification after checkpoint 073
 

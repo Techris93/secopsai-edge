@@ -3559,7 +3559,7 @@ Next checkpoint:
 
 ## Checkpoint 073 - OpenClaw Current-Runtime Plugin Evidence
 
-Status: plugin runtime integration closed; model-auth exercise remains external
+Status: plugin runtime integration closed; model tool-policy exercise remains external
 
 Scope:
 
@@ -3590,16 +3590,19 @@ Validation:
 
 Remaining external boundary:
 
-- A model-driven OpenClaw tool call could not run because this workstation's
-  OpenClaw agent has no usable provider authentication and its selected
-  `openai-codex/gpt-5.5` entry lacks a matching provider model declaration.
-  Configure an approved OpenClaw provider before exercising the read-only
-  `secopsai_edge_worker_status` tool through an agent turn.
+- A live model-driven OpenClaw turn was run with the approved Google provider.
+  The model completed normally, but the agent's `coding` tool profile removed
+  the SecOpsAI plugin tools before dispatch, so it reported
+  `secopsai_edge_worker_status` as unavailable instead of invoking it. The
+  direct plugin runtime call is healthy; the remaining work is to configure
+  the operator's OpenClaw agent policy so the exact plugin tool is visible in
+  model turns, without changing global plugin trust or unrelated plugins.
 - The unrelated OpenClaw warning about conflicting Brave plugin install
   metadata remains outside the SecOpsAI plugin.
 
 Next checkpoint:
 
-- Exercise one read-only plugin tool through an authenticated OpenClaw agent,
-  then close the remaining notification, account, DNS, paid-infrastructure,
-  reboot/soak, and hardware acceptance gates.
+- Exercise one read-only plugin tool through an OpenClaw agent with an
+  explicitly compatible tool policy, then close the remaining notification,
+  account, DNS, paid-infrastructure, reboot/soak, and hardware acceptance
+  gates.
