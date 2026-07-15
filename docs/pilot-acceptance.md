@@ -14,6 +14,14 @@ From the installed Edge directory:
 ./scripts/edge pilot check --cloud --output pilot-acceptance.json
 ```
 
+For an interactive operator run, add `--format text`. The terminal output is
+human-readable and still contains only safe status, error-code, version, and
+latency details; `--output` always remains the complete JSON evidence record:
+
+```bash
+./scripts/edge pilot check --cloud --format text --output pilot-acceptance.json
+```
+
 The JSON record uses `secopsai.edge.pilot-acceptance.v1`. Required checks cover
 Nmap, Python, hosted `/healthz`, hosted `/readyz`, the dashboard, and the local
 worker service. Wi-Fi capability is recorded as an advisory unless

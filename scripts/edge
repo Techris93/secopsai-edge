@@ -79,7 +79,7 @@ Usage:
   ./scripts/edge cloud drift-check     Check Render API, scheduler, and database drift/expiry
   ./scripts/edge cloud backup          Create and verify a hosted Render PostgreSQL backup
   ./scripts/edge cloud uptime-check    Record API/readiness/dashboard health evidence
-  ./scripts/edge pilot check [--cloud] [--output FILE]
+  ./scripts/edge pilot check [--cloud] [--format text|json] [--output FILE]
                                       Run non-destructive pilot acceptance checks
   SECOPSAI_PILOT_ACCESS_TOKEN=... ./scripts/edge pilot check --cloud --require-auth
                                       Also verify authenticated operator surfaces
