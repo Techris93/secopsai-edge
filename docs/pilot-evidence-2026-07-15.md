@@ -19,7 +19,7 @@ bodies, scan output, or customer telemetry.
 ## Latest hosted deployment
 
 - Render Edge `/healthz` returned HTTP `200`, status `ok`, version `0.3.11`,
-  commit `5b1496f0767f`.
+  commit `ead9822e331a`.
 - Render Edge `/readyz` returned HTTP `200`, status `ready`, version `0.3.11`,
   schema `0017_sensor_offline_alert`.
 - Render Core `/readyz` returned HTTP `200`, status `ready`, using its hosted
