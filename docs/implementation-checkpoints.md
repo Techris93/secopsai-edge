@@ -3249,3 +3249,52 @@ Next checkpoint:
 
 - Exercise a real notification destination and target-host worker outage/recovery,
   then record the final controlled-pilot acceptance evidence.
+
+## Checkpoint 066 - Sensor Release Visibility
+
+Status: implementation complete; release and hosted deployment verification
+remain pending
+
+Scope:
+
+- Make sensor lifecycle state visible to operators without introducing
+  unattended remote code execution or an unreviewed fleet rollout mechanism.
+- Reuse the verified GitHub release/bootstrap and rollback path already used by
+  the pilot installer.
+
+Completed changes:
+
+- Added semantic version comparison for sensor heartbeats. The API now exposes
+  `recommended_version`, `release_status`, and `upgrade_available` on each
+  sensor. Invalid or missing versions are reported as `unknown`; disabled
+  sensors are reported as `disabled`.
+- Added Sites release status text and a `Copy upgrade` action for outdated
+  sensors. The copied command supports authenticated GitHub CLI downloads for
+  the private repository and a public curl fallback, then invokes the exact
+  versioned bootstrap with `--upgrade`.
+- Added the read-only `./scripts/edge worker release-check --cloud` command for
+  terminal-based release verification. It does not download, install, or
+  mutate the sensor.
+- Added API, CLI syntax, and dashboard tests for current, outdated, ahead,
+  unknown, disabled, and copy-action states.
+- Aligned API, agent, and dashboard package versions at `0.3.12` for the
+  release gate.
+
+Validation:
+
+- Focused API release-state tests passed.
+- Full backend/agent suite, frontend suite, production build, and npm audit
+  passed locally before release preparation.
+- `bash -n scripts/edge` and the local read-only release-check command passed.
+
+Remaining external boundary:
+
+- The v0.3.12 package must pass the hosted release workflow and be deployed
+  before the hosted API can report `recommended_version: 0.3.12`.
+- An operator must still perform a target-host upgrade/rollback exercise and
+  retain evidence before calling the lifecycle path pilot-ready.
+
+Next checkpoint:
+
+- Run the v0.3.12 release gate, merge the release branch, verify hosted
+  deployment identity, and exercise one operator-controlled upgrade check.

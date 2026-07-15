@@ -150,6 +150,9 @@ def test_list_sensors_reports_online_state_and_current_job() -> None:
     assert sensors[0]["name"] == "MacBook Sensor"
     assert sensors[0]["site_name"] == "Test Site"
     assert sensors[0]["connection_state"] == "online"
+    assert sensors[0]["recommended_version"]
+    assert sensors[0]["release_status"] == "unknown"
+    assert sensors[0]["upgrade_available"] is None
     assert sensors[0]["current_job"]["id"] == job.id
     assert sensors[0]["current_job"]["status"] == "running"
 
@@ -166,6 +169,37 @@ def test_list_sensors_marks_stale_sensor_offline() -> None:
 
     assert response.status_code == 200
     assert response.json()[0]["connection_state"] == "offline"
+
+
+def test_list_sensors_reports_outdated_release() -> None:
+    db = make_session()
+    sensor, _sensor_token = seed_sensor(db)
+    sensor.version = "0.1.0"
+    sensor.last_seen_at = utcnow()
+    db.commit()
+    client = make_client(db)
+
+    response = client.get("/api/v1/sensors", headers=admin_headers())
+
+    assert response.status_code == 200
+    payload = response.json()[0]
+    assert payload["release_status"] == "outdated"
+    assert payload["upgrade_available"] is True
+
+
+def test_list_sensors_marks_disabled_release_as_disabled() -> None:
+    db = make_session()
+    sensor, _sensor_token = seed_sensor(db)
+    sensor.version = "0.1.0"
+    sensor.disabled_at = utcnow()
+    db.commit()
+    client = make_client(db)
+
+    response = client.get("/api/v1/sensors", headers=admin_headers())
+
+    assert response.status_code == 200
+    assert response.json()[0]["release_status"] == "disabled"
+    assert response.json()[0]["upgrade_available"] is False
 
 
 def test_retry_failed_scan_job_creates_new_queued_job() -> None:

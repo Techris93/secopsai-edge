@@ -53,7 +53,7 @@ Usage:
   ./scripts/edge worker [--cloud]      Poll for remote scan jobs and execute them locally
   ./scripts/edge worker install-service --cloud
                                       Install background worker service
-  ./scripts/edge worker start|stop|restart|status|logs
+  ./scripts/edge worker start|stop|restart|status|logs|release-check
                                       Manage background worker service
   ./scripts/edge worker uninstall     Stop and remove the background service
   ./scripts/edge report [--cloud]      Generate an AI-style report
@@ -921,6 +921,46 @@ worker_service_logs() {
   journalctl --user -u "$SERVICE_LABEL.service" -n 120 --no-pager
 }
 
+worker_release_check() {
+  profile="local"
+  for arg in "$@"; do
+    if [ "$arg" = "--cloud" ]; then
+      profile="cloud"
+    fi
+  done
+  ensure_python_tools
+  local_version="$(PYTHONPATH="$ROOT_DIR/agent" "$PYTHON_BIN" -c 'from secopsai_agent import __version__; print(__version__)')"
+  if [ "$profile" = "cloud" ]; then
+    load_cloud_env
+    target_api_url="$(cloud_api_url)"
+    sensor_id="${SECOPSAI_CLOUD_SENSOR_ID:-}"
+    [ -n "$sensor_id" ] || fail "No hosted sensor ID. Run ./scripts/edge cloud register first."
+    target_admin_token="$(cloud_admin_token)"
+    response="$(curl -fsS "$target_api_url/api/v1/sensors" -H "Authorization: Bearer $target_admin_token")" \
+      || fail "Unable to read hosted sensor release status. Check the API URL and admin access."
+    printf '%s' "$response" | SENSOR_ID="$sensor_id" LOCAL_VERSION="$local_version" "$PYTHON_BIN" -c '
+import json, os, sys
+items = json.load(sys.stdin)
+sensor_id = os.environ["SENSOR_ID"]
+sensor = next((item for item in items if item.get("id") == sensor_id), None)
+if sensor is None:
+    raise SystemExit("Hosted sensor was not found for the saved sensor ID.")
+print(f"Sensor:              {sensor.get(\"name\", sensor_id)}")
+print(f"Installed worker:    v{os.environ[\"LOCAL_VERSION\"]}")
+print(f"Reported worker:     v{sensor.get(\"version\") or \"unknown\"}")
+print(f"Recommended release: v{sensor.get(\"recommended_version\") or \"unknown\"}")
+print(f"Release status:      {sensor.get(\"release_status\", \"unknown\")}")
+if sensor.get("upgrade_available"):
+    print("Action:              copy the verified upgrade command from Sites, review it, then run it with --upgrade")
+else:
+    print("Action:              no upgrade required")
+' || fail "Hosted API returned an invalid sensor release response."
+    return
+  fi
+  printf "Installed worker: v%s\n" "$local_version"
+  printf "Action:           local release status is checked by the hosted API after the next heartbeat\n"
+}
+
 uninstall_worker_service() {
   stop_worker_service
   if [ "$(uname -s)" = "Darwin" ]; then
@@ -954,6 +994,10 @@ worker() {
       ;;
     logs)
       worker_service_logs
+      ;;
+    release-check)
+      shift || true
+      worker_release_check "$@"
       ;;
     uninstall)
       uninstall_worker_service
