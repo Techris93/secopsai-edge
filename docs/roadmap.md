@@ -246,6 +246,12 @@ is now the target-host lifecycle and pilot go/no-go exercise:
    provenance. Non-npm prefixes are rejected, package code is never fetched or
    executed, Core PR `#48` is merged at `f941fea`, and the broader ecosystem
    adapters plus external pilot gates remain explicit.
+36. **Checkpoint 082 - watchlist promotion dashboard actions.** The canonical
+   dashboard now loads the npm campaign watchlist and offers preview/create
+   buttons for the Core `research case from-watchlist` flow. Preview remains
+   read-only, creation is confirmation- and token-gated, and the helper and
+   hosted Worker validate the fixed command boundary. Dashboard PR `#15` is
+   merged at `325c45f`.
 
 Commercial SaaS/MSP, billing, broad fleet automation, appliance imaging, and
 multi-ecosystem research automation remain subsequent product horizons rather

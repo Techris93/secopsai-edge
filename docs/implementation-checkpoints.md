@@ -3967,3 +3967,49 @@ Next checkpoint:
 
 - Run the controlled pilot acceptance exercise and record pass/fail evidence
   for each external gate.
+
+## Checkpoint 082 - Watchlist Promotion Dashboard Actions
+
+Status: implementation complete; hosted dashboard rollout is merged and
+requires the normal Pages deployment check
+
+Scope:
+
+- Replace the research watchlist shell commands with a guided operator flow in
+  the canonical SecOpsAI dashboard.
+
+Completed changes:
+
+- Research Cases now loads the normalized npm package watchlist and provides
+  `Preview selected` and `Create draft cases` actions.
+- Preview maps to Core's `research case from-watchlist` command without
+  creating records. Creation is a separate confirmation-gated action and
+  requires the protected research operations token.
+- The local dashboard helper validates package names, ecosystem scope, and
+  selection limits before constructing the fixed CLI argument list. It never
+  invokes a shell and never fetches or executes package code.
+- The hosted Cloudflare Worker keeps preview read-only while enforcing the
+  admin token for creation, then forwards the protected request to the helper.
+- Dashboard tests cover the UI controls, CLI argument construction, unsafe
+  selection rejection, and hosted token boundary.
+
+Validation:
+
+- Canonical dashboard PR `#15` passed the Cloudflare Pages check and merged to
+  main at `325c45f`.
+- Dashboard `npm test` passed, `npm run check` passed, Python tests passed
+  (46 tests, 13 subtests), Python compilation passed, and `git diff --check`
+  passed.
+
+Remaining boundary:
+
+- Add the same guided action pattern for non-npm ecosystems only after their
+  registry-specific Core adapters and safety contracts exist.
+- Complete the external pilot gates listed in Checkpoint 081; dashboard
+  buttons do not replace deployment, authentication, notification, or sensor
+  hardware validation.
+
+Next checkpoint:
+
+- Run the controlled pilot acceptance exercise and record pass/fail evidence
+  for each external gate.
