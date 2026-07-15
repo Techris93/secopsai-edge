@@ -29,7 +29,7 @@ def _fake_release_curl(bin_dir: Path) -> None:
     curl = bin_dir / "curl"
     curl.write_text(
         "#!/bin/sh\n"
-        "printf '%s' '{\"id\":\"sensor-release\",\"name\":\"MacBook Sensor\",\"version\":\"0.3.13\",\"recommended_version\":\"0.3.13\",\"release_status\":\"current\",\"upgrade_available\":false}'\n",
+        "printf '%s' '{\"id\":\"sensor-release\",\"name\":\"MacBook Sensor\",\"version\":\"0.3.14\",\"recommended_version\":\"0.3.14\",\"release_status\":\"current\",\"upgrade_available\":false}'\n",
         encoding="utf-8",
     )
     curl.chmod(0o700)
@@ -143,6 +143,6 @@ def test_cloud_worker_release_check_formats_hosted_response(tmp_path: Path) -> N
 
     assert result.returncode == 0, result.stderr
     assert "MacBook Sensor" in result.stdout
-    assert "Installed worker:    v0.3.13" in result.stdout
+    assert "Installed worker:    v0.3.14" in result.stdout
     assert "Release status:      current" in result.stdout
     assert "invalid sensor release response" not in result.stderr
