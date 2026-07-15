@@ -53,7 +53,7 @@ The repository includes `render.yaml`.
 Expected response:
 
 ```json
-{"status":"ok","version":"0.3.8","commit":"<commit>"}
+{"status":"ok","version":"<release-version>","commit":"<commit>"}
 ```
 
 `/readyz` must return `status: ready` and schema revision

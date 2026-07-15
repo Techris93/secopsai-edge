@@ -1,8 +1,9 @@
 # Pilot Evidence - 2026-07-15
 
-This record captures the non-destructive hosted checks performed after the
-`v0.3.9` release. It contains no bearer tokens, response bodies, scan output,
-or customer telemetry.
+This record captures the non-destructive hosted checks performed through the
+`v0.3.10` release. Earlier sections retain the historical v0.3.9 validation
+where that package was exercised. It contains no bearer tokens, response
+bodies, scan output, or customer telemetry.
 
 ## Passed
 
@@ -14,6 +15,15 @@ or customer telemetry.
   identity, system status, onboarding, sites, sensors, schedules, findings,
   and reports.
 - Local Nmap and Python dependency checks passed.
+
+## Latest hosted deployment
+
+- Render Edge `/healthz` returned HTTP `200`, status `ok`, version `0.3.10`,
+  commit `2223abf8cae5`.
+- Render Core `/readyz` returned HTTP `200`, status `ready`, using its hosted
+  SQLite data store.
+- The v0.3.10 deployment is the current hosted release; the prior v0.3.9
+  bullets above remain historical evidence for that earlier package.
 
 ## Still Pending
 
