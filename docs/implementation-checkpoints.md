@@ -3410,3 +3410,53 @@ Next checkpoint:
 
 - Complete the target-host lifecycle, OpenClaw runtime exercise, and remaining
   controlled-pilot acceptance gates.
+
+## Checkpoint 070 - v0.3.14 Release-Check Repair
+
+Status: released; target-host lifecycle exercise remains pending
+
+Scope:
+
+- Repair the hosted worker release-check command discovered during a real
+  cloud exercise.
+- Publish the corrected formatter in the sensor package rather than leaving
+  the fix only on `main`.
+
+Completed changes:
+
+- PR `#67` replaced the conflicting shell/Python f-string quote boundary with
+  safe `.format()` rendering and added a regression test for a valid hosted
+  release-status response.
+- PR `#68` aligned the API, agent, and dashboard package versions at `0.3.14`.
+- Tag `v0.3.14` was created from verified `main`. Release workflow
+  `29387904397` passed in `3m13s`, including the full release gate, package
+  build, checksum publication, and GitHub release publication.
+- Render `/healthz` returned version `0.3.14`, commit `68f58d7dcbb1`;
+  `/readyz` returned version `0.3.14` and schema
+  `0017_sensor_offline_alert`.
+- The downloaded v0.3.14 archive checksum passed and archive inspection
+  confirmed the corrected packaged `scripts/edge`.
+- A live `./scripts/edge worker release-check --cloud` completed successfully
+  and reported the enrolled sensor as `v0.3.9` versus recommended `v0.3.14`,
+  status `outdated`. The command is read-only.
+
+Validation:
+
+- Edge focused release/worker tests passed.
+- Edge PR #67 CI passed all 28 checks.
+- Edge PR #68 CI passed all 28 checks.
+- The v0.3.14 release workflow passed all release steps.
+- Core full suite passed: 253 tests.
+- Canonical dashboard tests/checks passed.
+- OpenClaw plugin tests passed.
+
+Remaining external boundary:
+
+- Install v0.3.14 on the target sensor host, exercise upgrade/rollback,
+  reboot survival, uninstall, and long-running soak.
+- Install/reload the merged OpenClaw plugin in the real runtime and exercise
+  `secopsai_edge_release_check`.
+
+Next checkpoint:
+
+- Complete the target-host lifecycle and controlled-pilot acceptance gates.

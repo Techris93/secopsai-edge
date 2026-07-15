@@ -4,7 +4,7 @@ This roadmap records product gaps, not historical aspirations. A capability is
 listed as complete only when it has implementation and test evidence in
 `docs/implementation-checkpoints.md`.
 
-## Current Product Baseline - v0.3.13
+## Current Product Baseline - v0.3.14
 
 The controlled-pilot baseline includes:
 
@@ -185,6 +185,12 @@ is now the target-host lifecycle and pilot go/no-go exercise:
 25. **Checkpoint 069 - OpenClaw release check integration.** OpenClaw now has a
     read-only `secopsai_edge_release_check` action that invokes the scoped Edge
     lifecycle check without requesting upgrade or service mutation approval.
+26. **Checkpoint 070 - v0.3.14 release-check repair and evidence.** The hosted
+    release-check formatter now handles valid API JSON safely, the regression
+    test is in CI, the corrected package is published as `v0.3.14`, and Render
+    serves the matching API release. The enrolled target sensor is still
+    operator-pending at `v0.3.9` until its controlled upgrade/rollback/soak
+    exercise is completed.
 
 Commercial SaaS/MSP, billing, broad fleet automation, appliance imaging, and
 multi-ecosystem research automation remain subsequent product horizons rather
