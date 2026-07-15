@@ -81,7 +81,7 @@ without founder supervision:
 
 ## Controlled Pilot Completion Sequence
 
-Implementation checkpoints are complete through `060`. The remaining work is
+Implementation checkpoints are complete through `063`. The remaining work is
 external operator acceptance, not untracked feature development. The older
 numbered entries below are historical milestones; the active acceptance gate
 is now the target-host lifecycle and pilot go/no-go exercise:
@@ -160,6 +160,9 @@ is now the target-host lifecycle and pilot go/no-go exercise:
     `sensor_offline` event per outage, and re-arms only after a heartbeat or scan.
     Target-host reboot, upgrade rollback, uninstall, and soak evidence remain
     the active acceptance gate.
+21. **Checkpoint 063 - v0.3.11 hosted release evidence.** The release package
+    workflow passed, the downloaded archive was verified, and Render readiness
+    confirmed schema `0017_sensor_offline_alert` in production.
 
 Commercial SaaS/MSP, billing, broad fleet automation, appliance imaging, and
 multi-ecosystem research automation remain subsequent product horizons rather
