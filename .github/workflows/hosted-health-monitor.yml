@@ -19,7 +19,7 @@ jobs:
         run: >-
           python scripts/hosted_health_check.py
           --api-url https://secopsai-edge-api.onrender.com
-          --dashboard-url https://secopsai-edge.pages.dev
+          --dashboard-url https://secopsai-dashboard.pages.dev
           --output hosted-health.jsonl
       - name: Preserve health evidence
         if: always()

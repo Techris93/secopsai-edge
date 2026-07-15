@@ -1896,7 +1896,7 @@ cloud() {
     uptime-check)
       python3 "$ROOT_DIR/scripts/hosted_health_check.py" \
         --api-url "$(cloud_api_url)" \
-        --dashboard-url "${SECOPSAI_DASHBOARD_URL:-https://secopsai-edge.pages.dev}" \
+        --dashboard-url "${SECOPSAI_DASHBOARD_URL:-https://secopsai-dashboard.pages.dev}" \
         "$@"
       ;;
     help|-h|--help)
@@ -1929,7 +1929,7 @@ pilot() {
       done
       if [ "$profile" = "cloud" ]; then
         target_api_url="$(cloud_api_url)"
-        target_dashboard_url="${SECOPSAI_DASHBOARD_URL:-https://secopsai-edge.pages.dev}"
+        target_dashboard_url="${SECOPSAI_DASHBOARD_URL:-https://secopsai-dashboard.pages.dev}"
       else
         load_env
         target_api_url="$(api_url)"
