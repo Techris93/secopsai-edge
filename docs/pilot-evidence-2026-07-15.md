@@ -42,6 +42,20 @@ bodies, scan output, or customer telemetry.
 - PR `#71` merged the URL correction after the full GitHub verification job
   passed in `3m35s`.
 
+## OpenClaw current-runtime integration
+
+- OpenClaw plugin PR `#8` aligned the SecOpsAI plugin with the current
+  `2026.6.10` plugin API range, and PR `#9` declared its 27 registered tools
+  in the manifest contract.
+- Local installation and gateway restart succeeded. Runtime inspection
+  reported plugin version `1.0.2` as loaded and activated with 27 tools and
+  zero diagnostics.
+- No scan, queued job, report, worker mutation, or raw telemetry operation was
+  invoked during this check.
+- A model-driven read-only tool call remains pending because the local
+  OpenClaw agent has no usable provider authentication and its selected model
+  entry lacks a matching provider declaration.
+
 ## v0.3.14 release-check repair and package evidence
 
 - Edge PR `#67` fixed the hosted worker release-check formatter. The previous
