@@ -21,7 +21,7 @@ class Handler(BaseHTTPRequestHandler):
             self._write_json({"status": "ok", "version": "0.3.4", "commit": "release-034"})
         elif self.path == "/readyz":
             self._write_json(
-                {"status": "ready" if self.ready else "not_ready", "schema_revision": "0016_wifi_provenance"},
+                {"status": "ready" if self.ready else "not_ready", "schema_revision": "0017_sensor_offline_alert"},
                 200 if self.ready else 503,
             )
         elif self.path in {

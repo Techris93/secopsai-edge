@@ -3200,3 +3200,54 @@ Next checkpoint:
 
 - Run the v0.3.10 installer on the target MacBook or Linux sensor host through
   the lifecycle exercise and record the final acceptance evidence.
+
+## Checkpoint 062 - Sensor-Offline Notification Evaluation
+
+Status: implementation complete; hosted migration and external pilot exercise
+remain pending
+
+Scope:
+
+- Make sensor health operationally useful without requiring an operator to keep
+  the dashboard open.
+- Use the existing hosted notification scheduler to detect stale sensors while
+  keeping notification volume bounded and recovery explicit.
+
+Completed changes:
+
+- Added migration `0017_sensor_offline_alert` and the nullable
+  `sensors.offline_alerted_at` marker. Alembic upgrade and drift checks pass.
+- Added a sensor-health helper that marks a previously-seen stale sensor
+  offline, creates one minimized `sensor_offline` notification per outage, and
+  records an audit event without storing raw scan data in the payload.
+- Heartbeats, scan claims, scan starts, failed/completed scan jobs, and scan
+  ingestion clear the outage marker so a later outage can alert again.
+- Never-seen or disabled sensors do not generate offline alerts.
+- The scheduler response exposes `sensor_offline_alerts` for cron evidence and
+  operational troubleshooting.
+- Updated pilot, deployment, release, and evidence documentation for the
+  three-minute staleness threshold and five-minute scheduler cadence.
+
+Validation:
+
+- Focused notification and scan-job tests passed, including first alert,
+  duplicate suppression, heartbeat recovery, re-alerting, and never-seen
+  sensors.
+- Full backend/agent suite passed.
+- Dashboard tests: `33` passed; production build passed; `npm audit` found
+  `0` vulnerabilities.
+- Local PostgreSQL migration `0017_sensor_offline_alert` applied successfully;
+  `alembic check` reported no drift.
+- Package version was aligned to `0.3.11` for the release gate.
+
+Remaining external boundary:
+
+- Render must deploy `v0.3.11` and report schema `0017_sensor_offline_alert`
+  before the hosted migration is considered verified.
+- A real notification destination, target-host worker outage/recovery, and
+  seven-day scheduler/soak exercise still require operator evidence.
+
+Next checkpoint:
+
+- Run the clean release gate, publish `v0.3.11`, verify Render readiness, and
+  record a non-secret hosted migration and notification-scheduler result.

@@ -86,6 +86,7 @@ class Sensor(Base):
     disabled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    offline_alerted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     site: Mapped[Site] = relationship(back_populates="sensors")
 

@@ -13,8 +13,9 @@ from sqlalchemy.pool import StaticPool
 from secopsai_api.config import Settings
 from secopsai_api.database import get_db
 from secopsai_api.main import app
-from secopsai_api.models import Base, NotificationDelivery, NotificationEndpoint, Site, utcnow
+from secopsai_api.models import Base, NotificationDelivery, NotificationEndpoint, Sensor, Site, utcnow
 from secopsai_api.notifications import _send_webhook, notify_event, process_due_deliveries
+from secopsai_api.security import hash_secret
 
 
 def make_session() -> Session:
@@ -178,3 +179,100 @@ def test_delivery_history_and_manual_retry_api(monkeypatch) -> None:
     assert retried.status_code == 200
     assert retried.json()["status"] == "delivered"
     assert retried.json()["attempts"] == 1
+
+
+def test_notification_scheduler_alerts_once_for_stale_sensor_and_rearms_on_heartbeat(monkeypatch) -> None:
+    db = make_session()
+    site = Site(name="Pilot")
+    sensor = Sensor(
+        site=site,
+        name="MacBook Sensor",
+        hostname="macbook",
+        token_hash=hash_secret("sensor-token"),
+        status="online",
+        last_seen_at=utcnow() - timedelta(minutes=10),
+    )
+    endpoint = NotificationEndpoint(
+        site_id=site.id,
+        name="Offline webhook",
+        type="webhook",
+        target="https://example.test/hook",
+        enabled=True,
+        events=["sensor_offline"],
+    )
+    db.add_all([site, sensor, endpoint])
+    db.commit()
+
+    monkeypatch.setattr(
+        "secopsai_api.notifications.deliver_notification",
+        lambda *args, **kwargs: (True, "delivered"),
+    )
+    app.dependency_overrides[get_db] = lambda: (yield db)
+    client = TestClient(app)
+    headers = {"Authorization": "Bearer dev-admin-token"}
+
+    first = client.post("/api/v1/notification-deliveries/run-due", headers=headers)
+
+    assert first.status_code == 200
+    assert first.json()["sensor_offline_alerts"] == 1
+    assert sensor.status == "offline"
+    assert sensor.offline_alerted_at is not None
+    assert db.scalar(select(NotificationDelivery).where(NotificationDelivery.event_type == "sensor_offline")) is not None
+
+    second = client.post("/api/v1/notification-deliveries/run-due", headers=headers)
+
+    assert second.status_code == 200
+    assert second.json()["sensor_offline_alerts"] == 0
+    assert len(db.scalars(select(NotificationDelivery).where(NotificationDelivery.event_type == "sensor_offline")).all()) == 1
+
+    heartbeat = client.post(
+        f"/api/v1/sensors/{sensor.id}/heartbeat",
+        headers={"X-Sensor-Token": "sensor-token"},
+        json={"status": "online", "details": {"state": "waiting"}},
+    )
+
+    assert heartbeat.status_code == 200
+    assert sensor.offline_alerted_at is None
+
+    sensor.last_seen_at = utcnow() - timedelta(minutes=10)
+    db.commit()
+    third = client.post("/api/v1/notification-deliveries/run-due", headers=headers)
+
+    assert third.status_code == 200
+    assert third.json()["sensor_offline_alerts"] == 1
+    assert len(db.scalars(select(NotificationDelivery).where(NotificationDelivery.event_type == "sensor_offline")).all()) == 2
+
+
+def test_notification_scheduler_does_not_alert_never_seen_sensor(monkeypatch) -> None:
+    db = make_session()
+    site = Site(name="Pilot")
+    sensor = Sensor(
+        site=site,
+        name="New Sensor",
+        token_hash=hash_secret("sensor-token"),
+        status="registered",
+        last_seen_at=None,
+    )
+    endpoint = NotificationEndpoint(
+        site_id=site.id,
+        name="Offline webhook",
+        type="webhook",
+        target="https://example.test/hook",
+        enabled=True,
+        events=["sensor_offline"],
+    )
+    db.add_all([site, sensor, endpoint])
+    db.commit()
+    monkeypatch.setattr(
+        "secopsai_api.notifications.deliver_notification",
+        lambda *args, **kwargs: (True, "delivered"),
+    )
+    app.dependency_overrides[get_db] = lambda: (yield db)
+    response = TestClient(app).post(
+        "/api/v1/notification-deliveries/run-due",
+        headers={"Authorization": "Bearer dev-admin-token"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["sensor_offline_alerts"] == 0
+    assert db.scalar(select(NotificationDelivery).where(NotificationDelivery.event_type == "sensor_offline")) is None

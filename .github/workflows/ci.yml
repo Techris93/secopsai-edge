@@ -86,8 +86,8 @@ jobs:
             --input /tmp/secopsai-edge.dump \
             --target-url postgresql://secopsai:secopsai@127.0.0.1:5432/secopsai_edge_restore \
             --confirm-database secopsai_edge_restore
-          psql -h 127.0.0.1 -U secopsai -d secopsai_edge_restore \
-            -Atc "SELECT version_num FROM alembic_version" | grep -Fx 0016_wifi_provenance
+            psql -h 127.0.0.1 -U secopsai -d secopsai_edge_restore \
+            -Atc "SELECT version_num FROM alembic_version" | grep -Fx 0017_sensor_offline_alert
 
       - name: Install and test dashboard
         working-directory: web
