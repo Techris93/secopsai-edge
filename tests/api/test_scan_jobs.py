@@ -187,6 +187,23 @@ def test_list_sensors_reports_outdated_release() -> None:
     assert payload["upgrade_available"] is True
 
 
+def test_sensor_scoped_release_status_does_not_require_admin_access() -> None:
+    db = make_session()
+    sensor, sensor_token = seed_sensor(db)
+    sensor.version = "0.3.10"
+    db.commit()
+    client = make_client(db)
+
+    response = client.get(
+        f"/api/v1/sensors/{sensor.id}/release-status",
+        headers=sensor_headers(sensor_token),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["release_status"] == "outdated"
+    assert response.json()["upgrade_available"] is True
+
+
 def test_list_sensors_marks_disabled_release_as_disabled() -> None:
     db = make_session()
     sensor, _sensor_token = seed_sensor(db)

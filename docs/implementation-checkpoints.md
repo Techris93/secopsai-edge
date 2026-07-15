@@ -3339,3 +3339,45 @@ Remaining external boundary:
 Next checkpoint:
 
 - Complete the target-host lifecycle and controlled-pilot acceptance gates.
+
+## Checkpoint 068 - Sensor-Scoped Release Status
+
+Status: implementation complete; release and hosted deployment verification
+remain pending
+
+Scope:
+
+- Remove the administrator-token requirement from the sensor host's cloud
+  release check.
+- Give trusted local automation a narrow, read-only sensor lifecycle surface.
+
+Completed changes:
+
+- Added `GET /api/v1/sensors/{sensor_id}/release-status`, authenticated only
+  with that sensor's `X-Sensor-Token`. It returns the sensor's own version,
+  recommended API release, and release status without exposing other sensors.
+- Updated `./scripts/edge worker release-check --cloud` to use the saved
+  `.cloud-sensor.env` credential and the scoped endpoint. It no longer prompts
+  for or reads a workspace administrator token.
+- Added API coverage proving an authenticated sensor token can read its own
+  release state.
+- Aligned API, agent, and dashboard package versions at `0.3.13` for the
+  release gate.
+
+Validation:
+
+- Focused scan-job/release tests passed.
+- `bash -n scripts/edge`, `git diff --check`, and the local read-only release
+  check passed.
+
+Remaining external boundary:
+
+- v0.3.13 must pass the hosted release workflow and deploy before the endpoint
+  is available to the released worker.
+- OpenClaw still needs a small read-only release-status action after the Edge
+  release is hosted.
+
+Next checkpoint:
+
+- Release v0.3.13, verify the scoped endpoint on Render, then add and release
+  the OpenClaw `secopsai_edge_release_check` tool.

@@ -128,6 +128,7 @@ from secopsai_api.schemas import (
     SensorRotateResponse,
     SensorUpdateRequest,
     SensorOut,
+    SensorReleaseStatusOut,
     SensorRegisterRequest,
     SensorRegisterResponse,
     SensorEnrollRequest,
@@ -776,6 +777,22 @@ def sensor_out(db: Session, sensor: Sensor) -> SensorOut:
         created_at=sensor.created_at,
         last_seen_at=sensor.last_seen_at,
         current_job=current_sensor_job(db, sensor),
+    )
+
+
+def sensor_release_status_out(sensor: Sensor) -> SensorReleaseStatusOut:
+    release_status, upgrade_available = sensor_release_status(
+        sensor.version,
+        settings.release_version,
+        disabled=sensor.disabled_at is not None,
+    )
+    return SensorReleaseStatusOut(
+        id=sensor.id,
+        name=sensor.name,
+        version=sensor.version,
+        recommended_version=settings.release_version,
+        release_status=release_status,
+        upgrade_available=upgrade_available,
     )
 
 
@@ -2466,6 +2483,14 @@ def heartbeat(
         )
     db.commit()
     return {"status": "ok"}
+
+
+@app.get("/api/v1/sensors/{sensor_id}/release-status", response_model=SensorReleaseStatusOut)
+def sensor_release_status_endpoint(
+    sensor: Sensor = Depends(require_sensor_for_path),
+) -> SensorReleaseStatusOut:
+    """Expose only this sensor's release state to its scoped token."""
+    return sensor_release_status_out(sensor)
 
 
 @app.get("/api/v1/sensors", response_model=list[SensorOut])
