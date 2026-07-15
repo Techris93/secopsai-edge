@@ -3460,3 +3460,54 @@ Remaining external boundary:
 Next checkpoint:
 
 - Complete the target-host lifecycle and controlled-pilot acceptance gates.
+
+## Checkpoint 071 - v0.3.14 Clean-Host Lifecycle Evidence
+
+Status: partial external evidence recorded; reboot and long-running soak remain pending
+
+Scope:
+
+- Exercise the released MacBook installation workflow as a real hosted sensor.
+- Verify the service lifecycle and rollback behavior without running a network
+  scan.
+
+Completed changes and evidence:
+
+- Created a temporary 30-minute site-scoped enrollment through the hosted API.
+- Downloaded and checksum-verified the private `v0.3.14` release through the
+  documented authenticated GitHub CLI path.
+- Installed the package under
+  `~/.local/share/secopsai-edge-lifecycle-validation`, outside macOS protected
+  folders, and started the launchd worker.
+- After the first heartbeat, the temporary sensor reported worker
+  `v0.3.14`, recommended release `v0.3.14`, status `current`. The worker stayed
+  in the expected waiting state and its error log was empty.
+- Stopped and restarted the service successfully.
+- Ran an intentionally invalid `--upgrade` enrollment. It failed with exit
+  code `56`, restored the previous `v0.3.14` installation, and left no
+  `.previous` directory behind.
+- Rechecked the heartbeat after restart and received `release_status=current`.
+- Uninstalled the worker, disabled the temporary hosted sensor, and removed
+  only the isolated validation runtime and logs.
+
+Validation:
+
+- Released bootstrap and dependency installation passed.
+- launchd install/start/stop/status/uninstall passed.
+- Heartbeat and sensor-scoped release check passed.
+- Upgrade failure rollback and credential-preservation path passed.
+- No network scan or raw telemetry collection was performed.
+
+Remaining external boundary:
+
+- Reboot survival must be tested on the intended target host.
+- A seven-day worker soak, scheduled scan, real notification delivery and
+  offline/recovery alert, paid Render/PITR drill, second-owner MFA recovery,
+  and TL-WN722N Linux/Raspberry Pi validation remain pending.
+- The merged OpenClaw plugin still needs installation/reload and a real
+  `secopsai_edge_release_check` runtime exercise.
+
+Next checkpoint:
+
+- Complete reboot/soak and notification acceptance, then close the remaining
+  hosted pilot go/no-go gates.

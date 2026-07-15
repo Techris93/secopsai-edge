@@ -40,7 +40,7 @@ The controlled-pilot baseline includes:
 - Hosted Core API deployment and normalized Edge bundle ingestion are verified
   at `https://secopsai-core-api.onrender.com`; the hosted operator workspace
   is populated without raw scanner telemetry. Cold-start recovery and the
-  shipped `v0.3.11` package, clean-host bootstrap, and macOS worker service path
+  shipped `v0.3.14` package, clean-host bootstrap, and macOS worker service path
   are documented in checkpoints `055`-`059`.
 - Unified Core console visibility for Edge sync freshness, including current,
   stale, and never-synced states.
@@ -191,6 +191,11 @@ is now the target-host lifecycle and pilot go/no-go exercise:
     serves the matching API release. The enrolled target sensor is still
     operator-pending at `v0.3.9` until its controlled upgrade/rollback/soak
     exercise is completed.
+27. **Checkpoint 071 - v0.3.14 clean-host lifecycle evidence.** The released
+    bootstrap installed and started a real launchd worker, emitted a current
+    heartbeat, passed stop/start and failure-rollback checks, and was cleanly
+    uninstalled. Reboot survival, seven-day soak, notifications, and the
+    remaining pilot infrastructure drills are still external gates.
 
 Commercial SaaS/MSP, billing, broad fleet automation, appliance imaging, and
 multi-ecosystem research automation remain subsequent product horizons rather
