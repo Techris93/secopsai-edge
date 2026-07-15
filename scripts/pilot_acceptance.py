@@ -175,11 +175,79 @@ def run_acceptance(args: argparse.Namespace) -> dict[str, Any]:
     }
 
 
+def _human_check_line(item: dict[str, Any], *, advisory: bool = False) -> str:
+    state = "PASS" if item.get("ok") else ("WARN" if advisory else "FAIL")
+    label = str(item.get("name") or "check").replace("_", " ")
+    details: list[str] = []
+    for key in (
+        "status",
+        "error_code",
+        "status_code",
+        "reported_status",
+        "version",
+        "schema_revision",
+        "platform",
+        "backend",
+        "interface",
+        "reason",
+        "release_status",
+    ):
+        value = item.get(key)
+        if value not in (None, "", [], {}):
+            details.append(f"{key.replace('_', ' ')}={value}")
+    missing = item.get("missing_content") or item.get("config_missing")
+    if missing:
+        details.append("missing=" + ",".join(str(value) for value in missing))
+    if isinstance(item.get("latency_ms"), int):
+        details.append(f"latency_ms={item['latency_ms']}")
+    suffix = f" ({'; '.join(details)})" if details else ""
+    return f"  [{state}] {label}{suffix}"
+
+
+def render_human(evidence: dict[str, Any]) -> str:
+    """Render safe operator guidance without printing response bodies or secrets."""
+    lines = [
+        "SecOpsAI Edge pilot acceptance",
+        f"Profile: {evidence.get('profile', 'unknown')}",
+        f"Checked: {evidence.get('checked_at', 'unknown')}",
+        "",
+        "Required checks:",
+    ]
+    required = evidence.get("required_checks") or []
+    if required:
+        lines.extend(_human_check_line(item) for item in required)
+    else:
+        lines.append("  No required checks selected.")
+
+    advisories = evidence.get("advisories") or []
+    lines.extend(["", "Advisories:"])
+    if advisories:
+        lines.extend(_human_check_line(item, advisory=True) for item in advisories)
+    else:
+        lines.append("  None.")
+
+    result = "PASS" if evidence.get("ok") else "FAIL"
+    lines.extend(
+        [
+            "",
+            f"Result: {result}",
+            "This check is non-destructive: it does not scan networks, capture packets, execute packages, or unpack artifacts.",
+        ]
+    )
+    return "\n".join(lines)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run non-destructive SecOpsAI Edge pilot acceptance checks")
     parser.add_argument("--api-url", default="https://secopsai-edge-api.onrender.com")
     parser.add_argument("--dashboard-url", default=DEFAULT_DASHBOARD_URL)
     parser.add_argument("--output", type=Path)
+    parser.add_argument(
+        "--format",
+        choices=("json", "text"),
+        default="json",
+        help="Choose machine-readable JSON or safe human-readable terminal output",
+    )
     parser.add_argument("--skip-cloud", action="store_true", help="Skip hosted API and dashboard checks")
     parser.add_argument("--skip-worker", action="store_true", help="Skip local worker-service check")
     parser.add_argument("--skip-wifi", action="store_true", help="Skip the no-scan Wi-Fi capability check")
@@ -194,7 +262,7 @@ def main() -> int:
 
     evidence = run_acceptance(args)
     rendered = json.dumps(evidence, sort_keys=True, separators=(",", ":"))
-    print(rendered)
+    print(rendered if args.format == "json" else render_human(evidence))
     if args.output:
         args.output.expanduser().resolve().parent.mkdir(parents=True, exist_ok=True)
         args.output.expanduser().resolve().write_text(rendered + "\n", encoding="utf-8")

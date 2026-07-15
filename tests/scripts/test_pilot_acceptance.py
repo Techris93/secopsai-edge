@@ -72,7 +72,12 @@ class Handler(BaseHTTPRequestHandler):
         return
 
 
-def run_check(tmp_path: Path, *, ready: bool) -> subprocess.CompletedProcess[str]:
+def run_check(
+    tmp_path: Path,
+    *,
+    ready: bool,
+    output_format: str = "json",
+) -> subprocess.CompletedProcess[str]:
     Handler.ready = ready
     server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -90,6 +95,8 @@ def run_check(tmp_path: Path, *, ready: bool) -> subprocess.CompletedProcess[str
                 "--skip-worker",
                 "--skip-wifi",
                 "--skip-dependencies",
+                "--format",
+                output_format,
                 "--output",
                 str(tmp_path / "acceptance.json"),
             ],
@@ -123,6 +130,18 @@ def test_pilot_acceptance_fails_when_hosted_readiness_is_degraded(tmp_path: Path
     assert payload["ok"] is False
     readiness = next(item for item in payload["required_checks"] if item["name"] == "api_readiness")
     assert readiness["ok"] is False
+
+
+def test_pilot_acceptance_can_render_safe_human_output(tmp_path: Path) -> None:
+    result = run_check(tmp_path, ready=True, output_format="text")
+
+    assert result.returncode == 0
+    assert result.stdout.startswith("SecOpsAI Edge pilot acceptance\n")
+    assert "[PASS] api liveness" in result.stdout
+    assert "Result: PASS" in result.stdout
+    assert "body" not in result.stdout
+    stored = json.loads((tmp_path / "acceptance.json").read_text(encoding="utf-8"))
+    assert stored["ok"] is True
 
 
 def test_pilot_acceptance_verifies_authenticated_surfaces_without_printing_token(tmp_path: Path) -> None:

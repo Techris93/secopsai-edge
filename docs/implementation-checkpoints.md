@@ -3747,3 +3747,44 @@ Next checkpoint:
 
 - Run the complete local release gate, open/merge this change, and confirm the
   next tagged package publication with the new helper.
+
+## Checkpoint 077 - Human-Readable Pilot Acceptance
+
+Status: implementation complete; hosted and target-host acceptance remains
+external
+
+Scope:
+
+- Make the pilot preflight understandable to an operator without sacrificing
+  the JSON contract used by scripts, CI, and evidence records.
+
+Completed changes:
+
+- Added `--format json|text` to `scripts/pilot_acceptance.py` and the
+  `./scripts/edge pilot check` workflow.
+- Added safe human output with required/advisory status, non-secret error
+  codes, versions, schema identity, latency, and a clear final result.
+- Kept `--output` as a JSON evidence file regardless of terminal format, so
+  interactive use and audit automation can be performed in one command.
+- Added regression coverage for human output, JSON persistence, and secret/
+  response-body non-disclosure.
+- Updated the pilot acceptance guide and roadmap.
+
+Validation:
+
+- Focused pilot acceptance suite passed: 5 tests.
+- `bash -n scripts/edge scripts/pilot_acceptance.py` passed.
+- Interactive local check rendered a readable PASS result without scanning or
+  collecting telemetry.
+
+Remaining external boundary:
+
+- Run the human-readable command against the hosted dashboard from a network
+  with working Pages DNS and an authenticated operator credential.
+- Reboot/soak, notification, paid Render/PITR, second-owner recovery, custom
+  DNS, and Raspberry Pi/Wi-Fi acceptance remain unchanged.
+
+Next checkpoint:
+
+- Merge the change, run the full cross-repo gate, and use the human-readable
+  acceptance output during the operator-controlled pilot exercise.
