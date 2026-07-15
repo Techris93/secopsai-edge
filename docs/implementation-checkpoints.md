@@ -2987,3 +2987,43 @@ Next checkpoint:
 
 - Complete the independent dashboard availability check and the remaining
   fresh-host, paid-infrastructure, provider, hardware, and recovery evidence.
+
+## Checkpoint 057 - v0.3.9 Release Evidence
+
+Status: released; external pilot acceptance remains pending
+
+Scope:
+
+- Ship the hosted Core recovery fix in the public sensor package and verify the
+  release workflow after the earlier duplicate-release incident.
+
+Release evidence:
+
+- Edge `main` contains the retry hardening and version-safe worker heartbeat
+  assertion at merge commit `cfddbc7`.
+- Tag `v0.3.9` is published from the verified `main` commit.
+- GitHub release workflow run `29377706020` passed in `3m11s`, including the
+  exact release gate, dependency audit, package build, checksum generation,
+  and release publication.
+- Release [`v0.3.9`](https://github.com/Techris93/secopsai-edge/releases/tag/v0.3.9)
+  contains the versioned archive, versioned checksum, latest archive, latest
+  checksum, and bootstrap installer.
+- The provenance attestation step is intentionally skipped because this is a
+  user-owned private repository; the release still publishes SHA-256 manifests
+  from the verified tag workflow.
+
+Correction captured:
+
+- The first `v0.3.9` PR verification failed only because a worker-heartbeat
+  test hard-coded `0.3.8`. The test now derives the version from the agent
+  package, the corrected verification passed, and no broken tag was published.
+
+External boundary:
+
+- Package publication is verified; a fresh-host install, reboot survival,
+  seven-day soak, and customer pilot go/no-go still require an operator test.
+
+Next checkpoint:
+
+- Exercise the `v0.3.9` bootstrap on a clean MacBook or Linux host and record
+  installation, service, recovery, and uninstall evidence.
