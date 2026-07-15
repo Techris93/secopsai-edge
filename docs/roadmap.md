@@ -104,8 +104,9 @@ is now the target-host lifecycle and pilot go/no-go exercise:
    CNAME are active.
 3. **Checkpoint 073 - OpenClaw current-runtime plugin evidence.** The plugin
    now installs on OpenClaw `2026.6.10`, declares all 27 tool contracts, and
-   loads with zero diagnostics. One model-authenticated read-only tool turn
-   remains an operator setup gate.
+   loads with zero diagnostics. A live model turn was authenticated, but the
+   selected `coding` tool profile hid the plugin tools; an explicitly
+   compatible agent tool policy remains an operator setup gate.
 4. **Historical release closeout.** The exact verified `v0.3.4` build
    closeout was superseded by the verified `v0.3.5` release in checkpoint 042.
 5. **Checkpoint 042 - AI report cost guardrail and release evidence.** The
