@@ -124,15 +124,12 @@ cannot register another sensor.
 macOS:
 
 ```bash
-./scripts/edge worker stop
-rm -f ~/Library/LaunchAgents/ai.secopsai.edge.plist
+./scripts/edge worker uninstall
 rm -rf ~/Library/Logs/secopsai-edge
 ```
 
 Linux:
 
 ```bash
-systemctl --user disable --now ai.secopsai.edge.service
-rm -f ~/.config/systemd/user/ai.secopsai.edge.service
-systemctl --user daemon-reload
+./scripts/edge worker uninstall
 ```

@@ -80,14 +80,16 @@ without founder supervision:
 
 ## Controlled Pilot Completion Sequence
 
-Implementation checkpoints are complete through `059`. The remaining work is
-external operator acceptance, not untracked feature development:
+Implementation checkpoints are complete through `060`. The remaining work is
+external operator acceptance, not untracked feature development. The older
+numbered entries below are historical milestones; the active acceptance gate
+is now the target-host lifecycle and pilot go/no-go exercise:
 
-1. **Checkpoint 040 - External pilot acceptance.** Complete fresh-machine
+1. **External pilot acceptance gate.** Complete fresh-machine
    installation, seven-day soak, schedule/notification/offline-sensor
    exercises, support SLO, paid Render/PITR activation, two-owner recovery,
    uninstall, and the pilot exit checklist.
-2. **Checkpoint 041 - Release closeout.** The exact verified `v0.3.4` build
+2. **Historical release closeout.** The exact verified `v0.3.4` build
    closeout was superseded by the verified `v0.3.5` release in checkpoint 042.
 3. **Checkpoint 042 - AI report cost guardrail and release evidence.** The
    report cooldown, operator visibility, release archive, Render identity, and

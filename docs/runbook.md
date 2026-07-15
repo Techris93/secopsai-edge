@@ -231,6 +231,12 @@ Create a redacted diagnostics bundle when a sensor needs support:
 
 The command records release, platform, dependency, API, worker-service, and recent worker-log status without copying credential files or printing tokens. The output is created with owner-only permissions. Review local paths and network ranges before sharing it.
 
+Remove a local worker service without editing launchd/systemd files manually:
+
+```bash
+./scripts/edge worker uninstall
+```
+
 Before an external pilot, run the authenticated acceptance preflight with a
 real operator credential held only in the environment:
 
@@ -257,10 +263,17 @@ After deploying the API to Render and the dashboard to Cloudflare Pages:
 
 ```bash
 ./scripts/edge onboard --cloud --api-url https://<your-render-api>.onrender.com \
-  --enrollment-token <one-time-token> --install-service --start-service
+  --enrollment-token <one-time-token>
 ./scripts/edge scan 192.168.1.0/24 --cloud
 ./scripts/edge report --cloud
 ```
+
+The command above is foreground onboarding from a source checkout. For a
+persistent MacBook worker, use the released bootstrap installer, which places
+the runtime under `~/.local/share/secopsai-edge`. Do not install launchd from a
+checkout under macOS `~/Documents`, `~/Desktop`, `~/Downloads`, or iCloud Drive;
+the helper rejects that path because macOS privacy controls can block the
+service after the terminal exits.
 
 Use the dashboard Settings page to connect to the hosted API with the dashboard admin email and
 password. Invite additional operators from Users & Sessions; they choose their

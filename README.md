@@ -144,6 +144,7 @@ Replace `192.168.1.0/24` with your own authorized local network.
 ./scripts/edge pilot check --cloud --output pilot-acceptance.json
 ./scripts/edge worker status
 ./scripts/edge worker logs
+./scripts/edge worker uninstall
 ./scripts/edge schedules run-due --cloud
 ./scripts/edge stop-db
 ```
@@ -161,6 +162,8 @@ Cloud commands:
 ./scripts/edge cloud rotate-sensor-token
 ./scripts/edge cloud drift-check
 ./scripts/edge cloud backup
+# Run this from the released install under ~/.local/share/secopsai-edge,
+# or from a checkout outside macOS privacy-protected folders.
 ./scripts/edge worker install-service --cloud
 ./scripts/edge worker start
 ./scripts/edge worker restart

@@ -54,6 +54,15 @@ or customer telemetry.
 - The helper now rejects the protected source-tree service path with a direct
   release-installer instruction.
 
+## Worker lifecycle command
+
+- `./scripts/edge worker uninstall` now stops and removes the user service
+  definition on macOS and Linux, so operators do not need to edit launchd or
+  systemd files manually.
+- The onboarding page exposes the uninstall command as a copyable action.
+- The lifecycle helper and dashboard command-card tests passed as part of the
+  full Edge gate.
+
 ## Reproduction
 
 Run the hosted checks from a network with working DNS and an approved operator
