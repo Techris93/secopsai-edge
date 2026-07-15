@@ -27,7 +27,7 @@ class Handler(BaseHTTPRequestHandler):
             self._write_json(
                 {
                     "status": "ready" if self.ready else "not_ready",
-                    "schema_revision": "0016_wifi_provenance",
+                    "schema_revision": "0017_sensor_offline_alert",
                 },
                 200 if self.ready else 503,
             )

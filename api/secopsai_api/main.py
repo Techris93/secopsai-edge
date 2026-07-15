@@ -187,6 +187,7 @@ from secopsai_api.tenancy import (
     unique_slug,
 )
 from secopsai_api.splunk import export_finding, export_report
+from secopsai_api.sensor_health import evaluate_sensor_offline_alerts, mark_sensor_seen
 
 
 settings = get_settings()
@@ -2428,7 +2429,7 @@ def heartbeat(
         sensor.last_error,
     )
     sensor.status = payload.status
-    sensor.last_seen_at = utcnow()
+    mark_sensor_seen(sensor)
     sensor.version = payload.details.get("version") or sensor.version
     sensor.os_name = payload.details.get("os") or payload.details.get("os_name") or sensor.os_name
     sensor.hostname = payload.details.get("hostname") or sensor.hostname
@@ -2513,6 +2514,7 @@ def rotate_sensor_token(
     sensor.token_hash = hash_secret(token)
     sensor.status = "registered"
     sensor.last_seen_at = None
+    sensor.offline_alerted_at = None
     write_audit(db, "sensor.token_rotated", sensor_id=sensor.id, organization_id=organization_id, resource_type="sensor", resource_id=sensor.id)
     db.commit()
     return SensorRotateResponse(sensor_id=sensor.id, sensor_token=token)
@@ -2548,6 +2550,7 @@ def enable_sensor(
     sensor.disabled_at = None
     sensor.status = "registered"
     sensor.last_error = None
+    sensor.offline_alerted_at = None
     write_audit(db, "sensor.enabled", sensor_id=sensor.id, organization_id=organization_id, resource_type="sensor", resource_id=sensor.id)
     db.commit()
     db.refresh(sensor)
@@ -2851,7 +2854,7 @@ def claim_scan_job(
     job.claimed_at = now
     job.updated_at = now
     sensor.status = "online"
-    sensor.last_seen_at = now
+    mark_sensor_seen(sensor, now)
     organization_id = get_site_or_404(db, sensor.site_id).organization_id
     write_audit(db, "scan_job.claimed", sensor_id=sensor.id, organization_id=organization_id, resource_type="scan_job", resource_id=job.id)
     db.commit()
@@ -2877,7 +2880,7 @@ def start_scan_job(
     job.updated_at = now
     job.preview = payload.preview
     sensor.status = "scanning"
-    sensor.last_seen_at = now
+    mark_sensor_seen(sensor, now)
     organization_id = get_site_or_404(db, sensor.site_id).organization_id
     write_audit(db, "scan_job.started", sensor_id=sensor.id, organization_id=organization_id, resource_type="scan_job", resource_id=job.id)
     db.commit()
@@ -2903,7 +2906,7 @@ def fail_scan_job(
     job.completed_at = now
     job.updated_at = now
     sensor.status = "online"
-    sensor.last_seen_at = now
+    mark_sensor_seen(sensor, now)
     organization_id = get_site_or_404(db, sensor.site_id).organization_id
     write_audit(
         db,
@@ -2972,7 +2975,7 @@ def ingest_scan_endpoint(
             "findings_created": len({finding.id for finding in findings}),
         }
         sensor.status = "online"
-        sensor.last_seen_at = now
+        mark_sensor_seen(sensor, now)
     write_audit(
         db,
         "scan.ingested",
@@ -3717,7 +3720,14 @@ def run_due_notification_deliveries(
     db: Session = Depends(get_db),
 ) -> NotificationRunResponse:
     organization_id = None if auth_context.get("legacy") else organization_id_from_context(auth_context)
-    result = process_due_deliveries(db, organization_id=organization_id)
+    sensor_offline_alerts = evaluate_sensor_offline_alerts(
+        db,
+        offline_after=SENSOR_OFFLINE_AFTER,
+        settings=settings,
+        organization_id=organization_id,
+    )
+    result = process_due_deliveries(db, organization_id=organization_id, settings=settings)
+    result["sensor_offline_alerts"] = sensor_offline_alerts
     write_audit(
         db,
         "notification_delivery.run_due",

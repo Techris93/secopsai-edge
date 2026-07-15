@@ -1,7 +1,7 @@
 # Pilot Evidence - 2026-07-15
 
 This record captures the non-destructive hosted checks performed through the
-`v0.3.10` release. Earlier sections retain the historical v0.3.9 validation
+`v0.3.11` release. Earlier sections retain the historical v0.3.9 and v0.3.10 validation
 where that package was exercised. It contains no bearer tokens, response
 bodies, scan output, or customer telemetry.
 
@@ -24,6 +24,18 @@ bodies, scan output, or customer telemetry.
   SQLite data store.
 - The v0.3.10 deployment is the current hosted release; the prior v0.3.9
   bullets above remain historical evidence for that earlier package.
+
+## v0.3.11 implementation evidence
+
+- Migration `0017_sensor_offline_alert` adds durable outage-alert deduplication
+  without storing raw scan telemetry.
+- The notification scheduler marks stale, previously-seen sensors offline and
+  emits one `sensor_offline` event per outage. Heartbeat and scan activity clear
+  the marker so a later outage can alert again.
+- Focused notification and scan-job tests passed for first alert, duplicate
+  suppression, heartbeat recovery, re-alerting, and never-seen sensors.
+- Hosted deployment and Render `/readyz` evidence remain pending until the
+  v0.3.11 release is published and Render finishes the migration.
 
 ## Still Pending
 

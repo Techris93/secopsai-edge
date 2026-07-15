@@ -57,7 +57,7 @@ Expected response:
 ```
 
 `/readyz` must return `status: ready` and schema revision
-`0016_wifi_provenance`. Settings > System Health exposes the same safe
+`0017_sensor_offline_alert`. Settings > System Health exposes the same safe
 release/schema context to an authenticated operator.
 
 The Render start script runs Alembic migrations before starting Uvicorn. Keep
@@ -282,6 +282,11 @@ Every notification has a durable delivery record. The API attempts delivery imme
 five-minute Render cron retries failures with bounded backoff. Settings shows delivery status,
 attempt count, the last response, and a manual Retry action for exhausted deliveries.
 
+The same notification scheduler evaluates sensors that have not reported within the three-minute
+offline threshold. It creates one `sensor_offline` event per outage, marks the sensor offline, and
+does not repeat the event until a heartbeat or scan proves the sensor has recovered. A newly
+registered sensor that has never reported is not treated as offline.
+
 Webhook requests include `X-SecOpsAI-Delivery`, `X-SecOpsAI-Event`,
 `X-SecOpsAI-Timestamp`, and `X-SecOpsAI-Signature`. Verify the signature by computing HMAC-SHA256
 over `<timestamp>.<raw-request-body>` with `SECOPSAI_WEBHOOK_SIGNING_SECRET`, compare it in constant
@@ -298,5 +303,7 @@ time, and reject stale timestamps. Do not parse and reserialize the body before 
 - Dashboard Scan Actions can queue a remote job, and the installed worker can claim it.
 - Schedules page can create a daily/weekly schedule, and the cron trigger queues due jobs.
 - Settings can test a notification endpoint and shows a delivered or retrying delivery record.
+- A scheduled notification run reports `sensor_offline_alerts` and does not duplicate an outage
+  notification until the sensor sends a heartbeat or scan.
 - Browser source and Cloudflare env vars do not contain `NEXT_PUBLIC_ADMIN_TOKEN`.
 - Demo mode is unset or false for customer pilots.

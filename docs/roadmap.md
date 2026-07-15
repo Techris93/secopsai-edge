@@ -4,7 +4,7 @@ This roadmap records product gaps, not historical aspirations. A capability is
 listed as complete only when it has implementation and test evidence in
 `docs/implementation-checkpoints.md`.
 
-## Current Product Baseline - v0.3.10
+## Current Product Baseline - v0.3.11
 
 The controlled-pilot baseline includes:
 
@@ -25,6 +25,7 @@ The controlled-pilot baseline includes:
 - Seven-day reports with frozen metrics, minimized AI payloads, client brief,
   authenticated PDF export, HTML fallback, and browser print.
 - Email, Telegram, and signed-webhook notification endpoints.
+- Scheduled sensor-offline evaluation with one-event-per-outage deduplication and heartbeat recovery.
 - Redacted support bundles, backup/restore tooling, release gates, verified
   private release archives, Render API/PostgreSQL, Cloudflare dashboard,
   Render configuration drift checks, and matching-major hosted backups.
@@ -32,7 +33,7 @@ The controlled-pilot baseline includes:
 - Hosted Core API deployment and normalized Edge bundle ingestion are verified
   at `https://secopsai-core-api.onrender.com`; the hosted operator workspace
   is populated without raw scanner telemetry. Cold-start recovery and the
-  shipped `v0.3.10` package, clean-host bootstrap, and macOS worker service path
+  shipped `v0.3.11` package, clean-host bootstrap, and macOS worker service path
   are documented in checkpoints `055`-`059`.
 - Unified Core console visibility for Edge sync freshness, including current,
   stale, and never-synced states.
@@ -154,6 +155,9 @@ is now the target-host lifecycle and pilot go/no-go exercise:
     verification gates.
 19. **Checkpoint 061 - v0.3.10 sensor package release.** The lifecycle cleanup
     was published in the verified v0.3.10 archive and checked after download.
+20. **Checkpoint 062 - sensor-offline notification evaluation.** The hosted
+    notification scheduler now evaluates stale sensors, creates one durable
+    `sensor_offline` event per outage, and re-arms only after a heartbeat or scan.
     Target-host reboot, upgrade rollback, uninstall, and soak evidence remain
     the active acceptance gate.
 
@@ -165,7 +169,6 @@ than hidden requirements of the controlled-pilot release.
 
 - Fleet release visibility and a signed, staged sensor upgrade workflow with
   rollback.
-- Sensor-offline alert evaluation independent of dashboard visits.
 - Per-customer report branding, report retention policy, and export audit
   evidence.
 - Support SLOs, escalation runbook, safe remote diagnostics, and pilot exit

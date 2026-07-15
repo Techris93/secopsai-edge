@@ -699,6 +699,7 @@ class NotificationRunResponse(BaseModel):
     delivered: int
     retrying: int
     failed: int
+    sensor_offline_alerts: int = 0
 
 
 class NotificationTestResponse(BaseModel):

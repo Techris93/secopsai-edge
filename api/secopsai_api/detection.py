@@ -19,6 +19,7 @@ from secopsai_api.models import (
     utcnow,
 )
 from secopsai_api.schemas import AssetObservationIn, ScanIn, ServiceIn, WifiNetworkIn
+from secopsai_api.sensor_health import mark_sensor_seen
 
 
 RISKY_PORTS: dict[int, tuple[str, str]] = {
@@ -98,7 +99,7 @@ def ingest_scan(db: Session, sensor: Sensor, payload: ScanIn) -> tuple[ScanRun, 
         findings.extend(evaluate_wifi(db, sensor.site_id, wifi, observed_wifi, is_new_bssid))
 
     sensor.status = "online"
-    sensor.last_seen_at = utcnow()
+    mark_sensor_seen(sensor)
     return scan, [finding for finding in findings if finding is not None]
 
 
