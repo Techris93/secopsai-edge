@@ -3556,3 +3556,50 @@ Next checkpoint:
 
 - Close the dashboard DNS/account/notification gates where operator access is
   available, then record the final pilot go/no-go decision.
+
+## Checkpoint 073 - OpenClaw Current-Runtime Plugin Evidence
+
+Status: plugin runtime integration closed; model-auth exercise remains external
+
+Scope:
+
+- Make the merged OpenClaw SecOpsAI plugin load on the current local gateway.
+- Verify that the Edge operator tools are present without invoking scans or
+  state-changing actions.
+
+Completed changes and evidence:
+
+- OpenClaw plugin PR `#8` updated the compatibility range from the legacy
+  `pluginApi: "1"` declaration to `>=2026.6.10`.
+- OpenClaw plugin PR `#9` declared all 27 registered tools in
+  `openclaw.plugin.json` under `contracts.tools` and added a manifest-to-code
+  regression test.
+- The local plugin installed successfully through
+  `openclaw plugins install -l`, the gateway restarted, and runtime inspection
+  reported plugin version `1.0.2` as loaded and activated with all 27 tools and
+  zero diagnostics.
+- The plugin configuration now points to the real Core and Edge paths. The
+  gateway remains loopback-only.
+
+Validation:
+
+- Plugin test suite passed: 4 tests.
+- Runtime plugin inspection passed with 27 tool names and no diagnostics.
+- No network scan, scan queue, report generation, worker start/stop, or raw
+  telemetry operation was invoked.
+
+Remaining external boundary:
+
+- A model-driven OpenClaw tool call could not run because this workstation's
+  OpenClaw agent has no usable provider authentication and its selected
+  `openai-codex/gpt-5.5` entry lacks a matching provider model declaration.
+  Configure an approved OpenClaw provider before exercising the read-only
+  `secopsai_edge_worker_status` tool through an agent turn.
+- The unrelated OpenClaw warning about conflicting Brave plugin install
+  metadata remains outside the SecOpsAI plugin.
+
+Next checkpoint:
+
+- Exercise one read-only plugin tool through an authenticated OpenClaw agent,
+  then close the remaining notification, account, DNS, paid-infrastructure,
+  reboot/soak, and hardware acceptance gates.
