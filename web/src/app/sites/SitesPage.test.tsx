@@ -61,7 +61,7 @@ describe("SitesPage sensor enrollment", () => {
     fireEvent.click(button);
 
     await waitFor(() => expect(api.createSensorEnrollment).toHaveBeenCalledWith("site-alpha", "Alpha Office sensor"));
-    expect(screen.getByText("One-time installer")).toBeInTheDocument();
+    await screen.findByText("One-time installer");
     const command = screen.getByText(/bootstrap-secopsai-edge\.sh/);
     expect(command).toHaveTextContent("gh release download");
     expect(command).toHaveTextContent("curl -fsSLO");

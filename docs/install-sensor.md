@@ -90,10 +90,20 @@ installer fails.
 
 ## Manual Onboarding
 
+For a background worker, use the released bootstrap command above. The source
+checkout path is suitable for a foreground development worker only:
+
 ```bash
 ./scripts/edge onboard --cloud --api-url https://<api> \
-  --enrollment-token <one-time-token> --install-service --start-service
+  --enrollment-token <one-time-token>
 ```
+
+Do not use `--install-service` from a checkout stored under macOS
+`~/Documents`, `~/Desktop`, `~/Downloads`, or iCloud Drive. launchd may be
+blocked by macOS privacy controls once the terminal closes. Use the released
+installer, which places the runtime under `~/.local/share/secopsai-edge`, or
+move the checkout outside protected folders. The helper rejects the protected
+source-tree case by default and prints the recovery path.
 
 Optional first target preview:
 

@@ -41,6 +41,19 @@ or customer telemetry.
 - Launchd/systemd startup, reboot survival, upgrade rollback, and long-running
   soak remain separate operator acceptance steps.
 
+## macOS worker-service validation
+
+- Installing a launchd worker directly from the source checkout under
+  `~/Documents` failed with macOS `operation not permitted`; this is the
+  expected privacy boundary for that path, not a package failure.
+- The released `v0.3.9` package was installed in an isolated path outside
+  protected folders, started through launchd, reached the hosted Edge API, and
+  reported its waiting state without claiming or running a scan.
+- The validation worker was stopped and its temporary service file, logs, and
+  installation directory were removed.
+- The helper now rejects the protected source-tree service path with a direct
+  release-installer instruction.
+
 ## Reproduction
 
 Run the hosted checks from a network with working DNS and an approved operator

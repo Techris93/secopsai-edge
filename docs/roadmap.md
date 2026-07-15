@@ -32,8 +32,8 @@ The controlled-pilot baseline includes:
 - Hosted Core API deployment and normalized Edge bundle ingestion are verified
   at `https://secopsai-core-api.onrender.com`; the hosted operator workspace
   is populated without raw scanner telemetry. Cold-start recovery and the
-  shipped `v0.3.9` package and clean-host bootstrap are documented in
-  checkpoints `055`-`058`.
+  shipped `v0.3.9` package, clean-host bootstrap, and macOS worker service path
+  are documented in checkpoints `055`-`059`.
 - Unified Core console visibility for Edge sync freshness, including current,
   stale, and never-synced states.
 - OpenClaw read-only Edge operator checks for local worker status and safe
@@ -80,7 +80,7 @@ without founder supervision:
 
 ## Controlled Pilot Completion Sequence
 
-Implementation checkpoints are complete through `058`. The remaining work is
+Implementation checkpoints are complete through `059`. The remaining work is
 external operator acceptance, not untracked feature development:
 
 1. **Checkpoint 040 - External pilot acceptance.** Complete fresh-machine
@@ -141,6 +141,11 @@ external operator acceptance, not untracked feature development:
     environment without starting a service or collecting scan telemetry.
     Service/reboot/upgrade/uninstall acceptance and the dashboard custom-domain
     DNS record remain pending.
+17. **Checkpoint 059 - macOS worker service path.** The released package ran
+    through launchd outside protected folders and reached the hosted API. The
+    source checkout now rejects the macOS privacy-protected service path with
+    an actionable recovery message. Reboot, upgrade rollback, uninstall, and
+    soak evidence remain pending.
 
 Commercial SaaS/MSP, billing, broad fleet automation, appliance imaging, and
 multi-ecosystem research automation remain subsequent product horizons rather

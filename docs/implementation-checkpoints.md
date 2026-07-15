@@ -3060,3 +3060,48 @@ Next checkpoint:
 
 - Complete the operator-controlled service/reboot/upgrade/uninstall exercise
   and activate the dashboard custom-domain DNS record.
+
+## Checkpoint 059 - macOS Worker Service Path
+
+Status: partial; reboot, upgrade rollback, uninstall, and long-running soak
+remain pending
+
+Scope:
+
+- Verify the released sensor package can run as a persistent macOS worker and
+  make the source-checkout privacy boundary explicit.
+
+Evidence:
+
+- A direct launchd exercise from this repository under `~/Documents` failed at
+  the macOS privacy boundary with `operation not permitted`. No existing
+  service was present, and the validation service file/logs were removed after
+  the test.
+- The helper now rejects macOS worker-service installation from
+  `~/Documents`, `~/Desktop`, `~/Downloads`, or iCloud Drive by default and
+  prints the released-installer recovery path. An explicit override remains
+  available only for an operator who has granted the required macOS access.
+- The released `v0.3.9` package was installed in an isolated path outside
+  protected folders, configured with owner-only cloud credentials, and started
+  through launchd. The worker reached the hosted API and reported its waiting
+  state with no queued scan job; it was then stopped and all validation files
+  were removed.
+- `./scripts/edge worker --cloud --once` also completed an idle hosted poll
+  without claiming or running a scan.
+
+Validation:
+
+- Focused worker-service tests passed: `8` tests.
+- Full Edge gate passed: `134` backend/agent tests, `32` frontend tests,
+  production build, `28` desktop/mobile browser workflows, and `0` npm audit
+  vulnerabilities.
+
+Remaining external boundary:
+
+- Reboot survival, upgrade rollback, uninstall, Linux/systemd appliance
+  validation, and a seven-day worker soak still require operator evidence.
+
+Next checkpoint:
+
+- Run the released installer on the target host through a reboot and upgrade
+  cycle, then record the pilot notification, backup, recovery, and exit gates.

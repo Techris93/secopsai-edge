@@ -31,21 +31,27 @@ Edge owns local LAN discovery, Wi-Fi inventory, scan jobs, worker heartbeat, and
 
 ## Quick Start
 
-The easiest hosted pilot path is:
-
-```bash
-./scripts/edge onboard --cloud --install-service --start-service
-```
-
-For a released sensor, use the one-time command copied from Sites. It downloads
-the standalone bootstrap, verifies the release checksum, and installs the
-background worker without cloning the repository:
+The easiest hosted pilot path is the released installer command copied from
+Sites. It places the sensor under a macOS-safe user data directory and keeps
+the worker running after the terminal closes:
 
 ```bash
 gh auth login
 gh release download --repo Techris93/secopsai-edge --pattern bootstrap-secopsai-edge.sh --clobber
 bash bootstrap-secopsai-edge.sh --cloud --api-url https://<your-api>.onrender.com --enrollment-token <one-time-token>
 ```
+
+For a foreground development worker from this checkout, use:
+
+```bash
+./scripts/edge onboard --cloud
+```
+
+Do not install a macOS launchd worker directly from a checkout under
+`~/Documents`, `~/Desktop`, `~/Downloads`, or iCloud Drive. macOS privacy
+controls can prevent launchd from reading those paths after the terminal exits;
+the helper now stops with an actionable message instead of installing a broken
+service. A release install is the supported background-service path.
 
 The repository is private during the pilot, so installers need collaborator
 access and an authenticated GitHub CLI. A future public release can use the
