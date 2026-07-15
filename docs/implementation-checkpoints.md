@@ -3298,3 +3298,44 @@ Next checkpoint:
 
 - Run the v0.3.12 release gate, merge the release branch, verify hosted
   deployment identity, and exercise one operator-controlled upgrade check.
+
+## Checkpoint 067 - v0.3.12 Hosted Release Evidence
+
+Status: released; target-host lifecycle exercise remains pending
+
+Scope:
+
+- Close the release and hosted-deployment evidence for checkpoint 066.
+- Keep the historical GitHub release publication failure accurately
+  distinguished from the current successful release path.
+
+Release evidence:
+
+- PR `#63` passed hosted verification and was merged into `main`.
+- Tag `v0.3.12` was created from verified main ancestry.
+- GitHub release workflow `29385802680` passed in `3m41s`, including exact
+  release-commit verification, the full release gate, package archive and
+  checksum verification, browser workflows, npm audit, and publication.
+- The private-repository provenance limitation was recorded by the workflow;
+  SHA-256 manifests remain the available package-integrity evidence.
+- The downloaded v0.3.12 archive checksum passed and archive inspection found
+  `scripts/edge` while excluding credential and build paths.
+- Render `/healthz` returned version `0.3.12`, commit `91db49c7b9dd`; Render
+  `/readyz` returned schema `0017_sensor_offline_alert` and version `0.3.12`.
+
+Historical failure clarification:
+
+- The old v0.3.6 and v0.3.7 release runs failed only at publication because
+  the tag already had a GitHub release. The release workflow now detects an
+  existing release and refreshes assets with `gh release upload --clobber`.
+- A fresh v0.3.12 run exercised that corrected path successfully.
+
+Remaining external boundary:
+
+- An operator must still perform an upgrade/rollback exercise on the target
+  sensor host and retain the evidence before calling the lifecycle path
+  pilot-ready.
+
+Next checkpoint:
+
+- Complete the target-host lifecycle and controlled-pilot acceptance gates.

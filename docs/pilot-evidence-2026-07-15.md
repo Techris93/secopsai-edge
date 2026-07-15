@@ -1,7 +1,8 @@
 # Pilot Evidence - 2026-07-15
 
 This record captures the non-destructive hosted checks performed through the
-`v0.3.11` release. Earlier sections retain the historical v0.3.9 and v0.3.10 validation
+`v0.3.12` release. Earlier sections retain the historical v0.3.9, v0.3.10,
+and v0.3.11 validation
 where that package was exercised. It contains no bearer tokens, response
 bodies, scan output, or customer telemetry.
 
@@ -18,14 +19,39 @@ bodies, scan output, or customer telemetry.
 
 ## Latest hosted deployment
 
-- Render Edge `/healthz` returned HTTP `200`, status `ok`, version `0.3.11`,
-  commit `ead9822e331a`.
-- Render Edge `/readyz` returned HTTP `200`, status `ready`, version `0.3.11`,
+- Render Edge `/healthz` returned HTTP `200`, status `ok`, version `0.3.12`,
+  commit `91db49c7b9dd`.
+- Render Edge `/readyz` returned HTTP `200`, status `ready`, version `0.3.12`,
   schema `0017_sensor_offline_alert`.
 - Render Core `/readyz` returned HTTP `200`, status `ready`, using its hosted
   SQLite data store.
-- The v0.3.11 deployment is the current hosted release; the earlier v0.3.9
-  and v0.3.10 bullets above remain historical evidence.
+- The v0.3.12 deployment is the current hosted release; the earlier v0.3.9,
+  v0.3.10, and v0.3.11 bullets above remain historical evidence.
+
+## v0.3.12 package and release evidence
+
+- The v0.3.12 release workflow `29385802680` passed in `3m41s` after verifying
+  the tag's main ancestry, release gate, archive, checksums, and publication.
+- The release publication step completed successfully with the existing-release
+  safe workflow path. The private-repository provenance limitation was recorded
+  as a notice; SHA-256 manifests remain the published integrity evidence.
+- The downloaded `secopsai-edge-0.3.12.tar.gz` checksum passed and archive
+  inspection found `scripts/edge` while excluding credential and build paths.
+- The release is available at
+  https://github.com/Techris93/secopsai-edge/releases/tag/v0.3.12.
+- Render deployed the same main commit and reports the matching `0.3.12`
+  version and `0017_sensor_offline_alert` schema.
+
+## v0.3.12 sensor release visibility evidence
+
+- API, agent, and dashboard package versions are aligned at `0.3.12`.
+- Sites now reports `current`, `outdated`, `ahead`, `unknown`, or `disabled`
+  release state from the worker heartbeat and exposes a copyable, explicit
+  upgrade command for outdated sensors.
+- `./scripts/edge worker release-check --cloud` is read-only and does not
+  download, install, or mutate the sensor.
+- The target-host upgrade and rollback exercise remains an operator acceptance
+  task; unattended fleet rollout is intentionally not enabled.
 
 ## v0.3.11 implementation evidence
 
