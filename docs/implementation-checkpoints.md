@@ -3868,14 +3868,52 @@ Validation:
 
 Remaining boundary:
 
-- Add a dashboard write form and helper endpoint for attaching rules in a
-  future research-operations checkpoint; current dashboard review is
-  read-only and the CLI is the authoritative write path.
 - Expand compiler-backed validation only where a trusted local validator is
   deliberately installed; never execute untrusted rules or packages on the
   operator workstation.
 
 Next checkpoint:
 
-- Reconcile the dashboard helper write contract, then add the first narrow
-  package watchlist-to-research-case workflow for one ecosystem.
+- Add the first narrow package watchlist-to-research-case workflow for one
+  ecosystem.
+
+## Checkpoint 080 - Research Rule Dashboard Write Path
+
+Status: implementation complete; hosted pilot acceptance remains external
+
+Scope:
+
+- Let an authorized research operator attach defensive detection rules from the
+  canonical dashboard without exposing the Core CLI or collapsing multiline
+  rule content.
+
+Completed changes:
+
+- Dashboard Research Case details now include an `Add detection rule` form for
+  YARA, Sigma, and Semgrep content, with purpose and source-evidence fields.
+- The protected helper allowlists `add-rule`, preserves multiline content,
+  rejects NUL bytes and oversized submissions, and passes the content to Core
+  as one argument without a shell.
+- Core remains authoritative for rule-type validation, structural checks,
+  publication gates, stable IDs, and audit history; the dashboard does not
+  execute submitted rules.
+- Added browser/source assertions and Python regression tests for the write
+  contract and multiline preservation.
+
+Validation:
+
+- Dashboard `npm test`, syntax checks, Python tests, and Python compilation
+  passed: 44 tests and 13 subtests.
+- Dashboard PR `#14` merged to main at `aca1382`.
+- Edge/Core research-rule contract remains covered by Core's full suite.
+
+Remaining boundary:
+
+- Add the first narrow package watchlist-to-research-case workflow for one
+  ecosystem, then exercise it with public metadata only.
+- Complete the external pilot acceptance gates documented in Checkpoint 078.
+
+Next checkpoint:
+
+- Build the first package watchlist workflow with explicit provenance and safe
+  artifact handling.
