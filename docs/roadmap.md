@@ -4,7 +4,7 @@ This roadmap records product gaps, not historical aspirations. A capability is
 listed as complete only when it has implementation and test evidence in
 `docs/implementation-checkpoints.md`.
 
-## Current Product Baseline - v0.3.11
+## Current Product Baseline - v0.3.12
 
 The controlled-pilot baseline includes:
 
@@ -26,6 +26,11 @@ The controlled-pilot baseline includes:
   authenticated PDF export, HTML fallback, and browser print.
 - Email, Telegram, and signed-webhook notification endpoints.
 - Scheduled sensor-offline evaluation with one-event-per-outage deduplication and heartbeat recovery.
+- Sensor release visibility: the API compares the reported worker version with
+  the deployed release, Sites shows current/outdated/ahead/unknown state, and
+  the operator can copy a verified, explicit upgrade command. The read-only
+  `./scripts/edge worker release-check --cloud` command provides the same
+  check without downloading or changing the sensor.
 - Redacted support bundles, backup/restore tooling, release gates, verified
   private release archives, Render API/PostgreSQL, Cloudflare dashboard,
   Render configuration drift checks, and matching-major hosted backups.
@@ -81,7 +86,7 @@ without founder supervision:
 
 ## Controlled Pilot Completion Sequence
 
-Implementation checkpoints are complete through `063`. The remaining work is
+Implementation checkpoints are complete through `066`. The remaining work is
 external operator acceptance, not untracked feature development. The older
 numbered entries below are historical milestones; the active acceptance gate
 is now the target-host lifecycle and pilot go/no-go exercise:
@@ -163,6 +168,11 @@ is now the target-host lifecycle and pilot go/no-go exercise:
 21. **Checkpoint 063 - v0.3.11 hosted release evidence.** The release package
     workflow passed, the downloaded archive was verified, and Render readiness
     confirmed schema `0017_sensor_offline_alert` in production.
+22. **Checkpoint 066 - sensor release visibility.** The API and Sites view now
+    identify outdated sensors against the deployed release, while the CLI and
+    dashboard expose an operator-reviewed upgrade path. Unattended fleet
+    rollout, staged rings, and signed remote upgrades remain later SaaS
+    milestones.
 
 Commercial SaaS/MSP, billing, broad fleet automation, appliance imaging, and
 multi-ecosystem research automation remain subsequent product horizons rather

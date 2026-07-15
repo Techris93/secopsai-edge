@@ -298,6 +298,9 @@ export type Sensor = {
   status: string;
   connection_state: "online" | "offline" | string;
   version?: string | null;
+  recommended_version?: string | null;
+  release_status: "current" | "outdated" | "ahead" | "unknown" | "disabled" | string;
+  upgrade_available?: boolean | null;
   os_name?: string | null;
   worker_state?: string | null;
   current_job_id?: string | null;

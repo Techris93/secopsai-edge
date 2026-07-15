@@ -634,6 +634,9 @@ class SensorOut(BaseModel):
     status: str
     connection_state: str
     version: str | None = None
+    recommended_version: str | None = None
+    release_status: str
+    upgrade_available: bool | None = None
     os_name: str | None = None
     worker_state: str | None = None
     current_job_id: str | None = None

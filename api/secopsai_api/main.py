@@ -74,6 +74,7 @@ from secopsai_api.mfa import (
     verify_mfa_code,
 )
 from secopsai_api.report_pdf import render_report_pdf
+from secopsai_api.release import sensor_release_status
 from secopsai_api.site_export import build_site_export
 from secopsai_api.scheduling import compute_next_run_at, enqueue_due_schedules, normalize_frequency, pick_site_and_sensor
 from secopsai_api.schemas import (
@@ -750,6 +751,11 @@ def finding_notification_payload(finding: Finding) -> dict[str, object]:
 
 
 def sensor_out(db: Session, sensor: Sensor) -> SensorOut:
+    release_status, upgrade_available = sensor_release_status(
+        sensor.version,
+        settings.release_version,
+        disabled=sensor.disabled_at is not None,
+    )
     return SensorOut(
         id=sensor.id,
         site_id=sensor.site_id,
@@ -759,6 +765,9 @@ def sensor_out(db: Session, sensor: Sensor) -> SensorOut:
         status=sensor.status,
         connection_state="disabled" if sensor.disabled_at else sensor_connection_state(sensor),
         version=sensor.version,
+        recommended_version=settings.release_version,
+        release_status=release_status,
+        upgrade_available=upgrade_available,
         os_name=sensor.os_name,
         worker_state=sensor.worker_state,
         current_job_id=sensor.current_job_id,

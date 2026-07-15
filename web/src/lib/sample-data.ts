@@ -152,6 +152,7 @@ export const sampleData: DashboardData = {
       hostname: "macbook",
       status: "offline",
       connection_state: "offline",
+      release_status: "unknown",
       created_at: now,
       last_seen_at: null,
       current_job: null

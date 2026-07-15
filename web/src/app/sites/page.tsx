@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, Copy, Download, KeyRound, MapPinned, Pencil, Plus, PowerOff, Save, Trash2, UserPlus, X } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Copy, Download, KeyRound, MapPinned, Pencil, Plus, PowerOff, Save, Trash2, UserPlus, X } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { DataStatePanel } from "@/components/DataStatePanel";
 import { LiveState } from "@/components/LiveState";
@@ -20,6 +20,7 @@ import {
   updateSite
 } from "@/lib/api";
 import { timeAgo } from "@/lib/format";
+import { copyText } from "@/lib/clipboard";
 import type { DashboardDataMode } from "@/lib/api";
 import type {
   DashboardData,
@@ -425,6 +426,7 @@ function SensorRow({
   onToken: (value: { sensorId: string; token: string } | null) => void;
 }) {
   const [name, setName] = useState(sensor.name);
+  const [upgradeCopied, setUpgradeCopied] = useState(false);
 
   async function rename() {
     try {
@@ -467,6 +469,17 @@ function SensorRow({
     }
   }
 
+  async function copyUpgradeCommand() {
+    if (!sensor.recommended_version) return;
+    const bootstrapUrl = `https://github.com/Techris93/secopsai-edge/releases/download/v${sensor.recommended_version}/bootstrap-secopsai-edge.sh`;
+    const repository = "Techris93/secopsai-edge";
+    const download = `if command -v gh >/dev/null 2>&1 && gh auth status --hostname github.com >/dev/null 2>&1; then gh release download --repo ${shellQuote(repository)} --pattern bootstrap-secopsai-edge.sh --clobber || { printf '%s\\n' 'Your GitHub account needs access to the SecOpsAI Edge repository.'; exit 1; }; else curl -fsSLO ${shellQuote(bootstrapUrl)} || { printf '%s\\n' 'Private releases require GitHub CLI access. Run: gh auth login'; exit 1; }; fi`;
+    const command = `${download} && bash bootstrap-secopsai-edge.sh --version ${shellQuote(sensor.recommended_version)} --upgrade`;
+    const copied = await copyText(command);
+    setUpgradeCopied(copied);
+    onMessage(copied ? "Verified upgrade command copied" : "Unable to copy upgrade command");
+  }
+
   return (
     <div className="rounded-md border border-line bg-paper p-3">
       <div className="grid gap-3 lg:grid-cols-[1fr_auto] lg:items-center">
@@ -482,6 +495,9 @@ function SensorRow({
             <span>{sensor.connection_state}</span>
             <span>{sensor.worker_state ?? "state unknown"}</span>
             <span>{sensor.version ? `v${sensor.version}` : "version unknown"}</span>
+            <span className={sensor.release_status === "outdated" ? "font-semibold text-amber" : sensor.release_status === "current" ? "font-semibold text-sea" : ""}>
+              {sensor.release_status === "outdated" ? `Upgrade available: v${sensor.recommended_version}` : sensor.release_status === "current" ? "Release current" : `Release ${sensor.release_status}`}
+            </span>
             <span>{sensor.os_name ?? "OS unknown"}</span>
             {sensor.current_job_id ? <span>Job {sensor.current_job_id}</span> : null}
             <span>{sensor.last_seen_at ? `Last seen ${timeAgo(sensor.last_seen_at)}` : "Never seen"}</span>
@@ -489,6 +505,12 @@ function SensorRow({
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
+          {sensor.upgrade_available ? (
+            <button className="ButtonSecondary" disabled={!live} onClick={() => void copyUpgradeCommand()} type="button">
+              {upgradeCopied ? <CheckCircle2 size={16} aria-hidden="true" /> : <Copy size={16} aria-hidden="true" />}
+              {upgradeCopied ? "Copied" : "Copy upgrade"}
+            </button>
+          ) : null}
           <button className="ButtonSecondary" disabled={!live || name === sensor.name} onClick={rename} type="button">
             <Save size={16} aria-hidden="true" />
             Rename

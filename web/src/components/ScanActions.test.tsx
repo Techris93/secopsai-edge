@@ -11,6 +11,7 @@ const onlineSensor: Sensor = {
   hostname: "macbook",
   status: "online",
   connection_state: "online",
+  release_status: "current",
   created_at: "2026-06-27T12:00:00Z",
   last_seen_at: "2026-06-27T12:00:00Z",
   current_job: null

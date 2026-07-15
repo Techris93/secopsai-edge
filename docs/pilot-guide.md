@@ -22,17 +22,21 @@ SecOpsAI Edge discovers internal network assets, records service exposure, monit
 5. Click `Enroll sensor` for the target site, copy the one-time installer, and
    run it on the authorized MacBook/Raspberry Pi.
 6. Confirm the worker is online.
-7. Queue a scan or configure a schedule.
-8. Review Assets, Wi-Fi, and Findings.
-9. Add notes and mark findings acknowledged/resolved/false positive.
-10. Approve known assets, accepted services, and trusted BSSIDs to establish the site baseline.
-11. Generate a report.
-12. Open the report detail page, verify the frozen reporting period and metrics, then copy the executive summary/client brief or download the client-ready PDF.
-13. Open Settings > Data Lifecycle, confirm the agreed retention periods, and record the last-cleanup state.
-14. Configure a notification endpoint, stop the worker for longer than the offline threshold,
+7. In Sites, confirm the sensor says `Release current`. If it is outdated,
+   use `Copy upgrade` and review the explicit `--upgrade` command before
+   running it on the sensor host. The command preserves credentials and the
+   installer rolls back if the upgrade fails.
+8. Queue a scan or configure a schedule.
+9. Review Assets, Wi-Fi, and Findings.
+10. Add notes and mark findings acknowledged/resolved/false positive.
+11. Approve known assets, accepted services, and trusted BSSIDs to establish the site baseline.
+12. Generate a report.
+13. Open the report detail page, verify the frozen reporting period and metrics, then copy the executive summary/client brief or download the client-ready PDF.
+14. Open Settings > Data Lifecycle, confirm the agreed retention periods, and record the last-cleanup state.
+15. Configure a notification endpoint, stop the worker for longer than the offline threshold,
     run the hosted scheduler once, and confirm one `sensor_offline` delivery. Restart the worker
     and confirm the next heartbeat clears the outage marker.
-15. Run `./scripts/edge cloud uptime-check --output hosted-health.jsonl` and retain the non-secret evidence with the pilot record.
+16. Run `./scripts/edge cloud uptime-check --output hosted-health.jsonl` and retain the non-secret evidence with the pilot record.
 
 ## Ending A Pilot
 

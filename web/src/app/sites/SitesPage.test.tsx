@@ -91,4 +91,45 @@ describe("SitesPage sensor enrollment", () => {
       acknowledge_permanent: true
     }));
   });
+
+  it("shows a copy action when a sensor is behind the hosted release", async () => {
+    vi.mocked(api.fetchDashboardData).mockResolvedValueOnce({
+      live: true,
+      mode: "live",
+      data: {
+        sites: [{ id: "site-alpha", organization_id: "org-alpha", name: "Alpha Office", created_at: now }],
+        assets: [],
+        wifiNetworks: [],
+        baselines: [],
+        findings: [],
+        reports: [],
+        scanJobs: [],
+        sensors: [{
+          id: "sensor-alpha",
+          site_id: "site-alpha",
+          site_name: "Alpha Office",
+          name: "Alpha sensor",
+          hostname: "alpha-host",
+          status: "online",
+          connection_state: "online",
+          version: "0.3.10",
+          recommended_version: "0.3.11",
+          release_status: "outdated",
+          upgrade_available: true,
+          created_at: now,
+          last_seen_at: now,
+          current_job: null
+        }],
+        sensorEnrollments: [],
+        schedules: [],
+        notifications: [],
+        onboarding: null
+      }
+    });
+
+    render(React.createElement(SitesPage));
+
+    expect(await screen.findByRole("button", { name: "Copy upgrade" })).toBeInTheDocument();
+    expect(screen.getByText("Upgrade available: v0.3.11")).toBeInTheDocument();
+  });
 });

@@ -345,6 +345,24 @@ Flow:
 
 Remote jobs are limited to RFC1918 IPv4 CIDRs with `/24` or narrower ranges. Worker heartbeats update last-seen, version, OS, hostname, state, and active job while both waiting and scanning; stale claimed/running jobs are recovered so they do not remain stuck forever. Sites shows this runtime context. A disabled sensor can be re-enabled there without rotating its token; rotate the token separately if credential exposure is suspected. On the sensor host, `./scripts/edge cloud rotate-sensor-token` performs the same rotation through the hosted API and atomically replaces the owner-only `.cloud-sensor.env`; restart the worker afterward.
 
+### Check Sensor Release State
+
+The hosted API compares the worker version from its heartbeat with the API's
+deployed release. Sites labels each sensor as `Release current`, `Upgrade
+available`, `Release ahead`, `Release unknown`, or `Release disabled`. For a
+read-only terminal check:
+
+```bash
+./scripts/edge worker release-check --cloud
+```
+
+When an upgrade is available, use `Copy upgrade` in Sites. Review the command
+before running it on the sensor host. It downloads the exact versioned
+bootstrap from the GitHub release, preserves the owner-only credential files,
+and uses the installer's rollback path if the new package cannot start. This
+is an operator-controlled upgrade channel; unattended fleet rollout and
+remote self-upgrade are not enabled in the pilot baseline.
+
 When `./scripts/edge pilot check --cloud` or `./scripts/edge cloud uptime-check`
 fails, inspect the non-secret `error_code` in the JSON evidence. Use
 `dns_resolution_failed` to check the monitoring network's resolver or the
