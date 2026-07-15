@@ -106,101 +106,101 @@ is now the target-host lifecycle and pilot go/no-go exercise:
    now installs on OpenClaw `2026.6.10`, declares all 27 tool contracts, and
    loads with zero diagnostics. One model-authenticated read-only tool turn
    remains an operator setup gate.
-5. **Historical release closeout.** The exact verified `v0.3.4` build
+4. **Historical release closeout.** The exact verified `v0.3.4` build
    closeout was superseded by the verified `v0.3.5` release in checkpoint 042.
-6. **Checkpoint 042 - AI report cost guardrail and release evidence.** The
+5. **Checkpoint 042 - AI report cost guardrail and release evidence.** The
    report cooldown, operator visibility, release archive, Render identity, and
    Edge Pages deployment are verified. Attach the external evidence and signed
    pilot go/no-go record before calling the controlled pilot customer-ready.
-7. **Checkpoint 043 - Cross-product sync freshness.** Core, Dashboard, and
+6. **Checkpoint 043 - Cross-product sync freshness.** Core, Dashboard, and
    OpenClaw now share the same normalized Edge-to-Core freshness signal.
-8. **Checkpoint 044 - Safe OpenClaw Edge operator tools.** OpenClaw can check
+7. **Checkpoint 044 - Safe OpenClaw Edge operator tools.** OpenClaw can check
    the local worker and preview an authorized private CIDR without executing or
    uploading a scan.
-9. **Checkpoint 045 - Research ecosystem contract alignment.** OpenClaw's
+8. **Checkpoint 045 - Research ecosystem contract alignment.** OpenClaw's
    package-research schemas now expose the same twelve ecosystem choices as
    Core, including NuGet-style package investigations.
-10. **Checkpoint 046 - Approval-gated Edge scan actions.** OpenClaw can create
+9. **Checkpoint 046 - Approval-gated Edge scan actions.** OpenClaw can create
    a Core session and pending approval for an authorized scan. Applying the
    approval invokes only the structured Edge queue helper; direct Nmap and
    worker-service mutation remain outside the plugin.
-11. **Checkpoint 047 - Approval-gated Edge operations.** Report generation and
+10. **Checkpoint 047 - Approval-gated Edge operations.** Report generation and
    worker start/stop are now approval-backed Core session actions with no raw
    helper output or credentials crossing into Core.
-12. **Checkpoint 048 - Sensor credential recovery CLI.** Sensor hosts can rotate
+11. **Checkpoint 048 - Sensor credential recovery CLI.** Sensor hosts can rotate
    a hosted sensor credential and restart the worker without manual secret-file
    editing or exposing the replacement token in command output.
-13. **Checkpoint 050 - Hosted health failure diagnostics.** Hosted API and
+12. **Checkpoint 050 - Hosted health failure diagnostics.** Hosted API and
     dashboard failures now produce stable non-secret error codes, and the
     verified `v0.3.7` release records the release-gate evidence; the subsequent
     `v0.3.8` release also verifies the corrected tag publication workflow.
-14. **Checkpoint 052 - Authenticated pilot evidence.** The acceptance preflight
+13. **Checkpoint 052 - Authenticated pilot evidence.** The acceptance preflight
     can require an operator credential and verify authenticated identity,
     system status, onboarding, sites, sensors, schedules, findings, and reports
     without recording the token or response bodies.
-15. **Checkpoint 054 - Hosted operator evidence.** The live Render API and
+14. **Checkpoint 054 - Hosted operator evidence.** The live Render API and
     authenticated operator surfaces were verified for `v0.3.8`; Cloudflare
     Pages and the remaining fresh-host/soak/provider exercises remain explicitly
     pending.
-16. **Checkpoint 055 - Hosted Core API activation.** Core PR `#44` is merged,
+15. **Checkpoint 055 - Hosted Core API activation.** Core PR `#44` is merged,
     the hosted Core service accepts the versioned Edge bundle, and the
     authenticated workspace exposes normalized assets/findings. Independent
     dashboard aggregation and the remaining external pilot evidence gates are
     still pending.
-17. **Checkpoint 056 - Hosted Core cold-start recovery.** The Core CLI and
+16. **Checkpoint 056 - Hosted Core cold-start recovery.** The Core CLI and
     sensor-side supervised sync retry bounded transient provider/network
     failures while preserving fail-fast authentication, redirect, and payload
     validation behavior.
-18. **Checkpoint 057 - v0.3.9 release evidence.** The corrected worker version
+17. **Checkpoint 057 - v0.3.9 release evidence.** The corrected worker version
     assertion passed, the verified `v0.3.9` package was published, and the
     release asset set was checked. Clean-host install and pilot acceptance are
     still pending.
-19. **Checkpoint 058 - Clean-host bootstrap evidence.** The public installer
+18. **Checkpoint 058 - Clean-host bootstrap evidence.** The public installer
     registered a temporary sensor with owner-only credentials in an isolated
     environment without starting a service or collecting scan telemetry.
     Service/reboot/upgrade/uninstall acceptance and the dashboard custom-domain
     DNS record remain pending.
-20. **Checkpoint 059 - macOS worker service path.** The released package ran
+19. **Checkpoint 059 - macOS worker service path.** The released package ran
     through launchd outside protected folders and reached the hosted API. The
     source checkout now rejects the macOS privacy-protected service path with
     an actionable recovery message. Reboot, upgrade rollback, uninstall, and
     soak evidence remain pending.
-21. **Checkpoint 060 - Worker lifecycle cleanup and cross-repo gate.** The
+20. **Checkpoint 060 - Worker lifecycle cleanup and cross-repo gate.** The
     supported worker uninstall command, onboarding command card, and release
     path documentation passed the complete Edge, Core, dashboard, and plugin
     verification gates.
-22. **Checkpoint 061 - v0.3.10 sensor package release.** The lifecycle cleanup
+21. **Checkpoint 061 - v0.3.10 sensor package release.** The lifecycle cleanup
     was published in the verified v0.3.10 archive and checked after download.
-23. **Checkpoint 062 - sensor-offline notification evaluation.** The hosted
+22. **Checkpoint 062 - sensor-offline notification evaluation.** The hosted
     notification scheduler now evaluates stale sensors, creates one durable
     `sensor_offline` event per outage, and re-arms only after a heartbeat or scan.
     Target-host reboot, upgrade rollback, uninstall, and soak evidence remain
     the active acceptance gate.
-24. **Checkpoint 063 - v0.3.11 hosted release evidence.** The release package
+23. **Checkpoint 063 - v0.3.11 hosted release evidence.** The release package
     workflow passed, the downloaded archive was verified, and Render readiness
     confirmed schema `0017_sensor_offline_alert` in production.
-25. **Checkpoint 066 - sensor release visibility.** The API and Sites view now
+24. **Checkpoint 066 - sensor release visibility.** The API and Sites view now
     identify outdated sensors against the deployed release, while the CLI and
     dashboard expose an operator-reviewed upgrade path. Unattended fleet
     rollout, staged rings, and signed remote upgrades remain later SaaS
     milestones.
-26. **Checkpoint 067 - v0.3.12 hosted release evidence.** The fresh package
+25. **Checkpoint 067 - v0.3.12 hosted release evidence.** The fresh package
     passed the corrected release-publication workflow, archive verification,
     and Render deployment identity checks.
-27. **Checkpoint 068 - sensor-scoped release status.** The cloud worker check
+26. **Checkpoint 068 - sensor-scoped release status.** The cloud worker check
     now authenticates with the sensor's scoped token against a read-only
     endpoint; administrator credentials are not required for sensor lifecycle
     verification.
-28. **Checkpoint 069 - OpenClaw release check integration.** OpenClaw now has a
+27. **Checkpoint 069 - OpenClaw release check integration.** OpenClaw now has a
     read-only `secopsai_edge_release_check` action that invokes the scoped Edge
     lifecycle check without requesting upgrade or service mutation approval.
-29. **Checkpoint 070 - v0.3.14 release-check repair and evidence.** The hosted
+28. **Checkpoint 070 - v0.3.14 release-check repair and evidence.** The hosted
     release-check formatter now handles valid API JSON safely, the regression
     test is in CI, the corrected package is published as `v0.3.14`, and Render
     serves the matching API release. The enrolled target sensor is still
     operator-pending at `v0.3.9` until its controlled upgrade/rollback/soak
     exercise is completed.
-30. **Checkpoint 071 - v0.3.14 clean-host lifecycle evidence.** The released
+29. **Checkpoint 071 - v0.3.14 clean-host lifecycle evidence.** The released
     bootstrap installed and started a real launchd worker, emitted a current
     heartbeat, passed stop/start and failure-rollback checks, and was cleanly
     uninstalled. Reboot survival, seven-day soak, notifications, and the
