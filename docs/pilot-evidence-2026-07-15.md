@@ -28,6 +28,20 @@ bodies, scan output, or customer telemetry.
 - The v0.3.14 deployment is the current hosted release; the earlier v0.3.9
   through v0.3.12 bullets above remain historical evidence.
 
+## v0.3.14 hosted acceptance probe correction
+
+- The hosted health monitor and pilot acceptance defaults now target the
+  documented Cloudflare Pages project, `secopsai-dashboard.pages.dev`, rather
+  than the retired `secopsai-edge.pages.dev` hostname.
+- The corrected acceptance probe confirmed Edge API liveness and readiness at
+  v0.3.14 with schema `0017_sensor_offline_alert`.
+- The dashboard probe still failed from this workstation with a DNS resolution
+  error. This is an external Pages/DNS gate, not an API or release failure;
+  re-run the probe from a network that can resolve Pages after the project
+  hostname and `dashboard.secopsai.dev` CNAME are active.
+- PR `#71` merged the URL correction after the full GitHub verification job
+  passed in `3m35s`.
+
 ## v0.3.14 release-check repair and package evidence
 
 - Edge PR `#67` fixed the hosted worker release-check formatter. The previous
