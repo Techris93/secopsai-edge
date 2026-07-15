@@ -78,6 +78,19 @@ These are local repository verification results. They do not replace the
 external notification, DNS, paid-infrastructure, account-recovery,
 reboot/soak, or hardware acceptance rows below.
 
+## Hosted infrastructure recheck
+
+- `./scripts/edge status --cloud` returned a running Edge API with readiness
+  `ready`.
+- `./scripts/edge cloud uptime-check` returned Edge API `/healthz` and
+  `/readyz` as healthy on v0.3.14 with schema `0017_sensor_offline_alert`.
+- The same health check returned the documented non-secret
+  `dns_resolution_failed` result for `secopsai-dashboard.pages.dev`.
+- `./scripts/edge cloud drift-check` reported zero drift issues. It warned
+  that the current free Render database expires on 2026-07-20; paid
+  infrastructure activation and a PITR drill remain mandatory before a real
+  external pilot.
+
 ## v0.3.14 release-check repair and package evidence
 
 - Edge PR `#67` fixed the hosted worker release-check formatter. The previous
