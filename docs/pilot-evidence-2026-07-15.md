@@ -56,15 +56,11 @@ bodies, scan output, or customer telemetry.
   without an error, scan, or mutation.
 - No scan, queued job, report, worker mutation, or raw telemetry operation was
   invoked during this check.
-- A live model-driven read-only turn was exercised with the approved Google
-  provider after the gateway was restarted. The model ran successfully but
-  reported `secopsai_edge_worker_status` as unavailable because the agent's
-  `coding` tool profile removed the plugin tool surface before dispatch. This
-  is an OpenClaw agent-policy boundary, not a plugin load failure.
-- The exact plugin tool was therefore not invoked through the model turn. The
-  direct runtime exercise above remains the strongest local proof, and no
-  scan, queued job, report, worker mutation, or raw telemetry operation was
-  invoked.
+- An initial live model-driven read-only turn exposed an embedded-agent path
+  boundary: the model could see the plugin contract but the plugin received
+  no configured repository path and fell back to `~/secopsai-edge`. This was
+  corrected in plugin PR `#10`; it was not a plugin load or tool-policy
+  failure.
 - Plugin PR `#10` added `SECOPSAI_CORE_PATH` and `SECOPSAI_EDGE_PATH` fallback
   configuration for embedded/local agent runs while preserving explicit
   plugin configuration precedence. After the fix, a fresh live Google model
@@ -82,8 +78,8 @@ OpenClaw runtime and roadmap corrections:
 - Core: `253` tests, `13` warnings, and `4` subtests passed.
 - Canonical dashboard: `42` Python tests and `13` subtests passed; JavaScript
   tests and syntax checks passed.
-- OpenClaw SecOpsAI plugin: `4` tests passed, including compatibility and
-  manifest tool-contract checks.
+- OpenClaw SecOpsAI plugin: `5` tests passed, including compatibility,
+  manifest tool-contract, and embedded-agent path fallback checks.
 
 These are local repository verification results. They do not replace the
 external notification, DNS, paid-infrastructure, account-recovery,
