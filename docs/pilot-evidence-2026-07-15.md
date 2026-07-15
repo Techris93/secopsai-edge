@@ -18,12 +18,14 @@ bodies, scan output, or customer telemetry.
 
 ## Latest hosted deployment
 
-- Render Edge `/healthz` returned HTTP `200`, status `ok`, version `0.3.10`,
-  commit `2223abf8cae5`.
+- Render Edge `/healthz` returned HTTP `200`, status `ok`, version `0.3.11`,
+  commit `5b1496f0767f`.
+- Render Edge `/readyz` returned HTTP `200`, status `ready`, version `0.3.11`,
+  schema `0017_sensor_offline_alert`.
 - Render Core `/readyz` returned HTTP `200`, status `ready`, using its hosted
   SQLite data store.
-- The v0.3.10 deployment is the current hosted release; the prior v0.3.9
-  bullets above remain historical evidence for that earlier package.
+- The v0.3.11 deployment is the current hosted release; the earlier v0.3.9
+  and v0.3.10 bullets above remain historical evidence.
 
 ## v0.3.11 implementation evidence
 
@@ -34,8 +36,9 @@ bodies, scan output, or customer telemetry.
   the marker so a later outage can alert again.
 - Focused notification and scan-job tests passed for first alert, duplicate
   suppression, heartbeat recovery, re-alerting, and never-seen sensors.
-- Hosted deployment and Render `/readyz` evidence remain pending until the
-  v0.3.11 release is published and Render finishes the migration.
+- Hosted deployment and Render `/readyz` evidence are now closed for the
+  v0.3.11 migration. Real notification delivery and outage/recovery exercise
+  remain operator acceptance tasks.
 
 ## Still Pending
 
@@ -93,6 +96,15 @@ bodies, scan output, or customer telemetry.
   the worker uninstall command and agent version `0.3.10`.
 - The release is available at
   https://github.com/Techris93/secopsai-edge/releases/tag/v0.3.10.
+
+## v0.3.11 package closeout
+
+- The v0.3.11 release workflow `29383682759` passed in `3m27s` after verifying
+  the tag's main ancestry, release gate, archive, checksums, and publication.
+- The downloaded v0.3.11 archive checksum passed and archive inspection found
+  the sensor-health implementation while excluding credential and build paths.
+- The release is available at
+  https://github.com/Techris93/secopsai-edge/releases/tag/v0.3.11.
 
 ## Reproduction
 
