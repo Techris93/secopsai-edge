@@ -3027,3 +3027,36 @@ Next checkpoint:
 
 - Exercise the `v0.3.9` bootstrap on a clean MacBook or Linux host and record
   installation, service, recovery, and uninstall evidence.
+
+## Checkpoint 058 - Clean-host Bootstrap Evidence
+
+Status: partial; service and long-running pilot acceptance remain pending
+
+Scope:
+
+- Verify that a pilot can obtain the released sensor package and complete
+  enrollment without cloning the source repository or exposing credentials in
+  command output.
+
+Evidence:
+
+- The public `v0.3.9` bootstrap installer was downloaded from the verified
+  GitHub release into an isolated temporary directory.
+- Installation completed with a short-lived one-time enrollment token and
+  created owner-only sensor credentials.
+- The sensor registered successfully, was disabled after validation, and the
+  temporary installation directory was removed.
+- No service was started, no network scan was run, no raw telemetry was
+  collected, and no credential appeared in captured output.
+
+Remaining external boundary:
+
+- This does not prove launchd/systemd startup, reboot survival, upgrade
+  rollback, uninstall, or a seven-day worker soak.
+- `dashboard.secopsai.dev` is attached to the `secopsai-dashboard` Pages
+  project but remains pending until the CNAME record is created and verified.
+
+Next checkpoint:
+
+- Complete the operator-controlled service/reboot/upgrade/uninstall exercise
+  and activate the dashboard custom-domain DNS record.
