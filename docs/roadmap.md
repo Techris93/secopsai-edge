@@ -4,7 +4,7 @@ This roadmap records product gaps, not historical aspirations. A capability is
 listed as complete only when it has implementation and test evidence in
 `docs/implementation-checkpoints.md`.
 
-## Current Product Baseline - v0.3.9
+## Current Product Baseline - v0.3.10
 
 The controlled-pilot baseline includes:
 
@@ -32,7 +32,7 @@ The controlled-pilot baseline includes:
 - Hosted Core API deployment and normalized Edge bundle ingestion are verified
   at `https://secopsai-core-api.onrender.com`; the hosted operator workspace
   is populated without raw scanner telemetry. Cold-start recovery and the
-  shipped `v0.3.9` package, clean-host bootstrap, and macOS worker service path
+  shipped `v0.3.10` package, clean-host bootstrap, and macOS worker service path
   are documented in checkpoints `055`-`059`.
 - Unified Core console visibility for Edge sync freshness, including current,
   stale, and never-synced states.
