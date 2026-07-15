@@ -1,7 +1,7 @@
 # Pilot Evidence - 2026-07-15
 
 This record captures the non-destructive hosted checks performed through the
-`v0.3.13` release. Earlier sections retain the historical v0.3.9 through
+`v0.3.14` release. Earlier sections retain the historical v0.3.9 through
 v0.3.12 validation
 where that package was exercised. It contains no bearer tokens, response
 bodies, scan output, or customer telemetry.
@@ -19,14 +19,36 @@ bodies, scan output, or customer telemetry.
 
 ## Latest hosted deployment
 
-- Render Edge `/healthz` returned HTTP `200`, status `ok`, version `0.3.13`,
-  commit `581653754988`.
-- Render Edge `/readyz` returned HTTP `200`, status `ready`, version `0.3.13`,
+- Render Edge `/healthz` returned HTTP `200`, status `ok`, version `0.3.14`,
+  commit `68f58d7dcbb1`.
+- Render Edge `/readyz` returned HTTP `200`, status `ready`, version `0.3.14`,
   schema `0017_sensor_offline_alert`.
 - Render Core `/readyz` returned HTTP `200`, status `ready`, using its hosted
   SQLite data store.
-- The v0.3.13 deployment is the current hosted release; the earlier v0.3.9
+- The v0.3.14 deployment is the current hosted release; the earlier v0.3.9
   through v0.3.12 bullets above remain historical evidence.
+
+## v0.3.14 release-check repair and package evidence
+
+- Edge PR `#67` fixed the hosted worker release-check formatter. The previous
+  implementation reached the API but failed while formatting valid JSON because
+  shell and Python quote delimiters conflicted.
+- The fix is covered by a regression test using a hosted
+  `release-status` response. PR `#67` passed the complete Edge CI gate with
+  28 checks and was merged into `main`.
+- Edge PR `#68` aligned API, agent, and dashboard versions at `0.3.14`. Its
+  complete CI gate passed with 28 checks before merge.
+- The v0.3.14 release workflow `29387904397` passed in `3m13s`, including the
+  full release gate, package build, SHA-256 manifest publication, and GitHub
+  release creation.
+- The downloaded `secopsai-edge-0.3.14.tar.gz` checksum passed and the
+  packaged `scripts/edge` contains the corrected formatter.
+- `./scripts/edge worker release-check --cloud` now completes successfully
+  against the hosted API and reports the enrolled sensor's actual state:
+  the current sensor reported `v0.3.9`, while the hosted recommendation was
+  `v0.3.14`, with status `outdated`.
+- This does not perform an upgrade. The target-host upgrade, rollback, reboot,
+  and soak exercise remain operator acceptance tasks.
 
 ## v0.3.13 package and scoped release-status evidence
 
