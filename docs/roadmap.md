@@ -91,7 +91,7 @@ without founder supervision:
 
 ## Controlled Pilot Completion Sequence
 
-Implementation checkpoints are complete through `075`. The remaining work is
+Implementation checkpoints are complete through `076`. The remaining work is
 external operator acceptance, not untracked feature development. The older
 numbered entries below are historical milestones; the active acceptance gate
 is now the target-host lifecycle and pilot go/no-go exercise:
@@ -216,6 +216,11 @@ is now the target-host lifecycle and pilot go/no-go exercise:
     heartbeat, passed stop/start and failure-rollback checks, and was cleanly
     uninstalled. Reboot survival, seven-day soak, notifications, and the
     remaining pilot infrastructure drills are still external gates.
+30. **Checkpoint 076 - race-safe release publication.** Release publication is
+    now delegated to a tested helper that refreshes existing releases and
+    recovers when a concurrent tag run creates the release between the initial
+    lookup and create attempt. The next tagged release must exercise the
+    updated workflow.
 
 Commercial SaaS/MSP, billing, broad fleet automation, appliance imaging, and
 multi-ecosystem research automation remain subsequent product horizons rather

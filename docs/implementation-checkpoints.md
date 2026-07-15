@@ -3698,3 +3698,47 @@ Next checkpoint:
 
 - Record authenticated dashboard, DNS, and pilot go/no-go evidence from an
   operator-controlled network.
+
+## Checkpoint 076 - Race-Safe Release Publication
+
+Status: implementation complete; next tagged release exercise pending
+
+Scope:
+
+- Make the GitHub sensor-package publication path robust to duplicate and
+  concurrent release creation attempts.
+- Keep release publication separate from package build and integrity checks so
+  a publication problem is diagnosed as publication, not misreported as a
+  package-build failure.
+
+Completed changes:
+
+- Added `scripts/release-publish`, a small idempotent publisher that validates
+  every asset before calling GitHub, uploads with `--clobber` when a release
+  already exists, and retries a failed create as an existing-release upload
+  when another run wins the race.
+- Updated `.github/workflows/release.yml` to use the helper and updated the
+  release gate to syntax-check it.
+- Added four regression tests covering an existing release, normal creation,
+  duplicate-create race recovery, and unrecoverable publication failure.
+- Documented the historical duplicate-release failure and the recovery path in
+  the operator runbook.
+
+Validation:
+
+- `bash -n scripts/release-publish scripts/release-gate` passed.
+- `pytest tests/scripts/test_release_publisher.py -q` passed: 4 tests.
+- The existing v0.3.14 workflow remains the authoritative successful package
+  publication evidence; no release tag was created by this checkpoint.
+
+Remaining boundary:
+
+- A future tagged release must exercise the updated workflow in GitHub Actions.
+- The target-host reboot, seven-day soak, real notification delivery,
+  paid Render/PITR, second-owner recovery, DNS, and Raspberry Pi/Wi-Fi gates
+  remain operator acceptance work.
+
+Next checkpoint:
+
+- Run the complete local release gate, open/merge this change, and confirm the
+  next tagged package publication with the new helper.

@@ -11,7 +11,7 @@ if ! git diff --quiet || ! git diff --cached --quiet; then
   echo "Release gate requires a clean committed worktree" >&2
   exit 1
 fi
-bash -n scripts/edge scripts/install-secopsai-edge.sh scripts/bootstrap-secopsai-edge.sh scripts/build-release scripts/database-backup scripts/render-postgres-backup scripts/render-start-api
+bash -n scripts/edge scripts/install-secopsai-edge.sh scripts/bootstrap-secopsai-edge.sh scripts/build-release scripts/release-publish scripts/database-backup scripts/render-postgres-backup scripts/render-start-api
 python3 -m py_compile scripts/render-run-due-schedules scripts/render_drift_check.py scripts/render_psql_backup_proxy.py scripts/core-sync-runner.py scripts/hosted_health_check.py scripts/pilot_acceptance.py
 
 [ -x "$PYTHON_BIN" ] || { echo "Run ./scripts/edge setup first" >&2; exit 1; }

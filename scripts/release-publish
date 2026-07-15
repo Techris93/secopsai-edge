@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  printf 'Usage: %s TAG ASSET...\n' "$0" >&2
+}
+
+if [ "$#" -lt 2 ]; then
+  usage
+  exit 2
+fi
+
+tag="$1"
+shift
+assets=("$@")
+
+command -v gh >/dev/null 2>&1 || {
+  printf 'error: GitHub CLI (gh) is required\n' >&2
+  exit 127
+}
+
+for asset in "${assets[@]}"; do
+  [ -f "$asset" ] || {
+    printf 'error: release asset does not exist: %s\n' "$asset" >&2
+    exit 1
+  }
+done
+
+upload_existing() {
+  printf 'Refreshing assets for existing release %s.\n' "$tag"
+  gh release upload "$tag" --clobber "${assets[@]}"
+}
+
+if gh release view "$tag" --json tagName >/dev/null 2>&1; then
+  upload_existing
+  exit 0
+fi
+
+# A second tag run can observe the release as absent just before another run
+# creates it. If create loses that race, refresh the now-existing release.
+if gh release create "$tag" --verify-tag --generate-notes "${assets[@]}"; then
+  exit 0
+fi
+
+if gh release view "$tag" --json tagName >/dev/null 2>&1; then
+  upload_existing
+  exit 0
+fi
+
+printf 'error: unable to create or find release %s\n' "$tag" >&2
+exit 1
