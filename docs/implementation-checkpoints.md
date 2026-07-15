@@ -3651,3 +3651,50 @@ Next checkpoint:
 
 - Activate the hosted operator account and complete the notification,
   paid-infrastructure, reboot/soak, recovery, and hardware acceptance gates.
+
+## Checkpoint 075 - Hosted Dashboard Deployment Evidence
+
+Status: deployment configuration evidence recorded; independent operator
+sign-in remains external
+
+Scope:
+
+- Reconcile the hosted dashboard browser observation with the authoritative
+  Cloudflare Pages project configuration.
+- Avoid treating a browser-side script-blocking condition as proof that the
+  deployed Supabase configuration is absent.
+
+Evidence:
+
+- The Cloudflare Pages API returned the `secopsai-dashboard` production
+  project with `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and
+  `DASHBOARD_AUTH_REQUIRED` configuration entries. Secret values were not
+  requested or printed.
+- The public `secopsai-dashboard.pages.dev` root loaded in the available
+  browser. That browser blocked the runtime `/config.js` resource, so the
+  static app rendered its intentional locked fallback; this is not sufficient
+  evidence of a production configuration failure.
+- The shell-side pilot check still cannot resolve the Pages hostname from this
+  workstation (`dns_resolution_failed`). No DNS records were changed.
+
+Validation:
+
+- Cloudflare Pages project configuration was inspected read-only.
+- Edge Checkpoint 074 tests and the full Edge release gate passed before this
+  evidence correction.
+- No dashboard credentials, response bodies, scans, packets, or raw
+  telemetry were collected.
+
+Remaining external boundary:
+
+- Sign in from a normal browser/network with the invited operator account and
+  verify that the authenticated Mission Control workspace loads.
+- Add and validate `dashboard.secopsai.dev` using a Cloudflare credential with
+  DNS-write permission.
+- Complete the notification, paid-infrastructure, reboot/soak, recovery, and
+  hardware acceptance gates.
+
+Next checkpoint:
+
+- Record authenticated dashboard, DNS, and pilot go/no-go evidence from an
+  operator-controlled network.

@@ -20,7 +20,7 @@ bodies, scan output, or customer telemetry.
 ## Latest hosted deployment
 
 - Render Edge `/healthz` returned HTTP `200`, status `ok`, version `0.3.14`,
-  current deployed commit `6d9db82506c3`.
+  current deployed commit `ead0de44aa0a`.
 - Render Edge `/readyz` returned HTTP `200`, status `ready`, version `0.3.14`,
   schema `0017_sensor_offline_alert`.
 - Render Core `/readyz` returned HTTP `200`, status `ready`, using its hosted
@@ -44,6 +44,24 @@ bodies, scan output, or customer telemetry.
   hostname and `dashboard.secopsai.dev` CNAME are active.
 - PR `#71` merged the URL correction after the full GitHub verification job
   passed in `3m35s`.
+
+## Hosted dashboard configuration acceptance
+
+- Checkpoint 074 added runtime `/config.js` validation to hosted health and
+  pilot acceptance. It checks only safe patterns for the hosted HTTPS
+  Supabase URL and non-empty anonymous key; response bodies and credentials are
+  never written to evidence.
+- Checkpoint 075 inspected the `secopsai-dashboard` production Pages project
+  read-only. The project contains configuration entries for
+  `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `DASHBOARD_AUTH_REQUIRED`; secret
+  values were not requested or printed.
+- The available in-app browser loaded the public Pages root but blocked the
+  runtime `/config.js` resource, which caused the static app to show its
+  intentional locked fallback in that browser. This browser-side condition is
+  not treated as proof of a production configuration failure.
+- The shell-side check still reports `dns_resolution_failed` for the Pages
+  hostname from this workstation. Rerun from an independent network with a
+  normal browser before closing dashboard acceptance.
 
 ## OpenClaw current-runtime integration
 
@@ -75,7 +93,7 @@ bodies, scan output, or customer telemetry.
 The following suites were rerun from the clean repositories after the
 OpenClaw runtime and roadmap corrections:
 
-- Edge: `144` backend/agent tests, `34` frontend tests, `28` desktop/mobile
+- Edge: `145` backend/agent tests, `34` frontend tests, `28` desktop/mobile
   browser workflows, production Next.js build, and `npm audit` with zero
   vulnerabilities.
 - Core: `253` tests, `13` warnings, and `4` subtests passed.
@@ -111,7 +129,7 @@ reboot/soak, or hardware acceptance rows below.
   28 checks and was merged into `main`.
 - Edge PR `#68` aligned API, agent, and dashboard versions at `0.3.14`. Its
   complete CI gate passed with 28 checks before merge.
-- The v0.3.14 release workflow `29387904397` passed in `3m13s`, including the
+- The v0.3.14 release workflow `29387904397` passed in `3m17s`, including the
   full release gate, package build, SHA-256 manifest publication, and GitHub
   release creation.
 - The downloaded `secopsai-edge-0.3.14.tar.gz` checksum passed and the
