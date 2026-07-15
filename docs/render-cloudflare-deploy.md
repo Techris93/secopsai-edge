@@ -181,12 +181,17 @@ Configure the hosted API URL:
 ```
 
 Create a one-time enrollment from Sites in the selected workspace, then run the
-copied installer. The equivalent manual flow is:
+copied release installer. For a source checkout, use foreground onboarding only:
 
 ```bash
 ./scripts/edge onboard --cloud --api-url https://<your-render-api>.onrender.com \
-  --enrollment-token <one-time-token> --install-service --start-service
+  --enrollment-token <one-time-token>
 ```
+
+For a persistent MacBook worker, use the released bootstrap command from
+`docs/install-sensor.md`. Do not install launchd directly from a checkout under
+`~/Documents`, `~/Desktop`, `~/Downloads`, or iCloud Drive; macOS privacy
+controls can block launchd after the terminal exits.
 
 Run a scan and submit it to Render:
 
@@ -197,6 +202,8 @@ Run a scan and submit it to Render:
 Or run the local worker so dashboard-queued jobs execute locally:
 
 ```bash
+# Run this from the released install under ~/.local/share/secopsai-edge,
+# or from a checkout outside macOS privacy-protected folders.
 ./scripts/edge worker install-service --cloud
 ./scripts/edge worker start
 ./scripts/edge worker status

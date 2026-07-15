@@ -55,6 +55,7 @@ Usage:
                                       Install background worker service
   ./scripts/edge worker start|stop|restart|status|logs
                                       Manage background worker service
+  ./scripts/edge worker uninstall     Stop and remove the background service
   ./scripts/edge report [--cloud]      Generate an AI-style report
   ./scripts/edge schedules run-due [--cloud]
                                       Queue due scheduled scans
@@ -920,6 +921,18 @@ worker_service_logs() {
   journalctl --user -u "$SERVICE_LABEL.service" -n 120 --no-pager
 }
 
+uninstall_worker_service() {
+  stop_worker_service
+  if [ "$(uname -s)" = "Darwin" ]; then
+    rm -f "$LAUNCH_AGENT_FILE"
+    info "Removed $SERVICE_LABEL launch agent"
+    return
+  fi
+  rm -f "$SYSTEMD_SERVICE_FILE"
+  systemctl --user daemon-reload >/dev/null 2>&1 || true
+  info "Removed $SERVICE_LABEL systemd user service"
+}
+
 worker() {
   subcommand="${1:-run}"
   case "$subcommand" in
@@ -941,6 +954,9 @@ worker() {
       ;;
     logs)
       worker_service_logs
+      ;;
+    uninstall)
+      uninstall_worker_service
       ;;
     run)
       shift || true

@@ -43,3 +43,25 @@ def test_worker_service_rejects_protected_source_checkout() -> None:
     assert result.returncode != 0
     assert "privacy-protected folder" in result.stderr
     assert "released sensor" in result.stderr
+
+
+def test_worker_service_uninstall_removes_user_service_definition(tmp_path: Path) -> None:
+    home = tmp_path / "home"
+    if sys.platform == "darwin":
+        service_path = home / "Library" / "LaunchAgents" / "ai.secopsai.edge.plist"
+    else:
+        service_path = home / ".config" / "systemd" / "user" / "ai.secopsai.edge.service"
+    service_path.parent.mkdir(parents=True)
+    service_path.write_text("test service", encoding="utf-8")
+
+    result = subprocess.run(
+        [str(EDGE), "worker", "uninstall"],
+        cwd=ROOT,
+        env={**os.environ, "HOME": str(home)},
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert not service_path.exists()

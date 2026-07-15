@@ -42,6 +42,10 @@ export default function OnboardingPage() {
       {
         label: "Copy Worker Logs",
         value: `cd ${EDGE_ROOT}\n./scripts/edge worker logs`
+      },
+      {
+        label: "Copy Worker Uninstall",
+        value: `cd ${EDGE_ROOT}\n./scripts/edge worker uninstall`
       }
     ],
     []

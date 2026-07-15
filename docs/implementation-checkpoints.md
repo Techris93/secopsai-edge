@@ -3105,3 +3105,56 @@ Next checkpoint:
 
 - Run the released installer on the target host through a reboot and upgrade
   cycle, then record the pilot notification, backup, recovery, and exit gates.
+
+## Checkpoint 060 - Worker Lifecycle Cleanup and Cross-Repo Gate
+
+Status: implementation complete; external pilot acceptance remains pending
+
+Scope:
+
+- Close the worker-service lifecycle gap discovered during the macOS service
+  path validation.
+- Make uninstall a supported, repeatable operator action and expose it from
+  the onboarding command cards.
+- Re-run the Edge, Core, canonical dashboard, and OpenClaw verification gates
+  before continuing with external acceptance work.
+
+Completed changes:
+
+- Added `./scripts/edge worker uninstall` for macOS launchd and Linux systemd
+  user services. It stops the service, removes the user service definition,
+  and reloads systemd where applicable.
+- Added worker-service coverage proving the uninstall command removes the
+  expected service definition on the current platform test path.
+- Added an onboarding dashboard command card for copying the worker uninstall
+  command, alongside start, status, and logs.
+- Updated the README, installation guide, Render/Cloudflare deployment guide,
+  and runbook so source-checkout onboarding is foreground-only and released
+  installs are the supported path for persistent macOS services.
+
+Validation:
+
+- Edge full gate: `135` backend/agent tests, `33` frontend tests, production
+  Next.js build, `28` desktop/mobile Chromium browser workflows, and `0` npm
+  audit vulnerabilities.
+- Main SecOpsAI Core full suite: `253` tests passed.
+- Canonical SecOpsAI dashboard: Node tests and type/check gate passed.
+- OpenClaw SecOpsAI plugin: tests and production build passed.
+- Hosted Edge/Core health and readiness checks were previously verified; no
+  network scan or raw telemetry collection was performed during this gate.
+
+Remaining external boundary:
+
+- Reboot survival, upgrade rollback, uninstall on the target pilot host,
+  Linux/systemd appliance validation, and a seven-day worker soak still need
+  operator evidence.
+- Paid Render API/PostgreSQL activation and PITR restore drill, real SMTP or
+  notification-provider delivery, second-owner MFA recovery, manual
+  VoiceOver/NVDA review, and dashboard custom-domain DNS activation remain
+  external acceptance tasks.
+
+Next checkpoint:
+
+- Complete the target-host lifecycle exercise and record the final controlled
+  pilot go/no-go evidence, then move to paid-pilot hardening only for gaps
+  revealed by that exercise.
