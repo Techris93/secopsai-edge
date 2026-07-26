@@ -93,10 +93,16 @@ Node dependencies, and performs a real backup/restore drill.
 - `/healthz` is process liveness and returns release/commit identity without
   touching PostgreSQL.
 - `/readyz` performs a database round trip and requires the exact Alembic head.
+- Render must use `/healthz` for its five-second restart probe. External uptime
+  and deployment checks must also call `/readyz`; a dependency slowdown should
+  produce a bounded `503`, not a process restart loop.
 - Settings > System Health is the authenticated operator view of environment,
   release, commit, schema, and AI provider.
 
 Do not route pilot traffic to an API whose `/readyz` response is not `200`.
+Do not run an external pilot on a sleeping free web instance. Upgrade the API
+to an always-on plan and use at least two instances when uninterrupted traffic
+during instance replacement is a contractual requirement.
 
 Record a non-secret hosted check when validating a deployment:
 

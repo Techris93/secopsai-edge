@@ -5,7 +5,7 @@ services:
     plan: free
     buildCommand: pip install -r requirements.lock
     startCommand: ./scripts/render-start-api
-    healthCheckPath: /readyz
+    healthCheckPath: /healthz
     envVars:
       - key: DATABASE_URL
         fromDatabase:
@@ -15,6 +15,12 @@ services:
         value: "false"
       - key: SECOPSAI_ENVIRONMENT
         value: "pilot"
+      - key: SECOPSAI_DATABASE_CONNECT_TIMEOUT_SECONDS
+        value: "3"
+      - key: SECOPSAI_DATABASE_POOL_TIMEOUT_SECONDS
+        value: "3"
+      - key: SECOPSAI_DATABASE_STATEMENT_TIMEOUT_MS
+        value: "3000"
       - key: SECOPSAI_CORS_ORIGINS
         sync: false
       - key: SECOPSAI_ADMIN_TOKEN
@@ -93,4 +99,4 @@ databases:
   - name: secopsai-edge-postgres
     databaseName: secopsai_edge
     user: secopsai
-    plan: free
+    plan: basic-256mb

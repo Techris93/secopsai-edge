@@ -43,6 +43,15 @@ class Settings:
         or "local"
     )
     expected_schema_revision: str = "0017_sensor_offline_alert"
+    database_connect_timeout_seconds: int = int(
+        os.getenv("SECOPSAI_DATABASE_CONNECT_TIMEOUT_SECONDS", "3")
+    )
+    database_pool_timeout_seconds: int = int(
+        os.getenv("SECOPSAI_DATABASE_POOL_TIMEOUT_SECONDS", "3")
+    )
+    database_statement_timeout_ms: int = int(
+        os.getenv("SECOPSAI_DATABASE_STATEMENT_TIMEOUT_MS", "3000")
+    )
     admin_token: str = os.getenv("SECOPSAI_ADMIN_TOKEN", "dev-admin-token")
     token_secret: str = os.getenv("SECOPSAI_TOKEN_SECRET", "dev-token-secret")
     dashboard_admin_email: str | None = os.getenv("SECOPSAI_DASHBOARD_ADMIN_EMAIL") or None
@@ -98,6 +107,18 @@ class Settings:
         self.validate()
 
     def validate(self) -> None:
+        if not 1 <= self.database_connect_timeout_seconds <= 4:
+            raise RuntimeError(
+                "SECOPSAI_DATABASE_CONNECT_TIMEOUT_SECONDS must be between 1 and 4"
+            )
+        if not 1 <= self.database_pool_timeout_seconds <= 4:
+            raise RuntimeError(
+                "SECOPSAI_DATABASE_POOL_TIMEOUT_SECONDS must be between 1 and 4"
+            )
+        if not 250 <= self.database_statement_timeout_ms <= 4_000:
+            raise RuntimeError(
+                "SECOPSAI_DATABASE_STATEMENT_TIMEOUT_MS must be between 250 and 4000"
+            )
         if self.ai_max_findings_per_report < 1:
             raise RuntimeError("AI_MAX_FINDINGS_PER_REPORT must be at least 1")
         if not 0 <= self.ai_report_cooldown_seconds <= 86_400:

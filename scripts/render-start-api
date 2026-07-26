@@ -9,4 +9,10 @@ alembic -c api/alembic.ini upgrade head
 exec uvicorn secopsai_api.main:app \
   --app-dir api \
   --host 0.0.0.0 \
-  --port "${PORT:-8000}"
+  --port "${PORT:-8000}" \
+  --proxy-headers \
+  --forwarded-allow-ips="*" \
+  --no-server-header \
+  --limit-concurrency 100 \
+  --limit-max-requests 10000 \
+  --timeout-graceful-shutdown 30

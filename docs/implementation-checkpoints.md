@@ -3968,6 +3968,48 @@ Next checkpoint:
 - Run the controlled pilot acceptance exercise and record pass/fail evidence
   for each external gate.
 
+## Checkpoint 083 - Render API Health Boundary Hardening
+
+Status: implementation complete; live Render health-path reconciliation and
+always-on API upgrade are tracked as separate operational actions
+
+Scope:
+
+- Prevent a slow PostgreSQL connection from being mistaken for a dead API
+  process by Render's fixed five-second health probe.
+
+Completed changes:
+
+- Render now uses the shallow `/healthz` liveness endpoint for process restart
+  decisions while `/readyz` remains the independent database and schema gate.
+- PostgreSQL connection, pool checkout, and statement timeouts are bounded
+  below the provider health window, and readiness uses one schema query instead
+  of two sequential database round trips.
+- Uvicorn now uses bounded concurrency, periodic worker recycling, trusted
+  proxy handling, and a graceful shutdown window.
+- The Blueprint matches the live paid `basic-256mb` PostgreSQL plan and retains
+  the free API plan so repository sync cannot silently create a new charge.
+- Drift checks, configuration tests, environment examples, deployment guidance,
+  and incident recovery documentation enforce the corrected health boundary.
+- Updated Next.js to `16.2.12`, PostCSS to `8.5.23`, and the transitive Sharp
+  runtime to `0.35.3` after the release audit identified newly disclosed
+  vulnerabilities in the previous dependency tree.
+
+Validation:
+
+- `./scripts/edge test` passed: 154 backend/agent tests, 34 dashboard tests,
+  28 desktop/mobile browser workflows, the Next.js production build, and an
+  npm audit with zero known vulnerabilities.
+- Focused health, configuration, and Render drift tests passed; shell syntax
+  and repository diff checks passed.
+
+Remaining boundary:
+
+- Render Free web services still sleep after inactivity and can restart at any
+  time. An external pilot requires the account owner to approve an always-on
+  API plan; two instances are required only when zero interruption during an
+  individual instance replacement is part of the service objective.
+
 ## Checkpoint 082 - Watchlist Promotion Dashboard Actions
 
 Status: implementation complete; hosted dashboard rollout is merged and

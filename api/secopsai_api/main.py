@@ -261,8 +261,10 @@ def healthz() -> dict[str, str]:
 @app.get("/readyz")
 def readyz(db: Session = Depends(get_db)) -> JSONResponse:
     try:
-        db.execute(text("SELECT 1"))
-        revision = db.execute(text("SELECT version_num FROM alembic_version")).scalar_one_or_none()
+        # One bounded query proves both database reachability and schema readiness.
+        revision = db.execute(
+            text("SELECT version_num FROM alembic_version LIMIT 1")
+        ).scalar_one_or_none()
     except Exception:
         return JSONResponse(status_code=503, content={"status": "not_ready", "reason": "database_unavailable"})
     if revision != settings.expected_schema_revision:

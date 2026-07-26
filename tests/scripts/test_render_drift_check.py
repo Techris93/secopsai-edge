@@ -25,7 +25,7 @@ def inventory(
                 "branch": "main",
                 "autoDeploy": "yes",
                 "serviceDetails": {
-                    "healthCheckPath": "/readyz",
+                    "healthCheckPath": "/healthz",
                     **({"plan": api_plan} if api_plan else {}),
                     "envSpecificDetails": {
                         "buildCommand": "pip install -r requirements.lock",
@@ -86,7 +86,7 @@ def test_matching_paid_inventory_passes_without_leaking_unread_fields(tmp_path: 
 
 def test_build_and_health_drift_fail_the_check(tmp_path: Path) -> None:
     payload = inventory()
-    payload[0]["service"]["serviceDetails"]["healthCheckPath"] = "/healthz"  # type: ignore[index]
+    payload[0]["service"]["serviceDetails"]["healthCheckPath"] = "/readyz"  # type: ignore[index]
     payload[0]["service"]["serviceDetails"]["envSpecificDetails"]["buildCommand"] = "pip install -r api/requirements.txt"  # type: ignore[index]
 
     result = run_check(tmp_path, payload, "--now", "2026-07-13T00:00:00Z")
