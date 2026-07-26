@@ -56,9 +56,14 @@ Expected response:
 {"status":"ok","version":"<release-version>","commit":"<commit>"}
 ```
 
-`/readyz` must return `status: ready` and schema revision
-`0017_sensor_offline_alert`. Settings > System Health exposes the same safe
-release/schema context to an authenticated operator.
+Render's restart health check uses `/healthz`, which is deliberately independent
+of PostgreSQL and must answer within Render's five-second health window.
+`/readyz` remains the deeper deployment and traffic-readiness check: it must
+return `status: ready` and schema revision `0017_sensor_offline_alert`. The
+database connection, pool checkout, and statement timeouts are bounded below
+the provider health window so dependency failures return `503` instead of
+hanging. Settings > System Health exposes the same safe release/schema context
+to an authenticated operator.
 
 The Render start script runs Alembic migrations before starting Uvicorn. Keep
 `SECOPSAI_ENVIRONMENT=pilot` for the current controlled pilot. Both `pilot` and
@@ -66,17 +71,18 @@ The Render start script runs Alembic migrations before starting Uvicorn. Keep
 automatic table creation, and localhost CORS origins. Development is the only
 mode that permits local defaults.
 
-The Blueprint still uses free plans to avoid silently creating paid resources.
-Free instances are suitable only for development/demo. Render explicitly says
-free services are not for production, free web services spin down after idle
-time, and free PostgreSQL expires after 30 days without managed backups. Before
-storing pilot data, move both the API and database to paid instance types. Any
-paid Render PostgreSQL instance includes point-in-time recovery; validate a
-recovery into a separate database before relying on it.
+The Blueprint keeps the API on the free plan to avoid silently creating a new
+recurring web-service charge, while matching the existing paid
+`basic-256mb` PostgreSQL deployment. A free API is suitable only for development
+or a controlled demo: Render spins it down after idle time and cold startup can
+take about a minute. Before an external pilot, the account owner must upgrade
+the API to an always-on paid instance. The paid PostgreSQL instance includes
+point-in-time recovery; validate a recovery into a separate database before
+relying on it.
 
 Current operating decision:
 
-- controlled demo: free API/database plus verified local logical backup;
+- controlled demo: free API, paid database, and verified logical backup;
 - external or paid pilot: always-on paid API, paid PostgreSQL with PITR, daily
   logical export, and an isolated restore drill;
 - never represent the free deployment as durable pilot infrastructure.
@@ -97,9 +103,21 @@ infrastructure or dashboard change:
 The command fails on live build/start/health/branch/schedule/database-version
 drift and warns when the Edge API or database is on a free plan. A warning does
 not fail an interactive check unless `--fail-on-warning` is supplied. Treat
-free-plan warnings as a demo-only boundary; move both the API and database to
-paid pilot plans and complete a recovery-point drill before accepting customer
-data.
+free-API warnings as a demo-only boundary; move the API to a paid pilot plan and
+complete a database recovery-point drill before accepting customer data.
+
+### Health-check timeout recovery
+
+If Render reports `HTTP health check failed (timed out after 5 seconds)`:
+
+1. Confirm the service health path is `/healthz`, never `/readyz`.
+2. Check `/healthz` for process identity and `/readyz` for database/schema state.
+3. Treat a failing `/readyz` as a PostgreSQL or migration incident without
+   causing Render to restart an otherwise healthy API process.
+4. Confirm the three `SECOPSAI_DATABASE_*_TIMEOUT*` values remain at their
+   checked-in bounded defaults.
+5. Upgrade the API from Free before a real pilot; health-path separation cannot
+   remove free-tier sleeping and cold starts.
 
 Create a verified pre-deploy export while the database is still on a free plan:
 

@@ -139,7 +139,7 @@ def inspect_inventory(
             "branch": (api.get("branch"), "main"),
             "build command": (env_details.get("buildCommand"), "pip install -r requirements.lock"),
             "start command": (env_details.get("startCommand"), "./scripts/render-start-api"),
-            "health check": (details.get("healthCheckPath"), "/readyz"),
+            "health check": (details.get("healthCheckPath"), "/healthz"),
         }
         for label, (actual, wanted) in expected.items():
             if actual != wanted:

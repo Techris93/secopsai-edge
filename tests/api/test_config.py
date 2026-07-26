@@ -96,3 +96,18 @@ def test_ai_report_cooldown_can_be_disabled_for_controlled_tests() -> None:
     settings = replace(Settings(), ai_report_cooldown_seconds=0)
 
     assert settings.ai_report_cooldown_seconds == 0
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    [
+        ("database_connect_timeout_seconds", 5, "DATABASE_CONNECT_TIMEOUT_SECONDS"),
+        ("database_pool_timeout_seconds", 0, "DATABASE_POOL_TIMEOUT_SECONDS"),
+        ("database_statement_timeout_ms", 4_001, "DATABASE_STATEMENT_TIMEOUT_MS"),
+    ],
+)
+def test_database_timeouts_remain_below_render_health_window(
+    field: str, value: int, message: str
+) -> None:
+    with pytest.raises(RuntimeError, match=message):
+        replace(Settings(), **{field: value})
